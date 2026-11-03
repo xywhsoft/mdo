@@ -206,7 +206,8 @@ def run(host, website_host):
                 headers={'If-Match':f'"mdo-session-{current["id"]}-{current["revision"]}"'}
                 profile=dict(model_id=model_id,reasoning_effort=effort,permission_profile=current['permission_profile'])
                 changed=app('PUT',route+'/profile',profile,headers=headers)
-                assert changed['model_id']==model_id and changed['reasoning_effort']==effort
+                canonical = 'mdo-online.ornith-1.5-35b' if model_id=='ornith-1.5-35b' else model_id
+                assert changed['model_id']==canonical and changed['reasoning_effort']==effort,changed
                 run=app('POST',route+'/runs',dict(prompt='Continue with '+wire),status=202)
                 end=time.monotonic()+10
                 while time.monotonic()<end:

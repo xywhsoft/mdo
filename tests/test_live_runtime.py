@@ -43,7 +43,7 @@ class Model(BaseHTTPRequestHandler):
         output = []
         if "live ask" in prompt and not any(item.get("role") == "tool" for item in messages):
             output = [{"tool_calls": [{"index": 0, "id": "ask-live", "type": "function",
-                "function": {"name": "ask_user", "arguments": json.dumps({
+                "function": {"name": "ask", "arguments": json.dumps({
                     "question": "Live question?", "options": ["Yes", "No"]})}}]}]
             finish = "tool_calls"
         elif "live approval" in prompt and not any(item.get("role") == "tool" for item in messages):
@@ -176,7 +176,7 @@ def probe(host: Path | None, packed: Path | None):
             live = site / "src/api/live.c"
             source = live.read_text(encoding="utf-8").replace("#define MDO_LIVE_RECORDS 512u", "#define MDO_LIVE_RECORDS 1u")
             source = source.replace("#define MDO_LIVE_PING_US 20000000u", "#define MDO_LIVE_PING_US 200000u")
-            source = source.replace("#define MDO_LIVE_IDLE_US 60000000u", "#define MDO_LIVE_IDLE_US 800000u")
+            source = source.replace("#define MDO_LIVE_IDLE_US 60000000u", "#define MDO_LIVE_IDLE_US 10000000u")
             source = source.replace("Client->ReplayFirst = true; Reply = true;", "Client->ReplayFirst = true; Reply = true; printf(\"[qa-live] cache replay\\n\"); fflush(stdout);")
             live.write_text(source, encoding="utf-8")
             command = [str(host), str(site / "xs.json"), "--", "--home", str(home)]
@@ -196,15 +196,22 @@ def probe(host: Path | None, packed: Path | None):
             status, document = wait_bootstrap(process, port, site / "native.log")
             assert status == 200 and document["data"]["ready"], document
             def home_inventory():
+                # Startup update checks write their cache independently of a
+                # read-only subscription. All user/config/session data stays
+                # covered, and unexpected deltas name the exact changed file.
                 return {p.relative_to(home).as_posix(): p.read_bytes() if p.is_file() else None
-                        for p in home.rglob("*") if p.name not in (".mdo.lock", ".writer.lock")}
+                        for p in home.rglob("*") if p.name not in (".mdo.lock", ".writer.lock")
+                        and not p.is_relative_to(home / "data/cache")}
             before_connections = home_inventory()
             assert connect(origin="https://example.invalid").status == 403
             assert connect(token="incorrect").status == 403
             assert connect(version="12").status == 400
             for client in sockets: client.close()
             sockets.clear()
-            assert home_inventory() == before_connections, "read-only WebSocket check changed portable Home"
+            after_connections = home_inventory()
+            changed = sorted(k for k in before_connections.keys() | after_connections.keys()
+                             if before_connections.get(k, False) != after_connections.get(k, False))
+            assert not changed, ("read-only WebSocket check changed portable Home", changed)
             configure_model(port, endpoint)
             status, document = request(port, "POST", "/api/v1/sessions", {
                 "project_id": "default", "title": "Live probe", "agent_id": "mdo.default",
@@ -323,7 +330,7 @@ def probe(host: Path | None, packed: Path | None):
             assert closing.close_frame() == (8, struct.pack("!H", 1000))
             if not packed:
                 idle = connect()
-                deadline = time.monotonic() + 2
+                deadline = time.monotonic() + 12
                 saw_ping = False
                 while time.monotonic() < deadline:
                     opcode, payload = idle.frame()

@@ -1,3 +1,4 @@
+from model_fixture import conversation_catalog
 """Manual compaction, failure atomicity and cancellation with a loopback model."""
 import argparse,json,os,shutil,subprocess,tempfile,threading,time,uuid
 from pathlib import Path
@@ -43,9 +44,9 @@ def main():
                 time.sleep(.03)
               raise AssertionError(('timeout',path))
             settings,fields=call('GET','/models/config')
-            provider=json.loads(json.dumps(settings['providers'][0]));provider.update(id='command-fixture',name='fixture',builtin=False,editable=True,removable=True,
+            provider=json.loads(json.dumps(conversation_catalog()['providers'][0]));provider.update(id='command-fixture',name='fixture',builtin=False,editable=True,removable=True,
               endpoints={'chat_completions':f'http://127.0.0.1:{server.server_port}/v1'},credential={'secret_ref':'env:MDO_CONTEXT_FIXTURE_KEY'})
-            model=json.loads(json.dumps(settings['items'][0]));model.update(id='command-fixture',name='fixture',provider='command-fixture',builtin=False,free=False,
+            model=json.loads(json.dumps(conversation_catalog()['items'][0]));model.update(id='command-fixture',name='fixture',provider='command-fixture',builtin=False,free=False,
               editable=True,removable=True,protocols=['openai-chat-completions'],default_protocol='openai-chat-completions')
             model['window'].update(context_tokens=131072,max_input_tokens=131072,max_output_tokens=1024,output_reserve_tokens=1024,summary_tokens=1024)
             settings['providers'].append(provider);settings['items'].append(model);settings.pop('runtime_override',None)

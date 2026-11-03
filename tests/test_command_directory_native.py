@@ -102,6 +102,8 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
     for path in ('include/mdo/extensions.h', 'include/mdo/home.h', 'include/mdo/extension_manifest.h'):
         inner += '#include "/app/product/' + path + '"\n'
     inner += HOME_STUBS
+    policy = (ROOT / 'app/src/extensions/builtins.c').read_text(encoding='utf-8')
+    inner += policy[policy.index('bool MdoExtensionsEditableSource'):policy.index('bool MdoExtensionsBuiltinRole')]
     for path in ('app/src/extensions/manager.c', 'app/src/commands/catalog.c'):
         inner += '#include "/app/product/' + path.removeprefix('app/') + '"\n'
     inner += TEST.replace('mdoCommandRun(const mdo_command_context_v1* C', 'QaRun(const mdo_command_context_v1* C')

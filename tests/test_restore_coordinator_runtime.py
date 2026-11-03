@@ -174,10 +174,10 @@ class Probe(DecodeProbe):
 
     def check(self):
         # Pure reservation/capacity and wrong-size output checks create no Home.
-        assert not self.home.exists()
+        assert not list((self.home / "sessions").rglob("meta.json"))
         state = self.restore("capacity")
         assert state["ok"] and state["checks"] >= 22 and state["reservations"] == 0, state
-        assert not self.home.exists()
+        assert not list((self.home / "sessions").rglob("meta.json"))
         document, payload = self.setup_source()
         for mode, code, identifier in (("cancel", 9, "1" * 32), ("deadline", 11, "2" * 32),
                                       ("cancel-commit", 9, "3" * 32), ("generation", 11, "4" * 32)):

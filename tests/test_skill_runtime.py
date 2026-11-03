@@ -62,7 +62,11 @@ PROBE_SOURCE = rf'''
 #include <string.h>
 #include <xsbase.h>
 
-#include "src/storage/home.c"
+#define ServiceInit FixtureProductServiceInit
+#define ServiceUnit FixtureProductServiceUnit
+#include "generated/mdo_unity.c"
+#undef ServiceInit
+#undef ServiceUnit
 #include "src/skills/manager.c"
 
 static const char sExternalV1[] = {c_literal(EXTERNAL_V1)};
@@ -82,7 +86,7 @@ static void PrintFirst(MdoSkillCatalog *catalog, const char *label) {{
     MdoSkillInfo info;
     memset(&info, 0, sizeof(info));
     info.Size = sizeof(info);
-    if (MdoSkillCatalogAt(catalog, 0u, &info))
+    if (MdoSkillCatalogFind(catalog, "qa-explorer", &info))
         printf("%s=id:%s external:%d trust:%d version:%s resources:%zu tools:%zu tokens:%zu\n",
             label, info.Id, info.External ? 1 : 0, (int)info.Trust,
             info.Version != NULL ? info.Version : "null", info.ResourceCount,
@@ -94,7 +98,7 @@ static void PrintBody(MdoSkillCatalog *catalog, const char *label) {{
     MdoSkillContent content;
     memset(&content, 0, sizeof(content));
     content.Size = sizeof(content);
-    if (MdoSkillCatalogLoadBody(catalog, "project-explorer", &content)) {{
+    if (MdoSkillCatalogLoadBody(catalog, "qa-explorer", &content)) {{
         printf("%s=external:%d trust:%d text:%s\n", label,
             content.External ? 1 : 0, (int)content.Trust, content.Text);
         MdoSkillContentUnit(&content);
@@ -106,7 +110,7 @@ static void PrintResource(MdoSkillCatalog *catalog, const char *path,
     MdoSkillResourceContent content;
     memset(&content, 0, sizeof(content));
     content.Size = sizeof(content);
-    if (MdoSkillCatalogLoadResource(catalog, "project-explorer", path,
+    if (MdoSkillCatalogLoadResource(catalog, "qa-explorer", path,
             4096u, &content)) {{
         printf("%s=kind:%d external:%d text:%s\n", label,
             (int)content.Kind, content.External ? 1 : 0,
@@ -135,7 +139,7 @@ void ServiceInit(XS_HostInfo *host) {{
     MdoSkillCatalog *catalog = NULL;
     MdoSkillResourceContent undeclared;
     (void)host;
-    if (!MdoHomeInit() || !MdoSkillManagerInit()) {{
+    if (!MdoHomeInit() || !MdoExtensionsInit() || !MdoExtensionsSeedBuiltins((char[512]){{0}}) || !MdoSkillManagerInit()) {{
         PrintError("skill_init_error"); goto done;
     }}
     builtin = MdoSkillCatalogSnapshot();
@@ -146,11 +150,11 @@ void ServiceInit(XS_HostInfo *host) {{
     PrintBody(builtin, "builtin_body");
     PrintResource(builtin, "templates/report.md", "builtin_template");
 
-    if (!MdoHomeAtomicWrite("skills/project-explorer/scripts/run.txt",
+    if (!MdoHomeAtomicWrite("skills/qa-explorer/scripts/run.txt",
             "script-v1", 9u, false) ||
-        !MdoHomeAtomicWrite("skills/project-explorer/templates/stale.txt",
+        !MdoHomeAtomicWrite("skills/qa-explorer/templates/stale.txt",
             "stale-v1", 8u, false) ||
-        !MdoHomeAtomicWrite("skills/project-explorer/SKILL.md", sExternalV1,
+        !MdoHomeAtomicWrite("skills/qa-explorer/SKILL.md", sExternalV1,
             strlen(sExternalV1), false) || !MdoSkillManagerReload()) {{
         PrintError("external_v1_error"); goto done;
     }}
@@ -164,15 +168,15 @@ void ServiceInit(XS_HostInfo *host) {{
     memset(&undeclared, 0, sizeof(undeclared));
     undeclared.Size = sizeof(undeclared);
     printf("undeclared_resource=%d\n",
-        MdoSkillCatalogLoadResource(external_v1, "project-explorer",
+        MdoSkillCatalogLoadResource(external_v1, "qa-explorer",
             "assets/not-declared.txt", 4096u, &undeclared) ? 1 : 0);
     if (xrtGetError() != NULL) PrintError("undeclared_error");
 
-    if (!MdoHomeAtomicWrite("skills/project-explorer/scripts/run.txt",
+    if (!MdoHomeAtomicWrite("skills/qa-explorer/scripts/run.txt",
             "script-v2", 9u, false) ||
-        !MdoHomeAtomicWrite("skills/project-explorer/templates/stale.txt",
+        !MdoHomeAtomicWrite("skills/qa-explorer/templates/stale.txt",
             "stale-v2", 8u, false) ||
-        !MdoHomeAtomicWrite("skills/project-explorer/SKILL.md", sExternalV2,
+        !MdoHomeAtomicWrite("skills/qa-explorer/SKILL.md", sExternalV2,
             strlen(sExternalV2), false) || !MdoSkillManagerReload()) {{
         PrintError("external_v2_error"); goto done;
     }}
@@ -184,7 +188,7 @@ void ServiceInit(XS_HostInfo *host) {{
     PrintResource(external_v1, "scripts/run.txt", "pinned_v1_script");
     PrintResource(external_v1, "templates/stale.txt", "stale_v1_template");
 
-    if (!MdoHomeAtomicWrite("skills/project-explorer/SKILL.md", sInvalid,
+    if (!MdoHomeAtomicWrite("skills/qa-explorer/SKILL.md", sInvalid,
             strlen(sInvalid), false) || !MdoSkillManagerReload()) {{
         PrintError("invalid_publish_error"); goto done;
     }}
@@ -195,7 +199,7 @@ void ServiceInit(XS_HostInfo *host) {{
     PrintDiagnostics("invalid_diagnostic");
     MdoSkillCatalogRelease(catalog); catalog = NULL;
 
-    if (!MdoHomeAtomicWrite("skills/project-explorer/SKILL.md", sMissing,
+    if (!MdoHomeAtomicWrite("skills/qa-explorer/SKILL.md", sMissing,
             strlen(sMissing), false) || !MdoSkillManagerReload()) {{
         PrintError("missing_publish_error"); goto done;
     }}
@@ -219,6 +223,7 @@ void ServiceUnit(XS_HostInfo *host) {{ (void)host; }}
 
 
 def write_site(site: Path) -> None:
+    shutil.copytree(ROOT / "app", site, dirs_exist_ok=True)
     for relative in (
         "web", "default-home/config", "default-home/skills",
         "src/storage", "src/skills", "include/mdo",
@@ -234,6 +239,10 @@ def write_site(site: Path) -> None:
         "include/mdo/home.h", "include/mdo/home_purge.h", "include/mdo/home_restore.h", "include/mdo/session_file_policy.h", "include/mdo/skills.h",
     ):
         copy_app_source(relative, site)
+    (site / "src/storage/home.c").write_bytes((ROOT / "app/src/storage/home.c").read_bytes())
+    unity = site / 'generated/mdo_unity.c'
+    text = unity.read_text(encoding='utf-8').replace('#include "../src/skills/manager.c"','')
+    unity.write_text(text,encoding='utf-8')
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -251,6 +260,10 @@ def write_site(site: Path) -> None:
 
 
 def run_probe(host: Path, site: Path, home: Path) -> str:
+    authored = home / 'skills/qa-explorer'
+    authored.parent.mkdir(parents=True,exist_ok=True)
+    shutil.copytree(ROOT / 'app/default-home/skills/project-explorer',authored)
+    (authored / 'extension.json').write_text(json.dumps(dict(kind='skills',id='skill:qa.explorer',name='Explorer fixture',alias='qa-explorer',entry='SKILL.md',platforms=['any'])),encoding='utf-8')
     command = [str(host), "xs.json", "--", "--home", str(home)]
     creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     process = subprocess.Popen(
@@ -300,13 +313,13 @@ def main() -> int:
         write_site(site)
         output = run_probe(host, site, base / "home")
         assert "skill_init_error=" not in output, output
-        assert "initial_generation=1 count=2" in output, output
-        assert "initial_skill=id:project-explorer external:0 trust:0" in output, output
-        assert "builtin_body=external:0 trust:0" in output, output
+        assert "initial_generation=1 count=3" in output, output
+        assert "initial_skill=id:qa-explorer external:1 trust:1" in output, output
+        assert "builtin_body=external:1 trust:1" in output, output
         assert "# Project Explorer" in output, output
-        assert "builtin_template=kind:2 external:0" in output, output
-        assert "external_v1_generation=2 count=2 old_count=2" in output, output
-        assert "external_v1_skill=id:project-explorer external:1 trust:1 version:2.0.0" in output, output
+        assert "builtin_template=kind:2 external:1" in output, output
+        assert "external_v1_generation=2 count=3 old_count=3" in output, output
+        assert "external_v1_skill=id:qa-explorer external:1 trust:1 version:2.0.0" in output, output
         assert "external_v1_body=external:1 trust:1 text:external-body-v1" in output, output
         assert "external_v1_script=kind:1 external:1 text:script-v1" in output, output
         assert "undeclared_resource=0" in output, output
@@ -316,12 +329,12 @@ def main() -> int:
         assert "pinned_v1_body=external:1 trust:1 text:external-body-v1" in output, output
         assert "pinned_v1_script=kind:1 external:1 text:script-v1" in output, output
         assert "stale_v1_template=Skill resource changed; reload the Skill catalog" in output, output
-        assert "invalid_generation=4 count=1" in output, output
+        assert "invalid_generation=4 count=2" in output, output
         assert "invalid_diagnostic_count=1" in output, output
-        assert "invalid_diagnostic=stage:3 id:project-explorer" in output, output
-        assert "missing_generation=5 count=1" in output, output
+        assert "invalid_diagnostic=stage:3 id:qa-explorer" in output, output
+        assert "missing_generation=5 count=2" in output, output
         assert "missing_diagnostic_count=1" in output, output
-        assert "missing_diagnostic=stage:4 id:project-explorer" in output, output
+        assert "missing_diagnostic=stage:4 id:qa-explorer" in output, output
         assert "probe_done=1" in output, output
     print("skill runtime probe: PASS")
     return 0

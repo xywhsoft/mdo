@@ -145,10 +145,10 @@ try{
  const {api}=await import('/js/api/client.js');
  const current=await api.get('/models/config');
  const {runtime_override,verification,...config}=current.data;
- const provider={...config.providers[0],id:'native-changes-fixture',name:'Native changes fixture',builtin:false,
+ const provider={...{"id": "fixture-provider", "name": "Fixture", "builtin": false, "editable": true, "removable": true, "verify_peer": true, "timeout_ms": 120000, "endpoints": {"chat_completions": "http://127.0.0.1:9/v1"}},id:'native-changes-fixture',name:'Native changes fixture',builtin:false,
   editable:true,removable:true,endpoints:{chat_completions:'http://127.0.0.1:9/v1/chat/completions'},
   credential:{secret_ref:'env:MDO_NATIVE_FIXTURE_KEY'}};
- const model={...config.items[0],id:'native-changes-fixture',name:'Native changes fixture',provider:provider.id,
+ const model={...{"id": "fixture", "name": "Fixture model", "provider": "fixture-provider", "wire_model": "fixture", "builtin": false, "free": false, "editable": true, "removable": true, "protocols": ["openai-chat-completions"], "default_protocol": "openai-chat-completions", "capabilities": ["text-input", "tool-result-input", "text-output", "streaming", "tool-call-output"], "window": {"mode": "shared-context", "context_tokens": 240128, "max_input_tokens": 240127, "max_output_tokens": 16384, "output_reserve_tokens": 8192, "summary_tokens": 4096}, "reasoning_efforts": ["none"], "default_reasoning_effort": "none", "attachments": []},id:'native-changes-fixture',name:'Native changes fixture',provider:provider.id,
   builtin:false,free:false,editable:true,removable:true,protocols:['openai-chat-completions'],default_protocol:'openai-chat-completions'};
  await api.put('/settings/models',{schema_version:1,patch:{...config,providers:[...config.providers,provider],items:[...config.items,model]}},{ifMatch:current.etag});
  const session=(await api.post('/sessions',{project_id:'default',title:'Native baseline QA',

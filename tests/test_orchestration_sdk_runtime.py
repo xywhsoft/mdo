@@ -32,8 +32,13 @@ static mdo_result Capture(void* U,const mdo_sdk_context_v1* C,const xvalue* P,xv
  *R=V->Object();V->Set(*R,"before",Before);V->Set(*R,"after",After);if(Nested)V->Set(*R,"nested",Nested);
  V->Release(Before);V->Release(Nested);V->Release(After);return MDO_RESULT_OK;
 }
+static mdo_result Tool(void* U,const mdo_tool_context_v1* C,const char* P,mdo_result_writer_v1* W,char* E,size_t N){
+ (void)U;(void)C;(void)P;(void)E;(void)N;return W->WriteText(W->Context,"context fixture")&&W->SetSuccess(W->Context,true)?MDO_RESULT_OK:MDO_RESULT_ERROR;
+}
 static mdo_result Register(const mdo_host_services_v1* H,const mdo_registrar_v1* R,void** D,char* E,size_t N){
  (void)H;(void)D;mdo_service_v1 S={sizeof(S),1,"qa.trace","Trace fixture","{}","{}",MDO_TOOL_EFFECT_READ,NULL,Capture};
+ mdo_tool_v1 T={0};T.Size=sizeof(T);T.AbiVersion=1;T.Id="qa.orchestration-context";T.Name="SDK context";T.Description="Read execution context";T.ParametersJson="{\"type\":\"object\"}";T.Effects=MDO_TOOL_EFFECT_READ;T.MaxResultBytes=8192;T.Execute=Tool;
+ if(R->AddTool(R->Context,&T,E,N)!=MDO_RESULT_OK)return MDO_RESULT_ERROR;
  if(R->AddService(R->Context,&S,E,N)!=MDO_RESULT_OK)return MDO_RESULT_ERROR;
  S.Id="qa.child";return R->AddService(R->Context,&S,E,N);
 }
@@ -48,9 +53,8 @@ class Fixture:
         self.home = base / 'home'
         self.port = free_port()
         self.config = write_site(base, self.port)
-        module = self.home / 'modules/tools/orchestration.c'
-        module.parent.mkdir(parents=True)
-        module.write_text(MODULE, encoding='utf-8')
+        from runtime_sources import authored_extension
+        authored_extension(self.home,'tools','orchestration','tool.c',MODULE)
         self.host = host
 
     def start(self):

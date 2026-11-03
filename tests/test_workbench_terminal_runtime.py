@@ -1,4 +1,5 @@
 """Exercise real xrt PTYs in a private Home, without touching user terminals."""
+from runtime_sources import authored_extension
 import argparse,base64,json,os,re,subprocess,sys,tempfile,time,uuid
 from pathlib import Path
 from test_api_runtime import ROOT,write_site,free_port,request,wait_ready
@@ -46,7 +47,7 @@ def main():
   terminal_source.write_text(text.replace(hook,'    if(Title&&!strcmp(Title,"delayed-creation"))xrtSleep(350);\n'+hook),encoding='utf-8')
   (home/'commands').mkdir(parents=True)
   csource=COMMAND.replace('mdo_result Code=mdoCall(S,Method,V->At(A,1),R,&E);','mdo_result Code=!strcmp(Method,"terminal.capabilities")?mdoTerminalCapabilities(S,V->At(A,1),R,&E):mdoCall(S,Method,V->At(A,1),R,&E);')
-  (home/'commands/sdk.c').write_text('/* mdo-command {"id":"sdk","description":"Terminal fixture"} */\n#include <string.h>\n#include <mdo/workbench.h>\n'+csource,encoding='utf-8')
+  authored_extension(home,"commands",'sdk',"command.c",'/* mdo-command {"id":"sdk","description":"Terminal fixture"} */\n#include <string.h>\n#include <mdo/workbench.h>\n'+csource)
   log=(base/'host.log').open('wb')
   def start():
    nonlocal process
@@ -209,7 +210,7 @@ def main():
    before=time.monotonic();assert call('qa.terminal-stop') is True;assert time.monotonic()-before<5
    drained=call('terminal.get',{'id':running['id']});assert drained['state']=='ended' and drained['drained'] and drained['reason']=='service_stopped',drained
    stop();(home/'data/application/terminals.json').write_text('{broken terminal metadata');start()
-   call('terminal.capabilities',expected=503);assert call('runtime.info')['version']=='0.6.0'
+   call('terminal.capabilities',expected=503);assert call('runtime.info')['version']==json.loads((ROOT/'app/release.json').read_text(encoding='utf-8'))['version_name']
    assert (home/'data/application/terminals.json').read_text()=='{broken terminal metadata'
    if args.evidence:
     args.evidence.mkdir(parents=True,exist_ok=True);(args.evidence/'result.json').write_text(json.dumps({'passed':True,'time':time.time(),'platform':sys.platform,'checks':['C and HTTP shared sessions','real TTY','scope isolation','project lease lifetime','ordered deduplicated input','control lease','resize','bounded output/gap','input backpressure','explicit close/drain','no create replay after release','no command replay after restart','metadata privacy','corrupt receipt','spawn failure','graceful service drain','corrupt metadata retained'],'capabilities':cap,'ended':ended,'restored':restored},indent=2),encoding='utf-8')

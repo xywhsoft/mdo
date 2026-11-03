@@ -1,4 +1,5 @@
 """Real frontend/native context, history and inline edit regression; local model only."""
+from runtime_sources import authored_extension
 import argparse
 from http.server import ThreadingHTTPServer
 import json
@@ -23,8 +24,8 @@ def check(host, browser, width, packed=None):
             runtime = base; port = free_port(); config = write_site(base, port)
         home = base / "home"; workspace = base / "workspace"
         (workspace / "src").mkdir(parents=True); (workspace / "src/readme.md").write_text("Fixture", encoding="utf-8")
-        commands = workspace / ".mdo/commands"; commands.mkdir(parents=True)
-        (commands / "context-qa.c").write_text('''/* mdo-command
+        commands = home / "commands"; commands.mkdir(parents=True)
+        authored_extension(commands.parent,"commands",'context-qa',"command.c",'''/* mdo-command
 {"id":"context-qa","description":"Expand an inline test draft","effects":["read"]}
 */
 #include "mdo/command.h"
@@ -33,7 +34,7 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,
     (void)A; *R = C->Host->Parse("{\\"draft\\":\\"Expanded inline command\\"}");
     return *R ? MDO_RESULT_OK : MDO_RESULT_ERROR;
 }
-''', encoding="utf-8")
+''')
         server = ThreadingHTTPServer(("127.0.0.1", 0), Model)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         log = (base / "runtime.log").open("wb"); process = None

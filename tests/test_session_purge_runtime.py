@@ -23,6 +23,8 @@ def api_probe(packed: Path):
         process = start(path, packed, home, dict(os.environ, MDO_HOME=str(home)))
         try:
             assert wait_bootstrap(process, port, path / "packed.log")[1]["data"]["stage"] == "ready"
+            from test_packed_home_lease import configure_offline_model
+            configure_offline_model(port)
 
             def call(method, route, body=None, etag=None, **options):
                 headers = {"If-Match": etag} if etag else {}
@@ -77,7 +79,7 @@ def api_probe(packed: Path):
             assert call("GET", route)[0] == 404
             assert call("POST", route + "/restore", etag=trash_tag)[0] == 404
             assert call("POST", route + "/purge", etag=trash_tag)[0] == 404
-            assert call("GET", "/workspace-state")[2]["data"] == {"project_id": "", "session_id": ""}
+            assert call("GET", "/workspace-state")[2]["data"] == {"project_id": "", "session_id": "", "last_activated_at": 0}
             assert all(item["id"] != value["id"] for item in call("GET", "/sessions")[2]["data"]["items"])
             # An unrelated saved selection must survive a different deletion.
             route2, tag2, value2 = create("second disposable target")

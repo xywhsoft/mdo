@@ -1,3 +1,4 @@
+from model_fixture import conversation_catalog
 """Local packed-page fixture for todo, ask, and approval UI review.
 
 With --interleaved-chat-stream, send STREAM FAIL UI for a deterministic parse
@@ -1369,7 +1370,7 @@ base = Path(tempfile.mkdtemp(prefix="mdo-packed-docks-", dir=ROOT / ".build"))
 if args.image_capable:
     defaults = json.loads((ROOT / "app/default-home/config/defaults.json")
                           .read_text(encoding="utf-8"))
-    model_config = defaults["models"]["items"][0]
+    model_config = conversation_catalog()["items"][0]
     text_model = json.loads(json.dumps(model_config))
     text_model["capabilities"] = [item for item in text_model["capabilities"] if item != "media-input"]
     text_model["attachments"] = []

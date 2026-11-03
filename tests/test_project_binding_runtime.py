@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import re
 import tempfile
 from pathlib import Path
 
@@ -34,7 +35,9 @@ def write_binding_site(site: Path) -> None:
     needle = "File != NULL && !xrtClose(File)"
     assert text.count(needle) == 1
     binding.write_text(text.replace(needle, "File != NULL && !BindingProbeClose(File)"), encoding="utf-8")
-    shutil.copy2(ROOT / "tests/fixtures/project-binding.c", site / "probe.c")
+    source = (ROOT / "tests/fixtures/project-binding.c").read_text(encoding="utf-8")
+    source = re.sub(r'(BindingProbeOptions\(&Options, [^,]+, ")workspaces/',lambda m:m[1]+site.as_posix()+"/workspaces/",source)
+    (site / "probe.c").write_text(source,encoding="utf-8")
     for leaf in ("空间 alpha", "other"):
         (site / "workspaces" / leaf).mkdir(parents=True)
     (site / "workspaces/not-directory.txt").write_text("keep-file-root", encoding="utf-8")

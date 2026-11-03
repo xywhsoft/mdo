@@ -152,7 +152,7 @@ def check(packed: Path, base: Path, interactive: bool = False) -> dict:
             run, _ = call("POST", path + "/runs", {"prompt": "Continue after rejected configuration."}, 202)
             result = until(lambda: (value if (value := call("GET", "/runs/" + run["id"])[0])["terminal"] else None), seconds=15)
             assert result["state"] == "succeeded", result
-            assert Model.calls == 2 and Model.requests == ["ornith-1.5-35b", "profile-alternative"]
+            assert Model.calls == 2 and Model.requests == ["fixture", "profile-alternative"], Model.requests
         events = session_events(port, "/api/v1" + path)
         proof = {"source_id": source["id"], "rejections": rejections,
             "rejected_snapshot_unchanged": rejected_snapshot_unchanged,

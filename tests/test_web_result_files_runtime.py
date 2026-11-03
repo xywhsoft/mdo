@@ -75,12 +75,12 @@ def run(host: Path, envelopes: list[dict], *, ephemeral: bool = False) -> None:
     options.pSession = session;""")
             calls = []
             for i in range(len(envelopes)):
-                calls.append(f'    if (!Execute(agent, "web_search", "{{\\\"query\\\":\\\"fixture-{i}\\\",\\\"count\\\":10}}", &search)) goto done;\n')
+                calls.append(f'    if (!Execute(agent, "search", "{{\\\"query\\\":\\\"fixture-{i}\\\",\\\"count\\\":10}}", &search)) goto done;\n')
                 if ephemeral:
                     calls.append('    if (!strstr(search, "file_unavailable") || !strstr(search, "snippet") || strlen(search) > 4256) { printf("result_file_failed=ephemeral\\n"); goto done; }\n')
                 else:
                     calls.append(READ_PROBE)
-                    calls.append(f'    if (!Execute(agent, "web_search", "{{\\\"query\\\":\\\"fixture-{i}\\\",\\\"count\\\":10}}", &open) || strcmp(search, open)) {{ printf("result_file_failed=receipt\\n"); goto done; }}\n')
+                    calls.append(f'    if (!Execute(agent, "search", "{{\\\"query\\\":\\\"fixture-{i}\\\",\\\"count\\\":10}}", &open) || strcmp(search, open)) {{ printf("result_file_failed=receipt\\n"); goto done; }}\n')
                 calls.append('    xrtFree(search); search = NULL; xrtFree(open); open = NULL;\n')
             text = text.replace('    printf("probe_done=1\\n");', ''.join(calls) + '    printf("probe_done=1\\n");')
             text = text.replace("    xworkAgentDestroy(agent);", "    xworkAgentDestroy(agent); xworkArtifactStoreRelease(store);")

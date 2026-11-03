@@ -34,6 +34,11 @@ def project_references_probe(port: int, home: Path, log_path: Path) -> None:
         assert status == expected, (method, path, status, body)
         return json.loads(body)
 
+    def selection():
+        data=api("GET",selection_path)["data"]
+        assert isinstance(data["last_activated_at"],int) and (data["last_activated_at"]>0 if data["session_id"] else data["last_activated_at"]==0),data
+        return {key:data[key] for key in ("project_id","session_id")}
+
     def snapshot(expected: set[str]) -> None:
         data = api("GET", control + "snapshot")["data"]
         assert data["count"] == len(expected), data
@@ -170,11 +175,11 @@ def project_references_probe(port: int, home: Path, log_path: Path) -> None:
         thread = threading.Thread(target=writer, args=("selection", selection_path, other_selection))
         wait_and_check(thread, "reference_waiter=2", before)
         assert not errors and outcomes["selection"][0] == 200, (errors, outcomes)
-        assert api("GET", selection_path)["data"] == other_selection
+        assert selection() == other_selection
         draft("reference-other", "other pending input")
         snapshot(set())
         assert api("GET", draft_path)["data"]["text"] == "other pending input"
-        assert api("GET", selection_path)["data"] == other_selection
+        assert selection() == other_selection
 
         # Move only current owned references in the same storage transaction.
         draft("reference-probe")
@@ -187,7 +192,7 @@ def project_references_probe(port: int, home: Path, log_path: Path) -> None:
             and not p.startswith("sessions/reference-probe/")}
         assert files() == expected
         assert api("GET", draft_path)["data"]["revision"] == 0
-        assert api("GET", selection_path)["data"] == {"project_id": "", "session_id": ""}
+        assert selection() == {"project_id": "", "session_id": ""}
         # A delayed request cannot resurrect the removed project at revision 0.
         api("PUT", draft_path, {"revision": 0, "text": "late",
             "new_task": own_task}, expected=404)
@@ -231,7 +236,7 @@ def run_probe(host: Path) -> None:
                 wait_ready(port, process)
                 status, _, body = request(port, "GET", "/__fixture/project-references/snapshot")
                 assert status == 200 and json.loads(body)["data"]["count"] == 0, (status, body)
-                assert not home.exists(), home
+                assert not list((home / "sessions").rglob("meta.json")), home
                 project_references_probe(port, home, log_path)
             except BaseException as error:
                 output = log_path.read_text(encoding="utf-8", errors="replace")

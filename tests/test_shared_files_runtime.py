@@ -20,6 +20,8 @@ def probe(host):
         base = Path(temporary)
         site, inbox, workspace = base / 'site', base / 'inbox', base / 'workspace'
         shutil.copytree(ROOT / 'app', site)
+        from runtime_sources import seed_personal_defaults
+        seed_personal_defaults(site)
         inbox.mkdir(); workspace.mkdir()
         config = site / 'xs.json'; port = free_port()
         config.write_text(json.dumps({'services': [{'enabled': True, 'class': 'http', 'name': 'shares',

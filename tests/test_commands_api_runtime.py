@@ -1,4 +1,5 @@
 """Command jobs: real parent/child execution, cancellation, deadline and replay."""
+from runtime_sources import authored_extension
 import argparse,json,os,subprocess,tempfile,time,uuid,shutil
 from pathlib import Path
 from test_api_runtime import ROOT,write_site,free_port,request,wait_ready
@@ -18,7 +19,7 @@ def main():
         (home/'commands').mkdir(parents=True)
         legacy='---\ndescription: Legacy review\n---\nReview $ARGUMENTS carefully.'
         (home/'commands/legacy.md').write_text(legacy,encoding='utf-8')
-        commands=home/'commands' if args.packed else base/'default-home/commands';commands.mkdir(parents=True,exist_ok=True)
+        commands=home/'commands';commands.mkdir(parents=True,exist_ok=True)
         bodies={
           'echo':'mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){char* J=C->Host->Json(A);*R=C->Host->Parse(J);C->Host->Free(J);return MDO_RESULT_OK;}',
           'quit':'#include <stdlib.h>\nmdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){exit(17);return MDO_RESULT_ERROR;}',
@@ -30,7 +31,7 @@ def main():
           'bridge':'mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){return mdoCommandCall(C,"ui.help",A,R);}',
           'api':'mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){xvalue* P=C->Host->Parse("{\\"method\\":\\"GET\\",\\"path\\":\\"/api/v1/bootstrap\\"}");mdo_result E=mdoCommandCall(C,"api.request",P,R);C->Host->Release(P);return E;}',
         }
-        for name,body in bodies.items():(commands/f'{name}.c').write_text(fixture(name,body,1000 if name=='loop' else 30000),encoding='utf-8')
+        for name,body in bodies.items():authored_extension(commands.parent,"commands",name,"command.c",fixture(name,body,1000 if name=='loop' else 30000))
         log=base/'host.log'
         with log.open('wb') as output:
             process=subprocess.Popen([str(host),*([] if args.packed else [str(config)]),'--','--home',str(home)],cwd=base,stdout=output,stderr=subprocess.STDOUT,
@@ -74,32 +75,11 @@ def main():
                     if name in ('fork','export','clear'):assert result['actions'][0]['params']['action']==name,result
                 result=wait(invoke('new','unexpected'))
                 assert result['state']=='failed' and 'Invalid arguments for /new' in result['error'],result
-                result=wait(invoke('legacy','"C:\\new folder\\chapter.txt"'))
-                assert result['state']=='succeeded' and result['actions'][0]['type']=='skill.invoke',result
-                skill=result['actions'][0]['params']['id']
-                status,_,raw=request(port,'POST','/api/v1/skills/invoke?project=default',
-                    body=json.dumps({'id':skill,'arguments':'hello world'}).encode(),headers={'Content-Type':'application/json'})
-                assert status==200 and 'Review hello world carefully.' in json.loads(raw)['data']['text'],raw
+                # Flat Markdown migration and project overlays were retired.
+                # Directory CRUD/trust is covered by command_directory_native;
+                # this API probe keeps worker and receipt failure coverage.
+                assert 'legacy' not in json.loads(request(port,'GET','/api/v1/commands?project=default')[2])['data']
                 assert (home/'commands/legacy.md').read_text(encoding='utf-8')==legacy
-                old=json.loads(request(port,'GET','/api/v1/extensions/commands/legacy')[2])['data']
-                status,_,raw=request(port,'DELETE','/api/v1/extensions/commands/legacy',headers={'If-Match':'"'+old['revision']+'"'})
-                assert status==200,(status,raw)
-                builtin=json.loads(request(port,'GET','/api/v1/extensions/commands/help')[2])['data']['content']
-                path='/api/v1/commands/project/help?project=default'
-                status,_,raw=request(port,'PUT',path,body=json.dumps({'content':builtin}).encode(),headers={'Content-Type':'application/json','If-Match':'"new"'})
-                assert status==200,(status,raw)
-                revision=json.loads(raw)['data']['revision']
-                assert json.loads(request(port,'GET','/api/v1/commands?project=default')[2])['data']['help']['scope']=='project'
-                toggle='/api/v1/commands/project/help/enabled?project=default'
-                for enabled in (False,True):
-                    status,_,raw=request(port,'POST',toggle,body=json.dumps({'enabled':enabled}).encode(),headers={'Content-Type':'application/json','If-Match':'"'+revision+'"'})
-                    assert status==200,(status,raw)
-                    assert json.loads(request(port,'GET','/api/v1/commands?project=default')[2])['data']['help']['enabled']==enabled
-                status,_,_=request(port,'PUT',path,body=json.dumps({'content':builtin}).encode(),headers={'Content-Type':'application/json','If-Match':'"new"'})
-                assert status==412
-                status,_,raw=request(port,'DELETE',path,headers={'If-Match':'"'+revision+'"'})
-                assert status==200,(status,raw)
-                assert json.loads(request(port,'GET','/api/v1/commands?project=default')[2])['data']['help']['scope']=='builtin'
                 damaged='cmd-'+uuid.uuid4().hex
                 (home/'data/commands'/f'{damaged}.json').write_text('corrupt receipt',encoding='utf-8')
                 status,_,raw=request(port,'GET','/api/v1/command-invocations/'+damaged)
@@ -113,7 +93,7 @@ def main():
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
                 wait_ready(port,process)
                 assert wait(invoke('help'))['state']=='succeeded','One corrupt receipt disabled normal commands after restart'
-                assert 'legacy' not in json.loads(request(port,'GET','/api/v1/commands?project=default')[2])['data'],'Deleted migrated command was resurrected from its backup'
+                assert 'legacy' not in json.loads(request(port,'GET','/api/v1/commands?project=default')[2])['data'],'Retired flat command was loaded after restart'
                 assert (home/'data/commands'/f'{damaged}.json').read_text(encoding='utf-8')=='corrupt receipt'
                 assert not list((home/'data/cache/command-workers').glob('*/input.json')),'Sensitive worker inputs retained'
                 assert process.poll() is None,'Command terminated the host'

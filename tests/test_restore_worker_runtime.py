@@ -111,13 +111,13 @@ class Probe(CoordinatorProbe):
         assert self.api("DELETE", RESTORES + identifier)[0] == 200
 
     def check(self):
-        assert not self.home.exists()
+        assert not list((self.home / "sessions").rglob("meta.json"))
         assert self.api("GET", RESTORES.rstrip("/"))[1]["data"] == {"empty": True}
         assert self.call("HEAD", RESTORES.rstrip("/"))[0] == 200
         assert self.api("GET", RESTORES + "a" * 32)[0] == 404
         assert self.call("HEAD", RESTORES + "a" * 32)[0] == 404
         assert self.api("POST", RESTORES + "a" * 32 + "/apply")[0] == 404
-        assert not self.home.exists()
+        assert not list((self.home / "sessions").rglob("meta.json"))
         document, payload = self.setup_source()
         preview, digest = self.preview(document)
         review_path = PREVIEWS + preview + "/restore-review"

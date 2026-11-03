@@ -16,7 +16,7 @@ void ServiceInit(XS_HostInfo* Host) {
     Event.eModelErrorCode=XLLM_ERROR_RATE_LIMIT; Event.uHttpStatus=429;
     Event.sProviderCode="daily_token_limit"; Event.sText="specific final error";
     Event.iTextLength=strlen(Event.sText); Event.tDiagnostics.uAttemptCount=1;
-    size_t Size=0; char* Json=MdoEventsRecord(&Bridge,1,&Event,"",0,&Size);
+    size_t Size=0; char* Json=MdoEventsRecord(&Bridge,1,&Event,"",0,NULL,&Size);
     MdoSessionEventOwned Parsed={0};
     bool Good=Json && MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
     printf("current=%u schema=%u kind=%s status=%u attempts=%u\n",Good,
@@ -28,6 +28,7 @@ void ServiceInit(XS_HostInfo* Host) {
     xrtValueObjectRemove(Root,XRT_STR_LITERAL("model_error_kind"));
     xrtValueObjectRemove(Root,XRT_STR_LITERAL("model_http_status"));
     xrtValueObjectRemove(Root,XRT_STR_LITERAL("model_attempts"));
+    xrtValueObjectRemove(Root,XRT_STR_LITERAL("model_timing"));
     Json=xrtJsonStringify(Root,false,&Size);
     Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
     printf("legacy=%u schema=%u empty_kind=%u\n",Good,Parsed.Info.SchemaVersion,
@@ -39,25 +40,25 @@ void ServiceInit(XS_HostInfo* Host) {
     MdoEventsOwnedUnit(&Parsed); xrtFree(Json); xrtValueRelease(Root);
     Event.eModelErrorCode=XLLM_ERROR_AUTH; Event.uHttpStatus=0u;
     Event.sProviderCode="profile_credential_unavailable";
-    Json=MdoEventsRecord(&Bridge,3,&Event,"",0,&Size);
+    Json=MdoEventsRecord(&Bridge,3,&Event,"",0,NULL,&Size);
     Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
     printf("local_profile=%u kind=%s\n",Good,Parsed.Info.ModelErrorKind);
     MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
     Event.eModelErrorCode=XLLM_ERROR_INVALID_ARGUMENT;
     Event.sProviderCode="profile_image_unsupported";
-    Json=MdoEventsRecord(&Bridge,3,&Event,"",0,&Size);
+    Json=MdoEventsRecord(&Bridge,3,&Event,"",0,NULL,&Size);
     Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
     printf("image_profile=%u kind=%s\n",Good,Parsed.Info.ModelErrorKind);
     MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
     Event.eModelErrorCode=XLLM_ERROR_AUTH;
     Event.sProviderCode="profile_credential_unavailable";
     Event.uHttpStatus=401u;
-    Json=MdoEventsRecord(&Bridge,3,&Event,"",0,&Size);
+    Json=MdoEventsRecord(&Bridge,3,&Event,"",0,NULL,&Size);
     Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
     printf("upstream_profile_code=%u kind=%s\n",Good,Parsed.Info.ModelErrorKind);
     MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
     Event.eKind=XWORK_EVENT_MODEL_START; Event.eModelErrorCode=XLLM_ERROR_NONE;
-    Json=MdoEventsRecord(&Bridge,2,&Event,"",0,&Size);
+    Json=MdoEventsRecord(&Bridge,2,&Event,"",0,NULL,&Size);
     Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
     printf("ordinary=%u empty_kind=%u\n",Good,Parsed.Info.ModelErrorKind[0]==0);
     MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
@@ -67,31 +68,31 @@ void ServiceInit(XS_HostInfo* Host) {
     Event.eKind=XWORK_EVENT_COMPACTION_DONE; Event.uAgentDepth=1u;
     MdoEventsCompactionPhase(&Bridge,&Event);
     Event.eKind=XWORK_EVENT_ERROR;
-    Json=MdoEventsRecord(&Bridge,3,&Event,"",0,&Size);
+    Json=MdoEventsRecord(&Bridge,3,&Event,"",0,NULL,&Size);
     Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
     printf("child_isolation=%u\n",Good && Parsed.Info.ModelErrorKind[0]==0 && Bridge.MainCompacting);
     MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
     Event.uAgentDepth=0u; Event.uRunId=3u;
-    Json=MdoEventsRecord(&Bridge,4,&Event,"",0,&Size);
+    Json=MdoEventsRecord(&Bridge,4,&Event,"",0,NULL,&Size);
     Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
     MdoEventsCompactionPhase(&Bridge,&Event);
     printf("unrelated_run=%u\n",Good && Parsed.Info.ModelErrorKind[0]==0 && Bridge.MainCompacting);
     MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
     Event.uRunId=2u;
-    Json=MdoEventsRecord(&Bridge,5,&Event,"",0,&Size);
+    Json=MdoEventsRecord(&Bridge,5,&Event,"",0,NULL,&Size);
     Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
     printf("compaction=%u kind=%s\n",Good,Parsed.Info.ModelErrorKind);
     MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
     Event.eModelErrorCode=XLLM_ERROR_RATE_LIMIT;
     Event.sProviderCode="daily_token_limit"; Event.uHttpStatus=429u;
-    Json=MdoEventsRecord(&Bridge,6,&Event,"",0,&Size);
+    Json=MdoEventsRecord(&Bridge,6,&Event,"",0,NULL,&Size);
     Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
     printf("compaction_provider=%u kind=%s\n",Good,Parsed.Info.ModelErrorKind);
     MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
     MdoEventsCompactionPhase(&Bridge,&Event);
     Event.eModelErrorCode=XLLM_ERROR_NONE;
     Event.sProviderCode=NULL; Event.uHttpStatus=0u;
-    Json=MdoEventsRecord(&Bridge,7,&Event,"",0,&Size);
+    Json=MdoEventsRecord(&Bridge,7,&Event,"",0,NULL,&Size);
     Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
     printf("closed_phase=%u\n",Good && Parsed.Info.ModelErrorKind[0]==0 && !Bridge.MainCompacting);
     MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
@@ -110,9 +111,9 @@ void ServiceInit(XS_HostInfo* Host) {
     Event.sProviderRequestId="request-fixture"; Event.sFinishReason="stop";
     Event.uHttpStatus=200u; Event.iResponseToolCallCount=2u;
     Event.tDiagnostics.uAttemptCount=3u;
-    Json=MdoEventsRecord(&Bridge,8,&Event,"",0,&Size);
+    Json=MdoEventsRecord(&Bridge,8,&Event,"",0,NULL,&Size);
     Good=Json && MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
-    printf("model_done_metadata=%u\n",Good && Parsed.Info.SchemaVersion==7u &&
+    printf("model_done_metadata=%u\n",Good && Parsed.Info.SchemaVersion==10u &&
         !strcmp(Parsed.Info.ModelRequestId,"request-fixture") &&
         !strcmp(Parsed.Info.ModelFinishReason,"stop") && Parsed.Info.ModelToolCallCount==2u &&
         Parsed.Info.ModelHttpStatus==200u && Parsed.Info.ModelAttempts==3u);
@@ -124,6 +125,7 @@ void ServiceInit(XS_HostInfo* Host) {
     xrtValueObjectRemove(Root,XRT_STR_LITERAL("model_tool_call_count"));
     xrtValueObjectRemove(Root,XRT_STR_LITERAL("model_http_status"));
     xrtValueObjectRemove(Root,XRT_STR_LITERAL("model_attempts"));
+    xrtValueObjectRemove(Root,XRT_STR_LITERAL("model_timing"));
     Json=xrtJsonStringify(Root,false,&Size);
     Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
     printf("legacy_model_done=%u\n",Good && Parsed.Info.SchemaVersion==6u && !Parsed.Info.ModelRequestId[0]);
@@ -143,7 +145,7 @@ def main():
         write_site(site)
         (site / 'probe.c').write_text(PROBE, encoding='utf-8')
         output = run_probe(host, site, base / 'home')
-        for expected in ('current=1 schema=7 kind=daily_token_limit status=429 attempts=1',
+        for expected in ('current=1 schema=10 kind=daily_token_limit status=429 attempts=1',
                          'local_profile=1 kind=profile_credential_unavailable',
                          'image_profile=1 kind=profile_image_unsupported',
                          'upstream_profile_code=1 kind=authentication_failed',

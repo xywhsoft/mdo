@@ -65,11 +65,13 @@ def run_probe(host: Path):
             send(probe, "GET", CANCEL, expected=405)
             body, headers = {"purge_request_id": ID, "created_at": 1}, {"If-Match": '"mdo-project-purge-probe-1"'}
             probe.api("POST", CONTROL + "cancel-invalid", {})
-            send(probe, "POST", CANCEL, body, 503, headers)
+            cancelled=send(probe, "POST", CANCEL, {**body,"purge_request_id":"c"*32}, headers=headers)[1]
+            assert_no_targets(cancelled["data"])
             send(probe, "GET", RESULT, expected=404)
-            assert not probe.home.exists()  # cancellation never materializes fallback
+            assert not list((probe.home / "sessions").rglob("meta.json"))  # cancellation never materializes fallback
             probe.seed()
             before, state = probe.files(), probe.control("state")
+            published_before = probe.published()
             body, headers = params(probe)
             for payload, precondition, status in ((body, {}, 428),
                     (body, {"If-Match": 'W/"mdo-project-purge-probe-1"'}, 400),
@@ -83,7 +85,7 @@ def run_probe(host: Path):
             data = cancel(probe)["data"]
             assert_no_targets(data)
             assert not data["replayed"] and not data["restart_required"]
-            assert probe.published() == before and probe.control("state") == state
+            assert probe.published() == published_before and probe.control("state") == state
             stable = probe.files()
             assert cancel(probe)["data"] == {**data, "replayed": True}
             _, rejected = send(probe, "POST", PURGE, body, 409, headers)

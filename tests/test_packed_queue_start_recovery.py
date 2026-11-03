@@ -74,7 +74,9 @@ def configure_model(port: int, endpoint: str, protocol: str = "openai-chat-compl
     model = fixture["items"][0]
     model.update(id="queue-fixture", name="Queue fixture", provider="queue-fixture",
         builtin=False, free=False, editable=True, removable=True,
+        reasoning_efforts=["none", "medium"], default_reasoning_effort="medium",
         protocols=[protocol], default_protocol=protocol)
+    model["capabilities"] += ["reasoning-output", "reasoning-control"]
     config["providers"].append(provider)
     config["items"].append(model)
     if not config["default_model"]: config["default_model"] = model["id"]

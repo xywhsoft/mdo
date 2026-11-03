@@ -1,4 +1,5 @@
 """File workbench behavior through the real xs/TCC SDK, with private files."""
+from runtime_sources import authored_extension
 import argparse,base64,json,os,subprocess,tempfile,time,uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -11,7 +12,7 @@ def main():
         base=Path(raw);port=free_port();config=write_site(base,port);directory=base/'fixture';directory.mkdir()
         commands=base/'home/commands';commands.mkdir(parents=True)
         command=COMMAND.replace('mdo_result Code=mdoCall(S,Method,V->At(A,1),R,&E);','mdo_result Code=!strcmp(Method,"files.create")?mdoFilesCreate(S,V->At(A,1),R,&E):!strcmp(Method,"files.inspect")?mdoFilesInspect(S,V->At(A,1),R,&E):mdoCall(S,Method,V->At(A,1),R,&E);')
-        (commands/'sdk.c').write_text('/* mdo-command {"id":"sdk","description":"File workbench fixture"} */\n#include <string.h>\n#include <mdo/workbench.h>\n'+command,encoding='utf-8')
+        authored_extension(commands.parent,"commands",'sdk',"command.c",'/* mdo-command {"id":"sdk","description":"File workbench fixture"} */\n#include <string.h>\n#include <mdo/workbench.h>\n'+command)
         (directory/'nested').mkdir();(directory/'.git').mkdir();(directory/'.hidden').mkdir()
         (directory/'nested'/'小说.txt').write_text('第一行\n第二行\n',encoding='utf-8')
         (directory/'.git'/'internal.txt').write_text('metadata',encoding='utf-8')

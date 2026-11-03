@@ -24,7 +24,10 @@ def free_port() -> int:
 
 
 def request(port: int, method: str, path: str, body: dict | None = None):
-    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+    # First creation compiles the real role/tool modules on cold TCC hosts.
+    # Keep ordinary reads tight without timing out a valid bounded creation.
+    timeout = 15 if method == "POST" and path == "/api/v1/sessions" else 2
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
     try:
         data = json.dumps(body).encode() if body is not None else None
         headers = {"Content-Type": "application/json"} if data else {}

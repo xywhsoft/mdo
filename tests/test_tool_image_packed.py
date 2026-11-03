@@ -78,7 +78,7 @@ def check(packed: Path) -> None:
             assert status == 200
             config = json.loads(raw_config)["data"];config.pop("runtime_override", None)
             text = next(item for item in config["items"] if item["id"] == "queue-fixture")
-            text["capabilities"].remove("media-input");text["attachments"] = []
+            text["capabilities"] = [c for c in text["capabilities"] if c != "media-input"];text["attachments"] = []
             status, _, result = raw_request(first_port, "PUT", "/api/v1/settings/models",
                 body=json.dumps({"schema_version": 1, "patch": config}).encode(),
                 headers={"Content-Type": "application/json", "If-Match": headers["etag"]})

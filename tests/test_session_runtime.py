@@ -27,44 +27,13 @@ PROBE_SOURCE = r'''
 #include <string.h>
 #include <xsbase.h>
 
-#include "src/storage/home.c"
-#include "src/projects/lifecycle.c"
-#include "src/config/config.c"
-#include "src/security/secrets.c"
-#include "src/models/catalog.c"
-#include "src/skills/manager.c"
-#include "src/knowledge/manager.c"
-#include "src/memory/manager.c"
-#include "src/modules/manager.c"
-#include "src/approvals/manager.c"
-#include "src/agents/runtime.c"
-#include "src/asks/manager.c"
-#include "src/sessions/data_gate.c"
-#include "src/sessions/events.c"
-#include "src/sessions/todo.c"
-#include "src/sessions/sidecars/binding.c"
-#include "src/sessions/sidecars/profile.c"
-#include "src/sessions/sidecars/draft.c"
-#include "src/sessions/sidecars/queue.c"
-#include "src/sessions/attachments.c"
-#include "src/sessions/manager.c"
-#include "src/sessions/backup.c"
-#include "src/sessions/backup_model.c"
-#include "src/sessions/backup_input_payload.c"
-#include "src/sessions/backup_input_archive.c"
-#include "src/sessions/backup_origin.c"
+#define ServiceInit FixtureProductServiceInit
+#define ServiceUnit FixtureProductServiceUnit
+#include "generated/mdo_unity.c"
+#undef ServiceInit
+#undef ServiceUnit
 #include "session-capture.c"
 #include "session-backup.c"
-
-/* MCP scope installation is covered by test_extensions_runtime. This
- * isolated fixture has no MCP manager or configured MCP servers. */
-bool MdoMcpConfigureAgent(xwork_agent* agent, const char* workspace, xwork_error* error)
-{ (void)agent; (void)workspace; (void)error; return true; }
-
-xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
-/* Optional executable discovery is covered by the distribution probe. This
- * standalone session fixture has no initialized toolpack manager. */
-bool MdoToolPrompt(char **prompt) { return prompt != NULL && *prompt != NULL; }
 
 typedef struct Probe {
     unsigned Calls;
@@ -469,7 +438,7 @@ void ServiceInit(XS_HostInfo *host) {
     (void)host;
     memset(&probe, 0, sizeof(probe));
     memset(&fork_probe, 0, sizeof(fork_probe));
-    if (!MdoHomeInit() || !MdoProjectLifecycleInit() ||
+    if (!MdoHomeInit() || !MdoExtensionsInit() || !MdoExtensionsSeedBuiltins((char[512]){{0}}) || !MdoProjectLifecycleInit() ||
         !LifecycleProbe() || !MdoConfigInit() || !MdoModelManagerInit() ||
         !MdoSkillManagerInit() || !MdoApprovalManagerInit()) { printf("init_error=pre-runtime\n"); goto done; }
     if (!LegacyMeta()) goto done;
@@ -618,8 +587,7 @@ void ServiceInit(XS_HostInfo *host) {
         goto done;
     export_size = 123u;
     export_json = MdoSessionExportJson(session, &export_size, &error);
-    printf("export_stale=failed:%d size:%zu context:%d\n",
-        export_json == NULL, export_size, error.eCode == XWORK_ERROR_CONTEXT);
+    printf("export_metadata_refreshed=%d\n",export_json && export_size>0 && strstr(export_json,"Export revision probe"));
     xrtFree(export_json); export_json = NULL;
     MdoSessionRelease(stale); stale = NULL;
     MdoSessionRelease(session); session = NULL;
@@ -793,6 +761,7 @@ void ServiceUnit(XS_HostInfo *host) { (void)host; }
 
 
 def write_site(site: Path) -> None:
+    shutil.copytree(ROOT / "app", site, dirs_exist_ok=True)
     for relative in (
         "web",
         "default-home/config",
@@ -818,7 +787,7 @@ def write_site(site: Path) -> None:
     (site / "web/index.html").write_text("probe", encoding="utf-8")
     for relative in (
         "default-home/config/defaults.json",
-        "default-home/modules/agents/builtin_default.c",
+        "default-home/agents/default/agent.c",
         "default-home/skills/project-explorer/SKILL.md",
         "default-home/skills/project-explorer/templates/report.md",
         "src/storage/home.c", "src/storage/home_fs.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c",
@@ -860,6 +829,7 @@ def write_site(site: Path) -> None:
         ROOT / "app/src/memory/internal.h", site / "src/memory/internal.h"
     )
     shutil.copy2(ROOT / "include/mdo/module.h", site / "generated/module-sdk/mdo/module.h")
+    (site / "src/storage/home.c").write_bytes((ROOT / "app/src/storage/home.c").read_bytes())
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -1006,7 +976,7 @@ def main() -> int:
         assert events[-1]["artifact_path"].replace("\\", "/").endswith(artifact)
         assert isinstance(json.loads(restored_files["snapshot.json"]), dict)
         assert json.loads(restored_files["meta.json"])["revision"] == backup["revision"]
-        assert "export_stale=failed:1 size:0 context:1" in output, output
+        assert "export_metadata_refreshed=1" in output, output
         assert "message_guard=reused:1 changed:1" in output, output
         assert "message_guard_retained=1" in output, output
         created = re.search(r"created=id:([^ ]+) project:project-alpha", output)
@@ -1033,7 +1003,7 @@ def main() -> int:
         assert "catalog_trash=count:3 diagnostics:0" in output, output
         assert "search_trash=count:1 diagnostics:0 code:0" in output, output
         assert "status:3 pinned:0" in output, output
-        assert "failed_create=0 code:1" in output, output
+        assert "failed_create=0 code:7" in output, output
         assert "catalog_after_failed_create=count:3 diagnostics:0" in output, output
         assert "catalog_diagnostic=count:3 diagnostics:1" in output, output
         assert "recovery=calls:6 prior_prompt:1 prior_answer:1" in output, output
@@ -1105,7 +1075,7 @@ def main() -> int:
         prefix_fork_calls = {event["source_event_id"]: event
                              for event in prefix_fork_events if event["kind"] == 4}
         assert full_fork_calls and prefix_fork_calls
-        assert all(event["schema_version"] == 7 and event["model_id"] and
+        assert all(event["schema_version"] == 10 and event["model_id"] and
                    event["context_window_tokens"] > 0
                    for event in full_fork_calls.values())
         assert all((event["model_id"], event["context_window_tokens"]) ==
@@ -1125,7 +1095,7 @@ def main() -> int:
         assert invalid_events == 0
         assert all(event["session_id"] == source_path.parent.name for event in events)
         model_events = [event for event in events if event.get("input_tokens")]
-        assert model_events and all(event["schema_version"] == 7 and
+        assert model_events and all(event["schema_version"] == 10 and
                                     event["model_id"] and
                                     event["context_window_tokens"] > 0
                                     for event in model_events)

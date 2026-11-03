@@ -1,3 +1,4 @@
+from model_fixture import conversation_catalog
 """Small serial context-compaction probe against the packed native runtime.
 
 Five conversation turns, one summary rate-limit, one deliberately rejected
@@ -101,10 +102,10 @@ def main():
                         headers={'Content-Type':'application/json',**(headers or {})})
                     assert actual==status,(path,actual,data[:500]);return json.loads(data)['data'],head
                 settings,head=call('GET','/models/config')
-                provider=json.loads(json.dumps(settings['providers'][0]));provider.update(id='context-fixture',name='Context fixture',
+                provider=json.loads(json.dumps(conversation_catalog()['providers'][0]));provider.update(id='context-fixture',name='Context fixture',
                     builtin=False,editable=True,removable=True,endpoints={'chat_completions':f'http://127.0.0.1:{server.server_port}/v1'},
                     credential={'secret_ref':'env:MDO_CONTEXT_FIXTURE_KEY'})
-                model=json.loads(json.dumps(settings['items'][0]));model.update(id='context-fixture',name='Context fixture',
+                model=json.loads(json.dumps(conversation_catalog()['items'][0]));model.update(id='context-fixture',name='Context fixture',
                     provider='context-fixture',builtin=False,free=False,editable=True,removable=True,
                     protocols=['openai-chat-completions'],default_protocol='openai-chat-completions')
                 model['window'].update(context_tokens=16384,max_input_tokens=16384,max_output_tokens=1024,

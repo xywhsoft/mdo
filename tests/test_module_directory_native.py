@@ -12,7 +12,9 @@ static char QaWritten[1024];
 static bool QaWriteText(void* U,cstr Text){(void)U;snprintf(QaWritten,sizeof(QaWritten),"%s",Text);return true;}
 static bool QaSuccess(void* U,bool Value){(void)U;return Value;}
 static bool QaTool(MdoModuleCatalog* Catalog){
- if(!Catalog||Catalog->ToolCount!=1)return false;MdoModuleToolBinding* T=Catalog->Tools[0];
+ if(!Catalog)return false;MdoModuleToolBinding* T=NULL;
+ for(size_t I=0;I<Catalog->ToolCount;I++)if(!strcmp(Catalog->Tools[I]->Id,"user.fixture"))T=Catalog->Tools[I];
+ if(!T)return false;
  mdo_tool_context_v1 C={0};C.Size=sizeof(C);C.AbiVersion=MDO_MODULE_ABI_VERSION;C.Application=&T->Owner->Application;
  mdo_result_writer_v1 W={0};W.Size=sizeof(W);W.AbiVersion=MDO_MODULE_ABI_VERSION;W.WriteText=QaWriteText;W.SetSuccess=QaSuccess;
  char Error[1024]={0};return T->Execute(T->UserData,&C,"{}",&W,Error,sizeof(Error))==MDO_RESULT_OK&&!strcmp(QaWritten,"tool resource");
@@ -53,6 +55,16 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  Catalog=Edited?MdoModuleCatalogSnapshot():NULL;Child=MdoModulesFindAgent(Catalog,"agent.Craftsman");
  Edited=Edited&&Child&&strcmp(Hash,Child->Owner->SourceHash)&&QaRole(Catalog,"agent.Craftsman",29)&&QaRole(Catalog,"subagent.Worker",29);
  xrtValueObjectSetNew(R,XRT_STR_LITERAL("auxiliary_header_reloaded"),xrtValueBool(Edited));MdoModuleCatalogRelease(Catalog);Catalog=NULL;
+ /* Rejected source/ABI updates cannot publish a partial catalog. */
+ cstr SourcePath="agents/0123456789ABCDEFGHJKMNPQRSTVWXYZ/agent.c";
+ char* Good=MdoExtensionRead(SourcePath,true,MDO_EXTENSION_TEXT_LIMIT,NULL);uint64 Generation=MdoModuleManagerGeneration();
+ bool Broken=Good&&MdoHomeAtomicWrite(SourcePath,"this is invalid C;",18,false)&&!MdoModuleManagerReload();
+ Catalog=MdoModuleCatalogSnapshot();Broken=Broken&&MdoModuleManagerGeneration()==Generation&&MdoModulesFindAgent(Catalog,"agent.Craftsman");MdoModuleCatalogRelease(Catalog);Catalog=NULL;
+ bool Repaired=Good&&MdoHomeAtomicWrite(SourcePath,Good,strlen(Good),false)&&MdoModuleManagerReload();
+ cstr BadAbi="#include \"mdo/module.h\"\nMDO_EXPORT const mdo_module_v1* mdoModuleEntry(void){static const mdo_module_v1 M={sizeof(M),999,\"qa.bad-abi\",\"Bad ABI\",\"Fixture\",\"1\",0,0,0,0,0};return &M;}";
+ Generation=MdoModuleManagerGeneration();bool Abi=Repaired&&MdoHomeAtomicWrite(SourcePath,BadAbi,strlen(BadAbi),false)&&!MdoModuleManagerReload()&&MdoModuleManagerGeneration()==Generation;
+ Repaired=Good&&MdoHomeAtomicWrite(SourcePath,Good,strlen(Good),false)&&MdoModuleManagerReload();xrtFree(Good);
+ xrtValueObjectSetNew(R,XRT_STR_LITERAL("invalid_source_and_abi_keep_catalog"),xrtValueBool(Broken&&Abi&&Repaired));
  bool Disabled=MdoExtensionsSetEnabled("agents","0123456789ABCDEFGHJKMNPQRSTVWXYZ",false,Error)&&MdoModuleManagerReload();
  Catalog=Disabled?MdoModuleCatalogSnapshot():NULL;
  Disabled=Disabled&&!MdoModulesFindAgent(Catalog,"agent.Craftsman");MdoModuleCatalogRelease(Catalog);
@@ -123,7 +135,7 @@ def main():
     add('tools', 'tool-directory', 'fixture', 'tool.c', {'tool.c': tool, 'resource.txt': 'tool resource', 'helper.h': '#define QA_NUMBER 17\n'})
     try:
         result = product(args, fixture, CONTRACT, out / 'result.json')
-        for key in ('loaded', 'role_plan_uses_alias_for_physical_xid', 'tool_executed_with_resource', 'agent_driver', 'subagent_driver', 'inherited_and_own_resource_roots', 'auxiliary_header_reloaded', 'whole_role_disable', 'uninstalled_after_runtime_release'):
+        for key in ('loaded', 'role_plan_uses_alias_for_physical_xid', 'tool_executed_with_resource', 'agent_driver', 'subagent_driver', 'inherited_and_own_resource_roots', 'auxiliary_header_reloaded', 'invalid_source_and_abi_keep_catalog', 'whole_role_disable', 'uninstalled_after_runtime_release'):
             assert result.get(key), (key, result)
         print(json.dumps(result, ensure_ascii=False))
     finally:

@@ -77,7 +77,7 @@
       document.querySelector("#composer").requestSubmit();
       await wait(() => input.value === "" && chips().length === 0, "submission clears matching contexts");
       await wait(async () => { const runs = (await api("/runs")).items; return runs.some(run => !beforeRunIds.has(run.id)) && runs.every(run => run.terminal); }, "model completion");
-      await wait(() => document.querySelector("#stop").hidden, "idle presentation");
+      await wait(() => document.querySelector("#send").dataset.action === "send", "idle presentation");
       await wait(async () => { const draft = await api(sessionPath + "/draft"); return !draft.text && !draft.submissions.length &&
         document.querySelector("#prompt-queue").hidden; }, "submission queue drained");
       const user = () => [...document.querySelectorAll('.timeline-item[data-kind="user"]')].at(-1);
@@ -107,7 +107,7 @@
       document.querySelector('#message-edit-form button[type="submit"]').click();
       await wait(() => !document.querySelector(".message-inline-editor"), "edit accepted");
       await wait(async () => { const runs = (await api("/runs")).items; return runs.some(run => !beforeEditedRunIds.has(run.id)) && runs.every(run => run.terminal); }, "edited completion");
-      await wait(() => user()?.textContent.includes("Revised review") && document.querySelector("#stop").hidden, "edited transcript");
+      await wait(() => user()?.textContent.includes("Revised review") && document.querySelector("#send").dataset.action === "send", "edited transcript");
       check(user().querySelectorAll(".prompt-context-chip").length === 5, "resend retains all context");
       reports.inlineResend = true;
       edit().click(); await wait(() => document.querySelector(".message-inline-editor"), "edit before navigating");

@@ -83,6 +83,7 @@ void ServiceInit(XS_HostInfo* host)
         goto done;
     }
     xllmRequestInit(&request);
+    request.bParallelToolCalls = false; /* This probe tests network routing only. */
     if ( !xllmRequestAddTextMessage(&request, XLLM_ROLE_USER, "proxy probe") ) {
         printf("proxy_request=0\nprobe_done=1\n");
         xllmRequestUnit(&request);

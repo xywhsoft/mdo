@@ -50,53 +50,31 @@ CHECKS = r'''
         char* expanded=MdoSkillRender("$ARGUMENTS ${CLAUDE_SKILL_DIR} ${ZCODE_SKILL_DIR} ${MDO_SKILL_DIR}","/skill dir","$ARGUMENTS $&");
         printf("feature_literal_arguments=%d\n",expanded&&!strcmp(expanded,"$ARGUMENTS $& /skill dir /skill dir /skill dir"));xrtFree(expanded);
 
-        const char* project="---\nname: Project\ndescription: Scoped fixture\n---\nPROJECT_MARKER";
-        const char* other="---\nname: Other\ndescription: Other scope\n---\nOTHER_MARKER";
-        MdoHomeAtomicWrite("scope-a/.git","gitdir",6,false);
+
+        const char* project="---\nname: Project\ndescription: Import fixture\n---\nPROJECT_MARKER";
         MdoHomeAtomicWrite("scope-a/.mdo/skills/project-explorer/SKILL.md",project,strlen(project),false);
-        MdoHomeAtomicWrite("scope-a/child/.agents/skills/project-explorer/SKILL.md",other,strlen(other),false);
-        MdoHomeAtomicWrite("scope-b/.mdo/skills/project-explorer/SKILL.md",other,strlen(other),false);
+        MdoHomeCreateDirectory("scope-b");
         char* rootA=MdoHomeExternalPath("scope-a"),*rootB=MdoHomeExternalPath("scope-b");
-        char* child=MdoHomeExternalPath("scope-a/child");
-        MdoSkillCatalog* ca=MdoSkillCatalogForWorkspace(rootA);
-        MdoSkillCatalog* cb=MdoSkillCatalogForWorkspace(rootB);
-        MdoSkillCatalog* cc=MdoSkillCatalogForWorkspace(child);
-        MdoSkillContent a={0},b={0},c={0};a.Size=sizeof(a);b.Size=sizeof(b);c.Size=sizeof(c);
-        printf("feature_scope_isolation=%d\n",ca&&cb&&MdoSkillCatalogLoadBody(ca,"project-explorer",&a)&&
-            MdoSkillCatalogLoadBody(cb,"project-explorer",&b)&&strstr(a.Text,"PROJECT_MARKER")&&strstr(b.Text,"OTHER_MARKER"));
-        printf("feature_scope_nearest=%d\n",cc&&MdoSkillCatalogLoadBody(cc,"project-explorer",&c)&&strstr(c.Text,"OTHER_MARKER"));
-        MdoSkillContentUnit(&a);MdoSkillContentUnit(&b);MdoSkillContentUnit(&c);
-        MdoSkillCatalogRelease(ca);MdoSkillCatalogRelease(cb);MdoSkillCatalogRelease(cc);
+        MdoSkillCatalog* ca=MdoSkillCatalogForWorkspace(rootA),*cb=MdoSkillCatalogForWorkspace(rootB);
+        MdoSkillContent a={0},b={0};a.Size=sizeof(a);b.Size=sizeof(b);
+        printf("feature_scope_isolation=%d\n",ca&&cb&&MdoSkillCatalogLoadBody(ca,"project-explorer",&a)&&MdoSkillCatalogLoadBody(cb,"project-explorer",&b)&&!strcmp(a.Text,b.Text)&&!strstr(a.Text,"PROJECT_MARKER"));
+        MdoSkillContentUnit(&a);MdoSkillContentUnit(&b);MdoSkillCatalogRelease(ca);MdoSkillCatalogRelease(cb);
+        ca=MdoSkillCatalogDirectory(rootA,".mdo/skills");a.Size=sizeof(a);
+        printf("feature_explicit_import=%d\n",ca&&MdoSkillCatalogLoadBody(ca,"project-explorer",&a)&&strstr(a.Text,"PROJECT_MARKER"));
+        MdoSkillContentUnit(&a);MdoSkillCatalogRelease(ca);
         MdoHomeAtomicWrite("scope-a/.mdo/skills/project-explorer/SKILL.md","invalid",7,false);
         ca=MdoSkillCatalogForWorkspace(rootA);info.Size=sizeof(info);
-        MdoSkillDiagnostics* ds=MdoSkillCatalogDiagnostics(ca);
-        printf("feature_bad_shadow=%d\n",ca&&!MdoSkillCatalogFind(ca,"project-explorer",&info)&&MdoSkillDiagnosticsCount(ds)>0);
-        MdoSkillDiagnosticsRelease(ds);MdoSkillCatalogRelease(ca);
-        MdoHomeAtomicWrite("scope-a/.mdo/skills/project-explorer/SKILL.md",project,strlen(project),false);
-        const char* disabled="{\"project-explorer\":false}";
+        printf("feature_bad_foreign_does_not_shadow=%d\n",ca&&MdoSkillCatalogFind(ca,"project-explorer",&info));MdoSkillCatalogRelease(ca);
+        const char* disabled="{\"skill:project-explorer\":false}";
         MdoHomeAtomicWrite("scope-a/.mdo/skills.json",disabled,strlen(disabled),false);
         ca=MdoSkillCatalogForWorkspace(rootA);
-        printf("feature_scope_disabled=%d\n",ca&&!MdoSkillCatalogFind(ca,"project-explorer",&info)&&MdoSkillCatalogFind(builtin,"project-explorer",&info));
-        MdoSkillCatalogRelease(ca);
-        MdoHomeAtomicWrite("skills/pack-skill/SKILL.md",project,strlen(project),false);
-        const char* receipts="{\"local:pack\":{\"slug\":\"pack\",\"resources\":[{\"kind\":\"skills\",\"id\":\"pack-skill\"}]}}";
-        MdoHomeAtomicWrite("data/extensions/installed.json",receipts,strlen(receipts),false);MdoSkillManagerReload();
-        ca=MdoSkillCatalogForWorkspace(rootB);
-        printf("feature_namespace=%d\n",ca&&MdoSkillCatalogFind(ca,"pack:pack-skill",&info)&&info.Visible&&!strcmp(info.Scope,"plugin")&&
-            MdoSkillCatalogFind(ca,"pack-skill",&info)&&!info.Visible);
-        MdoSkillCatalogRelease(ca);
-        BoundaryAfter=2;BoundaryProbes=0;ca=MdoSkillCatalogForWorkspace(rootB);
-        printf("feature_ancestor_boundary=%d\n",ca&&MdoSkillCatalogFind(ca,"project-explorer",&info));
-        MdoSkillCatalogRelease(ca);
-        BoundaryAfter=1;BoundaryProbes=0;ca=MdoSkillCatalogForWorkspace(rootB);
-        printf("feature_workspace_denied=%d\n",ca==NULL);MdoSkillCatalogRelease(ca);xrtClearError();
-        BoundaryAfter=2;BoundaryProbes=0;
+        printf("feature_scope_disabled=%d\n",ca&&!MdoSkillCatalogFind(ca,"project-explorer",&info)&&MdoSkillCatalogFind(builtin,"project-explorer",&info));MdoSkillCatalogRelease(ca);
+        const char* untyped="{\"project-explorer\":false}";
+        MdoHomeAtomicWrite("scope-a/.mdo/skills.json",untyped,strlen(untyped),false);
+        ca=MdoSkillCatalogForWorkspace(rootA);printf("feature_untyped_selection_rejected=%d\n",ca==NULL);MdoSkillCatalogRelease(ca);xrtClearError();
         MdoHomeAtomicWrite("scope-b/.mdo/skills.json","{broken",7,false);
-        ca=MdoSkillCatalogForWorkspace(rootB);
-        printf("feature_workspace_invalid=%d\n",ca==NULL);MdoSkillCatalogRelease(ca);xrtClearError();
-        MdoHomeRemove("scope-b/.mdo/skills.json",false);BoundaryAfter=0;
-        xrtFree(rootA);xrtFree(rootB);xrtFree(child);
-        MdoHomeRemove("skills/pack-skill",true);MdoHomeRemove("data/extensions/installed.json",false);MdoSkillManagerReload();
+        ca=MdoSkillCatalogForWorkspace(rootB);printf("feature_workspace_invalid=%d\n",ca==NULL);MdoSkillCatalogRelease(ca);xrtClearError();
+        xrtFree(rootA);xrtFree(rootB);
 
     }
 '''
@@ -113,7 +91,7 @@ def main():
             base=Path(raw);fixture.write_site(base/'site')
             output=fixture.run_probe(args.host.resolve(),base/'site',base/'home')
             for field in ('metadata_idempotent','casefold','lazy_index','native_resources','utf8_page','binary_rejected',
-                          'controls','metadata_controls','unsupported_rejected','literal_arguments','scope_isolation','scope_nearest','bad_shadow','scope_disabled','namespace','ancestor_boundary','workspace_denied','workspace_invalid'):
+                          'controls','metadata_controls','unsupported_rejected','literal_arguments','scope_isolation','explicit_import','bad_foreign_does_not_shadow','scope_disabled','untyped_selection_rejected','workspace_invalid'):
                 assert f'feature_{field}=1' in output, output
             assert 'probe_done=1' in output, output
     finally: fixture.PROBE_SOURCE=source

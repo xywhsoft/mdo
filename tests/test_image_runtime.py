@@ -40,7 +40,7 @@ def wait_run(port: int, run_id: str) -> dict:
 
 
 def probe(host: Path) -> None:
-    with tempfile.TemporaryDirectory(prefix="mdo-image-probe-") as temp:
+    with tempfile.TemporaryDirectory(prefix="mdo-image-probe-", dir=ROOT / ".build") as temp:
         base = Path(temp)
         site = base / "site"
         home = base / "mdo-home"

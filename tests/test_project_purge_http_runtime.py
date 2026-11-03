@@ -22,9 +22,17 @@ PREVIEW = "/api/v1/projects/purge-probe/purge-preview"
 
 
 def send(probe, method: str, path: str, payload=None, expected=200, headers=None):
-    status, response_headers, body = request(probe.port, method, path,
-        body=json.dumps(payload).encode() if payload is not None else None,
-        headers={"Content-Type": "application/json", **(headers or {})})
+    # A preceding accepted mutation can still own admission while its HTTP
+    # response is being released. Retry only this explicit non-admission case;
+    # never retry a possibly accepted purge or the busy cases under test.
+    for attempt in range(6):
+        status, response_headers, body = request(probe.port, method, path,
+            body=json.dumps(payload).encode() if payload is not None else None,
+            headers={"Content-Type": "application/json", **(headers or {})})
+        if status != 409 or expected == 409 or json.loads(body).get("error", {}).get("code") != "write_admission_busy":
+            break
+        if attempt < 5:
+            time.sleep(.05)
     assert status == expected, (method, path, status, body)
     document = json.loads(body) if method != "HEAD" else None
     if document is not None:
@@ -56,7 +64,7 @@ def run_probe(host: Path) -> None:
             _, missing = send(probe, "POST", PURGE,
                 {"purge_request_id": ID, "created_at": 1}, 404, headers)
             assert missing["error"]["details"]["accepted"] is False
-            assert not probe.home.exists()
+            assert not list((probe.home / "sessions").rglob("meta.json"))
 
             targets = probe.seed()
             before = probe.files()

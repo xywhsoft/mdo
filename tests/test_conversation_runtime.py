@@ -18,6 +18,7 @@ import time
 from http.server import ThreadingHTTPServer
 from test_live_runtime import Model
 from test_api_runtime import request as raw_request
+from model_fixture import conversation_catalog
 from test_packed_home_lease import free_port, request, stop, wait_bootstrap
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,12 +79,12 @@ def probe(host: Path | None, packed: Path | None = None):
             assert status == 200, raw
             config = json.loads(raw)["data"]
             config.pop("runtime_override", None)
-            provider = json.loads(json.dumps(config["providers"][0]))
+            provider = json.loads(json.dumps(conversation_catalog()["providers"][0]))
             provider.update(id="history-fixture", name="History fixture",
                 builtin=False, editable=True, removable=True,
                 endpoints={"chat_completions":f"http://127.0.0.1:{model.server_port}/v1"},
                 credential={"secret_ref":"env:MDO_HISTORY_MODEL_KEY"})
-            profile = json.loads(json.dumps(config["items"][0]))
+            profile = json.loads(json.dumps(conversation_catalog()["items"][0]))
             profile.update(id="history-fixture", name="History fixture", provider="history-fixture",
                 builtin=False, free=False, editable=True, removable=True,
                 protocols=["openai-chat-completions"],default_protocol="openai-chat-completions")

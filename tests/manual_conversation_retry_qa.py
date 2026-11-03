@@ -1,3 +1,4 @@
+from model_fixture import conversation_catalog
 """Disposable packed-app fixture for browser retry, draft and stop verification.
 
 Run this alongside a browser pointed at the printed URL. Model requests never
@@ -191,12 +192,12 @@ def main():
         status,headers,raw=request(port,'GET','/api/v1/models/config')
         assert status==200,raw
         config=json.loads(raw)['data'];config.pop('runtime_override',None)
-        provider=json.loads(json.dumps(config['providers'][0]))
+        provider=json.loads(json.dumps(conversation_catalog()['providers'][0]))
         provider.update(id='conversation-fixture',name='Conversation fixture',
             builtin=False,editable=True,removable=True,
             endpoints={'chat_completions':f'http://127.0.0.1:{model.server_port}/v1'},
             credential={'secret_ref':'env:MDO_CONVERSATION_FIXTURE_KEY'})
-        item=json.loads(json.dumps(config['items'][0]))
+        item=json.loads(json.dumps(conversation_catalog()['items'][0]))
         item.update(id='conversation-fixture',name='Conversation fixture',
             provider='conversation-fixture',builtin=False,free=False,editable=True,
             removable=True,protocols=['openai-chat-completions'],

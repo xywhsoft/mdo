@@ -84,7 +84,8 @@ def setup_provider(port, provider_port, *, secret_ref=None):
         'endpoints': {'responses': f'http://127.0.0.1:{provider_port}/v1/responses'}}
     if secret_ref is not None:
         supplier['credential'] = {'secret_ref': secret_ref}
-    model = copy.deepcopy(config['items'][0])
+    from model_fixture import conversation_catalog
+    model = copy.deepcopy(conversation_catalog()['items'][0])
     model.update(id='fixture-followup', name='Fixture', provider='fixture-followup',
         wire_model='fixture-followup', builtin=False, free=False, editable=True, removable=True,
         protocols=['openai-responses'], default_protocol='openai-responses',

@@ -83,6 +83,7 @@ def checks():
         out=MdoSkillRender("$8191","/dir",raw);if(!out||strcmp(out,"x"))failures++;
         xrtFree(out);xrtFree(raw);
         const char* doc="---\nname: parameters\ndescription: Fixture\narguments: [file, focus]\n---\n$file|$focus";
+        MdoHomeAtomicWrite("skills/parameters/extension.json","{\"kind\":\"skills\",\"id\":\"skill:qa.parameters\",\"name\":\"Parameters\",\"alias\":\"parameters\",\"entry\":\"SKILL.md\",\"platforms\":[\"any\"]}",124,false);
         MdoHomeAtomicWrite("skills/parameters/SKILL.md",doc,strlen(doc),false);MdoSkillManagerReload();
         MdoSkillCatalog* old=MdoSkillCatalogSnapshot();MdoSkillInfo info={0};info.Size=sizeof(info);
         if(!MdoSkillCatalogFind(old,"parameters",&info)||info.ArgumentCount!=2||strcmp(info.ArgumentNames[1],"focus"))failures++;

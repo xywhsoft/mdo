@@ -230,7 +230,8 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/restore-id") ) Destination.SessionId = "bad";
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/restore-source-id") ) Destination.SessionId = g_DecodeFixtureBackup->Info.Id;
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/restore-missing-id") ) Destination.SessionId = NULL;
-        if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/restore-workspace") ) Destination.WorkspaceRoot = "relative/workspace";
+        if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/restore-workspace") ) Destination.WorkspaceRoot = "../foreign";
+        if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/restore-relative") ) Destination.WorkspaceRoot = "relative/workspace";
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/restore-control") ) Destination.WorkspaceRoot = "/root\ncontrol";
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/restore-windows") ) Destination.WorkspaceRoot = "C:\\explicit\\workspace 中文";
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/restore-unc") ) Destination.WorkspaceRoot = "\\\\host\\share\\workspace";

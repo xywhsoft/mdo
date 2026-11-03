@@ -3,6 +3,7 @@
 Uses the existing xs host and a bounded fake model attempt. No app copy,
 external model, account, SDK change, or mutation of the normal app config.
 """
+import shutil
 import argparse
 import json
 import os
@@ -135,7 +136,7 @@ void ServiceInit(XS_HostInfo* Host){
     /* Exercise the actual configured and online Agent route adapters over HTTP. */
     bool Ready=MdoHomeInit()&&MdoConfigInit()&&MdoModelManagerInit();
     Owner.Models=Ready?MdoModelCatalogSnapshot():NULL;
-    MdoAgentRoute Route={0};Route.ModelId=MDO_BUILTIN_MODEL_ID;
+    MdoAgentRoute Route={0};Route.ModelId="retry-fixture";
     Route.Protocol=MDO_MODEL_PROTOCOL_OPENAI_CHAT_COMPLETIONS;Route.MaxOutputTokens=128;
     for(unsigned Online=0;Online<2&&Owner.Models;Online++){
         S.Attempts=S.Waiting=S.Connecting=S.Replayed=S.Api=S.Hooks=0;S.CancelOnRetry=false;
@@ -146,6 +147,9 @@ void ServiceInit(XS_HostInfo* Host){
             MdoModelOnlineAuthority Authority={0};Authority.Origin=Origin;
             Authority.Acquire=Access;Authority.Release=ReleaseAccess;
             MdoModelManagerSetOnlineAuthority(&Authority);
+            xvalue* OnlineConfig=xrtJsonParse(xrtStrView("{\"models\": [{\"id\": \"retry-online\", \"title\": \"Retry online\", \"reasoning_efforts\": \"none\", \"output_limit_field\": \"max_tokens\", \"default_protocol\": \"chat\", \"context_window\": 64000, \"max_output\": 8192, \"available\": true, \"member_only\": false, \"free\": false, \"tool_calling\": true, \"vision\": false, \"protocols\": [\"chat\"]}]}"));
+            MdoModelManagerSetOnlineCatalog(OnlineConfig);xrtValueRelease(OnlineConfig);
+            MdoModelCatalogRelease(Owner.Models);Owner.Models=MdoModelCatalogSnapshot();Route.ModelId="mdo-online.retry-online";
         }
         Response=NULL;
         Result=MdoAgentsRouteComplete(&Owner,&Route,&Request,NULL,&Response,&Error);
@@ -186,14 +190,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host', type=Path, default=ROOT / '.build/host/xs.exe')
     args = parser.parse_args()
-    from tools import build_mdo
-    build_mdo.write_if_changed(build_mdo.UNITY_PATH, build_mdo.generated_unity(
-        build_mdo.load_object(build_mdo.LOCK_PATH), build_mdo.source_list()).encode())
-    probe = ROOT / 'app/generated/model_retry_progress_test.c'
-    config = ROOT / 'app/xs.model-retry-progress-test.json'
-    assert not probe.exists() and not config.exists(), 'An owned fixture is already running'
     with tempfile.TemporaryDirectory(prefix='model-retry-progress-', dir=ROOT / '.build') as raw:
         base = Path(raw)
+        site=base/'site';shutil.copytree(ROOT/'app',site)
+        probe=site/'generated/model_retry_progress_test.c';config=site/'xs.model-retry-progress-test.json'
+
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0)); port = sock.getsockname()[1]
         probe.write_text(PROBE, encoding='utf-8')
@@ -205,10 +206,15 @@ def main():
         Model.calls={};server=ThreadingHTTPServer(('127.0.0.1',0),Model)
         worker=threading.Thread(target=server.serve_forever,daemon=True);worker.start()
         origin=f'http://127.0.0.1:{server.server_port}'
+        from model_fixture import model_catalog
+        catalog=model_catalog('retry-fixture',origin+'/v1/chat/completions')
+        catalog['providers'][0]['credential']={'secret_ref':'env:MDO_ORNITH_API_KEY'}
+        home=base/'home';(home/'config').mkdir(parents=True)
+        (home/'config/models.json').write_text(json.dumps({'schema_version':1,'patch':catalog}),encoding='utf-8')
         try:
             log = base / 'runtime.log'
             with log.open('wb') as output:
-                proc = subprocess.Popen([str(args.host.resolve()), str(config)], cwd=ROOT / 'app',
+                proc = subprocess.Popen([str(args.host.resolve()), str(config)], cwd=site,
                     stdout=output, stderr=output, env={**os.environ, 'MDO_HOME': str(base / 'home'),
                         'MDO_ORNITH_API_KEY':'fixture-only-key','MDO_RETRY_TEST_ORIGIN':origin,
                         'MDO_ORNITH_CHAT_COMPLETIONS_URL':origin+'/v1/chat/completions'},

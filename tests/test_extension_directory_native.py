@@ -206,6 +206,8 @@ def main():
     source += (ROOT / 'app/include/mdo/extensions.h').read_text(encoding='utf-8')
     source += (ROOT / 'app/include/mdo/home.h').read_text(encoding='utf-8')
     source += headers() + HOME_STUBS
+    policy = (ROOT / 'app/src/extensions/builtins.c').read_text(encoding='utf-8')
+    source += policy[policy.index('bool MdoExtensionsEditableSource'):policy.index('bool MdoExtensionsBuiltinRole')]
     manager = (ROOT / 'app/src/extensions/manager.c').read_text(encoding='utf-8')
     manager = '\n'.join(line for line in manager.splitlines() if not line.startswith('#include '))
     # This fixture isolates single-directory recovery; group recovery is exercised

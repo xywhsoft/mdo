@@ -33,6 +33,8 @@ class Probe:
         self.site, self.home = base / "site", base / "home"
         self.port, self.process = free_port(), None
         shutil.copytree(ROOT / "app", self.site)
+        from runtime_sources import seed_personal_defaults
+        seed_personal_defaults(self.site)
         # Backup probes measure Home writes. Isolate unrelated passive catalog
         # and update workers, which otherwise fetch the public website and can
         # create notification cache files while a zero-write assertion runs.

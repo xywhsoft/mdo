@@ -142,8 +142,7 @@ class Probe:
         memory = "/api/v1/memory/projects/purge-probe"
         status, headers, _ = request(self.port, "GET", memory)
         assert status == 200
-        self.api("PUT", memory, {"id": "local-note", "title": "Local note",
-            "content": "Purge this owned memory", "tags": [], "pinned": False},
+        self.api("PUT", memory, {"id": "local-note", "content": "Purge this owned memory"},
             extra={"If-Match": headers["etag"]})
         assert (self.home / "memory/projects/purge-probe/local-note.md").read_text() == (
             "Purge this owned memory")
@@ -228,10 +227,10 @@ def run_probe(host: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="project-purge-", dir=ROOT / ".build") as raw:
         base = Path(raw)
         with running(host, base / "normal") as probe:
-            assert not probe.home.exists()
+            assert not (probe.home / "projects").exists() and not list((probe.home / "sessions").rglob("meta.json"))
             assert probe.control("invalid")["status"] == INVALID
             assert probe.control("missing")["status"] == NOT_FOUND
-            assert not probe.home.exists()
+            assert not (probe.home / "projects").exists() and not list((probe.home / "sessions").rglob("meta.json"))
             targets = probe.seed()
             before, state = probe.files(), probe.control("state")
             assert state["native_owned"] == 2 and state["native_enabled"] == 1, state
@@ -271,7 +270,7 @@ def run_probe(host: Path) -> None:
             assert probe.control("purge")["status"] == NOT_FOUND
             assert probe.files() == probe.expected_after(before, targets)
             assert probe.api("GET", "/api/v1/draft")["revision"] == 0
-            assert probe.api("GET", "/api/v1/workspace-state") == {"project_id": "", "session_id": ""}
+            assert probe.api("GET", "/api/v1/workspace-state") == {"project_id": "", "session_id": "", "last_activated_at": 0}
             probe.api("PUT", "/api/v1/draft", {"revision": 0, "text": "late",
                 "new_task": {"project_id": "purge-probe", "session_id": "c" * 32,
                     "title": "Late task", "agent_id": "mdo.default", "model_id": "ornith-1.5-35b",

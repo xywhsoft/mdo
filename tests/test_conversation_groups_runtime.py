@@ -4,6 +4,7 @@ No model requests or user journal writes. Uses an isolated packed Home and
 five replies, including tool-only calls, long paragraphs and a reused run ID.
 """
 from __future__ import annotations
+from model_fixture import conversation_catalog
 import argparse
 import hashlib
 import json
@@ -21,7 +22,7 @@ def prepare_history_home(home):
     config['providers'].append(dict(id='history-fixture', name='History fixture',
         builtin=False, editable=True, removable=True, verify_peer=True, timeout_ms=1000,
         endpoints={'responses':'http://127.0.0.1:1/v1'}, credential={'secret_ref':'env:MDO_HISTORY_FIXTURE_KEY'}))
-    model = {**config['items'][0], 'id':'history-fixture', 'name':'History fixture',
+    model = {**conversation_catalog()["items"][0], 'id':'history-fixture', 'name':'History fixture',
         'provider':'history-fixture', 'builtin':False, 'editable':True, 'removable':True,
         'protocols':['openai-responses'], 'default_protocol':'openai-responses'}
     config['items'].append(model)

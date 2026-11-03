@@ -1,5 +1,6 @@
 """Bounded settings integration through xs/TCC and a local model API."""
 from __future__ import annotations
+from model_fixture import conversation_catalog
 import argparse
 import copy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -142,7 +143,7 @@ def main():
                     global_proxy({'kind': 'none', 'host': '', 'port': 0, 'user': '', 'credential': None})
                 config, etag = get()
                 supplier['proxy'] = {'kind': 'none'}
-                model = copy.deepcopy(config['items'][0])
+                model = copy.deepcopy(conversation_catalog()['items'][0])
                 model.update(id='fixture-agent', name='Fixture agent', provider='fixture', wire_model='fixture-agent',
                     builtin=False, free=False, editable=True, removable=True,
                     protocols=['openai-chat-completions'], default_protocol='openai-chat-completions',

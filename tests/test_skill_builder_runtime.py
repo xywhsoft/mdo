@@ -23,7 +23,10 @@ CHECKS = r'''
         xrtValueGetBool(xrtValueObjectGet(report,XRT_STR_LITERAL("valid")),&valid);
         if(valid||!xrtValueCount(xrtValueObjectGet(report,XRT_STR_LITERAL("errors"))))failures++;
         xrtValueRelease(input);xrtValueRelease(report);
-        MdoHomeAtomicWrite("builder-project/.mdo/skills/sample/SKILL.md",doc,strlen(doc),false);
+        const char* manifest="{\"kind\":\"skills\",\"id\":\"skill:qa.sample\",\"name\":\"Sample\",\"alias\":\"sample\",\"entry\":\"SKILL.md\",\"platforms\":[\"any\"]}";
+        MdoHomeAtomicWrite("skills/sample/extension.json",manifest,strlen(manifest),false);
+        MdoHomeCreateDirectory("builder-project");
+        MdoHomeAtomicWrite("skills/sample/SKILL.md",doc,strlen(doc),false);MdoSkillManagerReload();
         char* root=MdoHomeExternalPath("builder-project");
         input=xrtJsonParse(XRT_STR_LITERAL("{\"name\":\"sample\",\"scope\":\"project\"}"));report=xrtValueObject();
         if(!MdoSkillCheckRequest(input,root,report))failures++;
@@ -32,13 +35,13 @@ CHECKS = r'''
         if(!valid||!resources)failures++;
         xrtValueRelease(report);report=xrtValueObject();
         const char* missing="---\nname: sample\ndescription: Fixture\nscripts: [scripts/missing.sh]\n---\nTask";
-        MdoHomeAtomicWrite("builder-project/.mdo/skills/sample/SKILL.md",missing,strlen(missing),false);
+        MdoHomeAtomicWrite("skills/sample/SKILL.md",missing,strlen(missing),false);MdoSkillManagerReload();
         if(!MdoSkillCheckRequest(input,root,report))failures++;
         xrtValueGetBool(xrtValueObjectGet(report,XRT_STR_LITERAL("valid")),&valid);
         if(valid||!xrtValueCount(xrtValueObjectGet(report,XRT_STR_LITERAL("errors"))))failures++;
         xrtValueRelease(report);report=xrtValueObject();
         const char bad[]="---\nname: sample\ndescription: Fixture\n---\n\xff";
-        MdoHomeAtomicWrite("builder-project/.mdo/skills/sample/SKILL.md",bad,sizeof(bad)-1,false);
+        MdoHomeAtomicWrite("skills/sample/SKILL.md",bad,sizeof(bad)-1,false);MdoSkillManagerReload();
         if(!MdoSkillCheckRequest(input,root,report))failures++;
         xrtValueGetBool(xrtValueObjectGet(report,XRT_STR_LITERAL("valid")),&valid);
         if(valid)failures++;

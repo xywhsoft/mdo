@@ -1,3 +1,4 @@
+from model_fixture import conversation_catalog
 """Draft verification commits only successful profiles; bounded loopback calls."""
 import argparse,copy,http.client,json,os,re,subprocess,tempfile,threading,time
 from concurrent.futures import ThreadPoolExecutor
@@ -51,11 +52,11 @@ def check(host,packed=False):
                 return data['data'],headers['etag']
             initial,etag=current()
             def draft(name,protocol='openai-chat-completions',provider=None):
-                p=copy.deepcopy(provider or initial['providers'][0]);p.update(id='onboarding',name='Onboarding',builtin=False,editable=True,removable=True,
+                p=copy.deepcopy(provider or conversation_catalog()['providers'][0]);p.update(id='onboarding',name='Onboarding',builtin=False,editable=True,removable=True,
                     endpoints={dict(zip(['openai-chat-completions','openai-responses','anthropic-messages'],['chat_completions','responses','anthropic_messages']))[protocol]:
                         f'http://127.0.0.1:{supplier.server_port}/v1/'+{'openai-chat-completions':'chat/completions','openai-responses':'responses','anthropic-messages':'messages'}[protocol]},proxy={'kind':'none'})
                 p.pop('credential',None)
-                m=copy.deepcopy(initial['items'][0]);m.update(id=name,name=name,wire_model=name,provider=p['id'],builtin=False,free=False,editable=True,removable=True,
+                m=copy.deepcopy(conversation_catalog()['items'][0]);m.update(id=name,name=name,wire_model=name,provider=p['id'],builtin=False,free=False,editable=True,removable=True,
                     protocols=[protocol],default_protocol=protocol,reasoning_efforts=['default'],default_reasoning_effort='default',proxy={'kind':'provider'})
                 return {'provider':p,'model':m,'key':'onboarding-fixture-only','make_default':False}
             for mode,name in [('reasoning_only','reply-fails'),('invalid_tool','tools-fail')]:

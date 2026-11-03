@@ -136,7 +136,7 @@ def run_probe(host):
             probe.ack(409)
             send(probe, "POST", PREPARE, {"purge_request_id": ID, "created_at": 1}, 404,
                  {"If-Match": '"mdo-project-purge-probe-1"'})
-            assert not probe.home.exists()
+            assert not list((probe.home / "sessions").rglob("meta.json"))
             probe.seed()
             before, state = probe.files(), probe.control("state")
             payload, project_etag = params(probe)

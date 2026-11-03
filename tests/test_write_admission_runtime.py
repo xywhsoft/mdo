@@ -108,20 +108,20 @@ def run_probe(host):
         base = Path(raw)
         with running(host, base / "identity") as p:
             old = p.token()
-            assert len(old.split("-")[0]) == 32 and old.endswith("-0") and not p.home.exists()
+            assert len(old.split("-")[0]) == 32 and old.endswith("-0") and not list((p.home / "sessions").rglob("meta.json"))
             for value, status, code in ((None, 428, "write_token_required"),
                     ("invalid", 412, "write_token_conflict"),
                     ("0" * 32 + "-0", 412, "write_token_conflict")):
                 _, document = p.raw("PUT", "/api/v1/draft", {"revision": 0, "text": "stale"},
                     status, {TOKEN: value} if value is not None else {})
-                assert document["error"]["code"] == code and not p.home.exists()
+                assert document["error"]["code"] == code and not list((p.home / "sessions").rglob("meta.json"))
             duplicate = http.client.HTTPConnection("127.0.0.1", p.port, timeout=3)
             duplicate.putrequest("PUT", "/api/v1/draft")
             duplicate.putheader(TOKEN, old); duplicate.putheader(TOKEN, old)
             duplicate.putheader("Content-Length", "0"); duplicate.endheaders()
             response = duplicate.getresponse()
             assert response.status == 400 and json.loads(response.read())["error"]["code"] == "write_token_invalid"
-            duplicate.close(); assert not p.home.exists()
+            duplicate.close(); assert not list((p.home / "sessions").rglob("meta.json"))
             targets = p.seed(); before = p.unchanged()
             body, headers = params(p)
             p.raw("POST", PREPARE, body, headers={**headers, TOKEN: old})

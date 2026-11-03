@@ -132,7 +132,7 @@ static xwork_permission_decision Permission(void *data,
     ++probe->Permissions;
     probe->PermissionResources += (unsigned)request->iResourceCount;
     for (size_t i = 0u; i < request->iResourceCount; ++i)
-        if (strcmp(request->sToolName, "web_open") == 0 &&
+        if (strcmp(request->sToolName, "open") == 0 &&
             request->pResources[i].eKind == XWORK_RESOURCE_NETWORK)
             printf("open_resource=%s\n", request->pResources[i].sResource);
     return XWORK_PERMISSION_ALLOW;
@@ -218,7 +218,7 @@ void ServiceInit(XS_HostInfo *host) {
     for (i = 0u; i < xworkToolCatalogCount(catalog); ++i) {
         memset(&info, 0, sizeof(info));
         if (xworkToolCatalogToolAt(catalog, i, &info) &&
-            strncmp(info.sName, "web_", 4u) == 0)
+            (!strcmp(info.sName,"search")||!strcmp(info.sName,"open")||!strcmp(info.sName,"find")))
             printf("tool=%s effects:%llu source:%s permissions:%d\n",
                 info.sName, (unsigned long long)info.uEffects, info.sSource,
                 info.bDescribesPermissions ? 1 : 0);
@@ -240,18 +240,18 @@ void ServiceInit(XS_HostInfo *host) {
     if (definition == NULL || session == NULL || agent == NULL) {
         printf("init_error=agent\n"); goto done;
     }
-    if (!Execute(agent, "web_search", "{\"query\":\"alpha beta\",\"count\":2}",
+    if (!Execute(agent, "search", "{\"query\":\"alpha beta\",\"count\":2}",
             &search)) goto done;
-    if (!Execute(agent, "web_open", "{\"url\":\"https://example.com/page#needle\",\"max_characters\":4096}",
+    if (!Execute(agent, "open", "{\"url\":\"https://example.com/page#needle\",\"max_characters\":4096}",
             &open)) goto done;
-    if (!Execute(agent, "web_find", "{\"document_id\":\"doc-0000000000000001\",\"query\":\"needle\",\"max_results\":3,\"context_characters\":32}",
+    if (!Execute(agent, "find", "{\"document_id\":\"doc-0000000000000001\",\"query\":\"needle\",\"max_results\":3,\"context_characters\":32}",
             &find)) goto done;
-    (void)Execute(agent, "web_open", "{\"url\":\"https://example.com/fail\"}",
+    (void)Execute(agent, "open", "{\"url\":\"https://example.com/fail\"}",
         &failed);
-    (void)Execute(agent, "web_open", "{\"url\":\"http://127.0.0.1/private\"}",
+    (void)Execute(agent, "open", "{\"url\":\"http://127.0.0.1/private\"}",
         &invalid);
     printf("reload=%d\n", MdoWebManagerReload() ? 1 : 0);
-    if (!Execute(agent, "web_find", "{\"document_id\":\"doc-0000000000000001\",\"query\":\"Omega\"}",
+    if (!Execute(agent, "find", "{\"document_id\":\"doc-0000000000000001\",\"query\":\"Omega\"}",
             &find_after)) goto done;
     memset(&snapshot, 0, sizeof(snapshot)); snapshot.Size = sizeof(snapshot);
     if (MdoWebManagerGetSnapshot(&snapshot))
@@ -381,9 +381,9 @@ def main() -> int:
         output = run_probe(host, site, base / "state")
         assert "init_error=" not in output, output
         assert "catalog_count=3" in output, output
-        assert "tool=web_search effects:57 source:mdo.web permissions:1" in output, output
-        assert "tool=web_open effects:9 source:mdo.web permissions:1" in output, output
-        assert "tool=web_find effects:1 source:mdo.web permissions:0" in output, output
+        assert "tool=search effects:57 source:mdo.web permissions:1" in output, output
+        assert "tool=open effects:9 source:mdo.web permissions:1" in output, output
+        assert "tool=find effects:1 source:mdo.web permissions:0" in output, output
         assert '"type":"web_search_results"' in output, output
         assert '"title":"Result One"' in output and "Rejected" not in output, output
         assert '"url":"https://example.com/page#needle"' in output, output
@@ -398,7 +398,7 @@ def main() -> int:
         assert "hidden script" not in output and "hidden style" not in output, output
         assert '"type":"web_find_results"' in output, output
         assert '"matches":[{"offset":' in output, output
-        assert "execute_web_open=infra:1 success:0" in output, output
+        assert "execute_open=infra:1 success:0" in output, output
         assert "The connection or remote server is still unavailable" in output, output
         assert "reload=1" in output, output
         assert "snapshot=generation:2 enabled:1 docs:1/16 completed:2 failed:1" in output, output

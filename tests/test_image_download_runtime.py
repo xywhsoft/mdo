@@ -36,6 +36,8 @@ class Probe:
         self.port = free_port()
         self.process, self.log = None, None
         shutil.copytree(ROOT / "app", self.site)
+        from runtime_sources import seed_personal_defaults
+        seed_personal_defaults(self.site)
         isolate_background_network(self.site)
         shutil.copy2(ROOT / "tests/fixtures/image-download.c", self.site / "src/bootstrap/image-download.c")
         replace(self.site, "src/bootstrap/service.c", "void ServiceInit(XS_HostInfo* pHost)",

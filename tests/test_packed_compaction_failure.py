@@ -1,3 +1,4 @@
+from model_fixture import conversation_catalog
 """Bounded summary failure/cancellation, restart and continuation on real packs.
 
 Three serial cases use only a synthetic loopback model and disposable Home.
@@ -108,11 +109,11 @@ def main():
                         time.sleep(.02)
                     raise AssertionError("bounded run did not finish")
                 settings, fields = call("GET", "/models/config")
-                provider = json.loads(json.dumps(settings["providers"][0]))
+                provider = json.loads(json.dumps(conversation_catalog()["providers"][0]))
                 provider.update(id="context-fixture", name="Context fixture", builtin=False, editable=True, removable=True,
                     endpoints={"chat_completions": f"http://127.0.0.1:{server.server_port}/v1"},
                     credential={"secret_ref": "env:MDO_CONTEXT_FIXTURE_KEY"})
-                model = json.loads(json.dumps(settings["items"][0]))
+                model = json.loads(json.dumps(conversation_catalog()["items"][0]))
                 model.update(id="context-fixture", name="Context fixture", provider="context-fixture", builtin=False,
                     free=False, editable=True, removable=True, protocols=["openai-chat-completions"],
                     default_protocol="openai-chat-completions")

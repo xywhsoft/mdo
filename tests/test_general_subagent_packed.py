@@ -7,6 +7,7 @@ Only the executable and small disposable Homes are copied, without a new runtime
 or repository checkout. No user installation is changed.
 """
 from __future__ import annotations
+from model_fixture import conversation_catalog
 
 import argparse
 from collections import defaultdict
@@ -128,7 +129,7 @@ def configure(port, endpoint):
     provider = dict(id='general-fixture', name='Offline fixture', builtin=False, editable=True,
         removable=True, verify_peer=True, timeout_ms=15000, proxy={'kind': 'none'},
         endpoints={'chat_completions': endpoint}, credential={'secret_ref': 'env:MDO_GENERAL_FIXTURE_KEY'})
-    model = json.loads(json.dumps(config['items'][0]))
+    model = json.loads(json.dumps(conversation_catalog()['items'][0]))
     model.update(id='general-fixture', name='Offline fixture', provider=provider['id'],
         wire_model='fixture-general-wire', builtin=False, free=False, editable=True, removable=True,
         protocols=['openai-chat-completions'], default_protocol='openai-chat-completions',

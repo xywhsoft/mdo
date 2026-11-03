@@ -68,10 +68,11 @@ def main():
     try:
         with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='member-sdk-') as tmp:
             f=Fixture(a.host.resolve(),Path(tmp));roles=f.home/'subagents';roles.mkdir(parents=True)
-            (f.home/'modules/tools/scope.c').write_text(SCOPE_MODULE,encoding='utf-8')
-            (f.home/'modules/tools/collaboration.c').write_text((ROOT/'examples/collaboration/tools.c').read_text(encoding='utf-8'),encoding='utf-8')
-            native=f.home/'modules/subagents/worker.c';native.parent.mkdir(parents=True);native.write_text('#define MEMBER_ROLE_ONLY\n'+SCOPE_MODULE,encoding='utf-8')
-            (roles/'member.md').write_text('---\nschema: mdo.agent.v1\nname: Member QA\nmodel: qa-local-model\ntools: [qa.context]\nread_only: true\n---\nReply briefly.\n',encoding='utf-8')
+            from runtime_sources import authored_extension
+            authored_extension(f.home,'tools','scope','tool.c',SCOPE_MODULE)
+            authored_extension(f.home,'tools','collaboration','tool.c',(ROOT/'examples/collaboration/tools.c').read_text(encoding='utf-8'))
+            authored_extension(f.home,'subagents','c-worker','agent.c','#define MEMBER_ROLE_ONLY\n'+SCOPE_MODULE)
+            authored_extension(f.home,'subagents','member','agent.md','---\nschema: mdo.agent.v1\nname: Member QA\nmodel: qa-local-model\ntools: [qa.context]\nread_only: true\n---\nReply briefly.\n')
             f.start()
             try:
                 cfg=f.call('product.models.config.get');patch={k:v for k,v in cfg['data'].items() if k!='runtime_override'}
@@ -124,7 +125,7 @@ def main():
                 f.stop();f.start();assert call('get')['last_outcome']==result['last_outcome']
                 call('send',message_id='turn3',prompt='After restart');result=call('step');assert result['last_outcome']['outcome']=='succeeded',result
                 users=[m['content'] for m in mock.last_request['messages'] if m['role']=='user'];assert len(users)>=3,users
-                (roles/'member.md').write_text((roles/'member.md').read_text(encoding='utf-8')+'Updated.\n',encoding='utf-8');f.call('runtime.reload',{'domain':'modules'})
+                (roles/'member/agent.md').write_text((roles/'member/agent.md').read_text(encoding='utf-8')+'Updated.\n',encoding='utf-8');f.call('runtime.reload',{'domain':'modules'})
                 call('send',message_id='updated',prompt='Use the updated role');assert call('step')['last_outcome']['outcome']=='succeeded'
                 assert any('Updated.' in m.get('content','') for m in mock.last_request['messages'] if m['role']=='system')
                 mock.child_scope=True;call('send',message_id='member-context',prompt='Inspect current member');assert call('step')['last_outcome']['outcome']=='succeeded';mock.child_scope=False

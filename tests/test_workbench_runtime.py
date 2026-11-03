@@ -1,4 +1,5 @@
 """Real C worker / HTTP shared state, CAS, ownership, recovery and UI receipts."""
+from runtime_sources import authored_extension
 import argparse,json,os,subprocess,tempfile,time,uuid
 from pathlib import Path
 from test_api_runtime import ROOT,write_site,free_port,request,wait_ready
@@ -9,8 +10,8 @@ def main():
     with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='workbench-qa-') as temporary:
         base=Path(temporary);port=free_port();config=write_site(base,port);home=base/'home';(home/'commands').mkdir(parents=True)
         csource=COMMAND.replace('mdo_result Code=mdoCall(S,Method,V->At(A,1),R,&E);','mdo_result Code=!strcmp(Method,"resource.put")?mdoResourcePut(S,V->At(A,1),R,&E):mdoCall(S,Method,V->At(A,1),R,&E);')
-        (home/'commands/sdk.c').write_text('/* mdo-command {"id":"sdk","description":"Workbench fixture"} */\n#include <string.h>\n#include <mdo/workbench.h>\n'+csource,encoding='utf-8')
-        (home/'commands/workbench-plan.c').write_text((ROOT/'examples/application-sdk/workbench-plan.c').read_text(encoding='utf-8'),encoding='utf-8')
+        authored_extension(home,"commands",'sdk',"command.c",'/* mdo-command {"id":"sdk","description":"Workbench fixture"} */\n#include <string.h>\n#include <mdo/workbench.h>\n'+csource)
+        authored_extension(home,"commands",'workbench-plan',"command.c",(ROOT/'examples/application-sdk/workbench-plan.c').read_text(encoding='utf-8'))
         log=(base/'host.log').open('wb');process=None
         def start():
             nonlocal process
@@ -35,7 +36,7 @@ def main():
             raise AssertionError('C invocation did not finish')
         try:
             start()
-            assert native('runtime.info')['version']=='0.6.0'
+            assert native('runtime.info')['version']==json.loads((ROOT/'app/release.json').read_text(encoding='utf-8'))['version_name']
             example=native('',command='workbench-plan');assert example['resource']['kind']=='plan'
             context=native('sdk.context');owner=context['extension']
             created=native('resource.put',{'title':'C plan','kind':'plan','revision':0,'value':{'items':[{'text':'Verify native SDK','done':False}]}})

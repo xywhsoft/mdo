@@ -102,13 +102,13 @@ static bool Fetch(void* data, const XS_FetchRequest* request, XS_FetchResponse* 
 }
 ''' + text[b:]
     # The old page extractor fixture is not needed; xs owns native responses.
-    a = text.index('    if (!Execute(agent, "web_search"')
+    a = text.index('    if (!Execute(agent, "search"')
     b = text.index("done:\n", a)
     calls = []
     for index, (arguments, success) in enumerate(cases):
         literal = json.dumps(arguments, ensure_ascii=False)
         calls.append(f'    unsigned before_{index} = probe.Fetches;\n'
-                     f'    if (Execute(agent, "web_search", {literal}, &search) != {str(success).lower()}) '
+                     f'    if (Execute(agent, "search", {literal}, &search) != {str(success).lower()}) '
                      f'{{ printf("case_failed={index}\\n"); goto done; }}\n'
                      f'    printf("case_fetches={index}:%u\\n", probe.Fetches - before_{index});\n'
                      '    xrtFree(search); search = NULL;\n')

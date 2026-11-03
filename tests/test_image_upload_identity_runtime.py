@@ -25,7 +25,7 @@ def png(red):
 
 
 def probe(host, frontend_evidence=None):
-    with tempfile.TemporaryDirectory(prefix='mdo-upload-identity-') as temp:
+    with tempfile.TemporaryDirectory(prefix='mdo-upload-identity-', dir=ROOT / '.build') as temp:
         base = Path(temp); home = base / 'home'; port = free_port()
         config = write_site(base / 'site', port)
         config_data = json.loads(config.read_text(encoding='utf-8'))

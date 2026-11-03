@@ -43,6 +43,10 @@ class Probe:
         self.process = None
         self.log = None
         shutil.copytree(ROOT / "app", self.site)
+        from fixture_offline import isolate_background_network
+        isolate_background_network(self.site)
+        from runtime_sources import seed_personal_defaults
+        seed_personal_defaults(self.site)
         shutil.copy2(ROOT / "tests/fixtures/backup-download.c", self.site / "src/bootstrap/backup-download.c")
         replace(self.site, "src/bootstrap/service.c", "void ServiceInit(XS_HostInfo* pHost)",
                 '#include "backup-download.c"\nvoid ServiceInit(XS_HostInfo* pHost)')
@@ -106,10 +110,17 @@ class Probe:
         data = json.dumps(body).encode() if body is not None else None
         if data is not None:
             headers["Content-Type"] = "application/json"
-        with closing(self.connection()) as conn:
-            conn.request(method, path, body=data, headers=headers)
-            response = conn.getresponse()
-            return response.status, {k.lower(): v for k, v in response.getheaders()}, response.read()
+        for attempt in range(6):
+            with closing(self.connection()) as conn:
+                conn.request(method, path, body=data, headers=headers)
+                response = conn.getresponse()
+                result = response.status, {k.lower(): v for k, v in response.getheaders()}, response.read()
+            # Capture uses nonblocking guards against live draft/queue writes.
+            # Retry that documented read conflict; retain every other failure.
+            if (method != "GET" or not path.endswith("/backup") or result[0] != 409 or
+                    json.loads(result[2]).get("error", {}).get("code") != "session_capture_busy" or attempt == 5):
+                return result
+            time.sleep(0.05)
 
     def control(self, name):
         status, _, body = self.call("GET", CONTROL + name)

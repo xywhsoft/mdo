@@ -1,3 +1,4 @@
+from model_fixture import conversation_catalog
 """Route real local TLS model requests through model/provider/global policies."""
 import argparse
 import copy
@@ -60,7 +61,7 @@ def main():
                 provider = {'id':'fixture','name':'Fixture','builtin':False,'editable':True,'removable':True,
                     'verify_peer':True,'timeout_ms':5000,'endpoints':{'responses':f'https://127.0.0.1:{model.server_port}/v1'},
                     'credential':{'secret_ref':'env:MDO_TEST_MODEL_KEY'},'proxy':provider_proxy}
-                custom = copy.deepcopy(config['items'][0]);custom.update(id='fixture',name='Fixture',provider='fixture',
+                custom = copy.deepcopy(conversation_catalog()["items"][0]);custom.update(id='fixture',name='Fixture',provider='fixture',
                     builtin=False,editable=True,removable=True,protocols=['openai-responses'],default_protocol='openai-responses')
                 if model_proxy is not None:custom['proxy']=model_proxy
                 config['providers'].append(provider);config['items'].append(custom)

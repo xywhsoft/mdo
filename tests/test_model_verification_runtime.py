@@ -1,3 +1,4 @@
+from model_fixture import conversation_catalog
 """Model onboarding evidence through the real API; in-place, local HTTP only."""
 import argparse
 import copy
@@ -280,7 +281,7 @@ def main():
                         'credential': {'secret_ref': 'env:MDO_ONBOARDING_TEST_KEY'},
                         'endpoints': {endpoint: f'http://127.0.0.1:{supplier.server_port}/v1/'+
                             {'chat_completions': 'chat/completions', 'responses': 'responses', 'anthropic_messages': 'messages'}[endpoint]}}
-                    model = copy.deepcopy(config['items'][0])
+                    model = copy.deepcopy(conversation_catalog()["items"][0])
                     model.update(id=name, name=name, provider=name, wire_model=name, builtin=False, free=False,
                         editable=True, removable=True, protocols=[protocol], default_protocol=protocol,
                         reasoning_efforts=['default'], default_reasoning_effort='default', attachments=[],

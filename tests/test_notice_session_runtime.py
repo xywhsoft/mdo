@@ -13,7 +13,7 @@ def stage_forwarder(site):
     import sys
     sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"))
     import build_mdo,build_cli_forwarder
-    xs=build_mdo.find_xserver(None,build_mdo.load_object(build_mdo.LOCK_PATH))
+    xs=build_mdo.find_xserver(Path(os.environ['MDO_TEST_SDK']) if os.environ.get('MDO_TEST_SDK') else None,build_mdo.load_object(build_mdo.LOCK_PATH))
     build_cli_forwarder.build(xs,site/"generated/native/windows/cli-forwarder.exe")
 
 ROOT = Path(__file__).resolve().parents[1]

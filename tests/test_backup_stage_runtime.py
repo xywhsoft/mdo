@@ -522,7 +522,8 @@ class Probe(DecodeProbe):
         actual = {p.relative_to(stage).as_posix(): p.read_bytes() for p in stage.rglob("*") if p.is_file()}
         target = json.loads(actual["meta.json"])
         assert target["id"] == "1" * 32 and target["project_id"] == "imported" and target["revision"] == 1
-        assert target["workspace_root"] == "/explicit/restore workspace 中文"
+        expected_workspace = os.path.abspath("/explicit/restore workspace 中文")
+        assert target["workspace_root"] == expected_workspace, target["workspace_root"]
         assert target["created_at_us"] == target["updated_at_us"] == 1790900000000000
         assert not target["pinned"] and target["status"] == target["previous_status"] == "active"
         assert target["parent_session_id"] == "" and target["forked_through_sequence"] == 0
@@ -580,10 +581,13 @@ class Probe(DecodeProbe):
             assert rejected["artifact_references"] == 0 and rejected["inputs"] == [] and not list(self.parent.iterdir())
         for mode, workspace in (("restore-windows", "C:\\explicit\\workspace 中文"),
                                 ("restore-unc", "\\\\host\\share\\workspace"),
+                                ("restore-relative", "relative/workspace"),
                                 ("restore-null-error", "/explicit/restore workspace 中文")):
             accepted = self.prepare(small, mode)
             assert accepted["verified"] and accepted["artifact_reader_paths"]
-            assert json.loads((self.parent / accepted["directory"] / "meta.json").read_bytes())["workspace_root"] == workspace
+            saved_workspace = json.loads((self.parent / accepted["directory"] / "meta.json").read_bytes())["workspace_root"]
+            expected_workspace = workspace if mode == "restore-relative" else os.path.abspath(workspace)
+            assert saved_workspace == expected_workspace, saved_workspace
             assert self.fixture("discard")["ok"]
         long_artifact = "artifacts/run-00000000000000000001/00000000000000000001-" + "x" * 128 + ".txt"
         long_doc = copy.deepcopy(small); replace(long_doc, long_artifact, b"bounded")
@@ -635,7 +639,7 @@ class Probe(DecodeProbe):
         invalid("stale fork", lambda p: metadata(p["imports"][0]["target_meta"], parent_session_id="a" * 32))
         invalid("stale generation", lambda p: metadata(p["imports"][0]["target_meta"], model_generation=4))
         invalid("changed profile", lambda p: metadata(p["imports"][0]["target_meta"], model_id="unrelated"))
-        invalid("relative target", lambda p: metadata(p["imports"][0]["target_meta"], workspace_root="relative"))
+        invalid("escaping relative target", lambda p: metadata(p["imports"][0]["target_meta"], workspace_root="../foreign"))
         invalid("UI fingerprint", lambda p: p["imports"][0].update(source_ui_sha256="bad"))
         invalid("false absence", lambda p: p["imports"][0].update(ui_present=False, source_ui_sha256=""))
         invalid("target artifact path", lambda p: p["imports"][0]["artifact_paths"][0].update(target_path="../bad"))

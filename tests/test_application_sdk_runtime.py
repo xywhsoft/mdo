@@ -1,5 +1,6 @@
 """Public SDK through real TCC workers and generation-owned native providers."""
-import argparse,base64,json,os,subprocess,sys,tempfile,time,uuid,threading
+from runtime_sources import authored_extension
+import argparse,base64,json,os,subprocess,sys,tempfile,time,uuid,threading,shutil
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 from test_api_runtime import ROOT,write_site,free_port,request,wait_ready
@@ -93,10 +94,24 @@ def main():
    base,port=site(Path(tmp),'site',args.packed.resolve());command=[str(base/args.packed.name),'--']
   else:
    base=Path(tmp);port=free_port();config=write_site(base,port);command=[str(args.host.resolve()),str(config),'--']
+  modules=base/'home/tools'
   home=base/'home';(home/'commands').mkdir(parents=True)
-  (home/'commands/sdk.c').write_text('/* mdo-command {"id":"sdk","description":"SDK fixture"} */\n#include <string.h>\n'+COMMAND,encoding='utf-8')
-  modules=home/'modules/tools';modules.mkdir(parents=True);(modules/'sdk.c').write_text(MODULE,encoding='utf-8')
-  (modules/'application-example.c').write_text((ROOT/'examples/application-sdk/application-module.c').read_text(encoding='utf-8'),encoding='utf-8')
+  if args.packed:
+   # The native catalog probe needs an explicit personal fixture profile;
+   # shipped installs intentionally start without a configured model.
+   from model_fixture import conversation_catalog
+   catalog=conversation_catalog();catalog['providers'][0].pop('credential',None)
+   (home/'config').mkdir(parents=True,exist_ok=True)
+   (home/'config/models.json').write_text(json.dumps({'schema_version':1,'patch':catalog}),encoding='utf-8')
+  authored_extension(home,"commands",'sdk',"command.c",'/* mdo-command {"id":"sdk","description":"SDK fixture"} */\n#include <string.h>\n'+COMMAND)
+  authored_extension(home,'tools','sdk','tool.c',MODULE)
+  # The example exports an Application service. A tools directory must also
+  # expose an Agent tool; keep the service source unchanged and add that adapter.
+  example=(ROOT/'examples/application-sdk/application-module.c').read_text(encoding='utf-8')
+  adapter=MODULE[MODULE.index('static mdo_result Tool('):MODULE.index('static mdo_result Register(')]
+  example=example.replace('static mdo_result Register(',adapter+'\nstatic mdo_result Register(')
+  example=example.replace('    return R->AddService(', '    mdo_tool_v1 T={0};T.Size=sizeof(T);T.AbiVersion=1;T.Id="qa.example-context";T.Name="Example context";T.Description="Example adapter";T.ParametersJson="{\\"type\\":\\"object\\"}";T.Effects=MDO_TOOL_EFFECT_READ;T.MaxResultBytes=8192;T.Execute=Tool;\n    if(R->AddTool(R->Context,&T,Error,Capacity)!=MDO_RESULT_OK)return MDO_RESULT_ERROR;\n    return R->AddService(')
+  authored_extension(home,'tools','application-example','tool.c',example)
   with (base/'host.log').open('wb') as log:
    child=subprocess.Popen([*command,'--home',str(home)],cwd=base,env=dict(os.environ,USE_WEBVIEW='0'),stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
    try:
@@ -194,34 +209,9 @@ def main():
     project_root.rmdir()
     assert native('operation.start',{'method':'runtime.sleep','params':{'milliseconds':1}},'sdk-project',409)['code']=='sdk_project_changed'
     assert exclusive('sdk-project') is True,'Rejected admission must release its provisional lease'
-    plugin_path='web/plugins/qa-sdk/value.txt'
-    first=invoke('plugin.apply',{'id':'qa-sdk','files':[{'path':plugin_path,'text':'revision one'}]})
-    assert first['items'][0]['enabled'],first
-    assert invoke('vfs.read',{'path':'/app/'+plugin_path})['text']=='revision one'
-    # The provider maps exact inventory files, not an entire parent directory.
-    rogue=home/'plugins/qa-sdk/revisions'/first['items'][0]['revision']/'files/web/plugins/qa-sdk/unlisted.txt'
-    rogue.write_text('not in the inventory',encoding='utf-8')
-    assert invoke('vfs.read',{'path':'/app/web/plugins/qa-sdk/unlisted.txt'},'catch')['status']==404
-    before=(home/'config/plugins.json').read_bytes()
-    collision=invoke('plugin.apply',{'id':'qa-collision','files':[{'path':plugin_path,'text':'must not publish'}]},'catch')
-    assert collision['status']==409,collision
-    assert (home/'config/plugins.json').read_bytes()==before
-    assert invoke('vfs.read',{'path':'/app/'+plugin_path})['text']=='revision one'
-    assert len(invoke('plugin.list')['items'])==1
-    second_payload={'id':'qa-sdk','files':[{'path':plugin_path,'text':'revision two'}]}
-    invoke('plugin.apply',second_payload)
-    assert invoke('vfs.read',{'path':'/app/'+plugin_path})['text']=='revision two'
-    invoke('plugin.disable',{'id':'qa-sdk'});invoke('plugin.enable',{'id':'qa-sdk'})
-    invoke('plugin.apply',second_payload)  # same revision must retain history too
-    assert invoke('plugin.list')['items'][0]['previous']==first['items'][0]['revision']
-    invoke('plugin.rollback',{'id':'qa-sdk'})
-    assert invoke('vfs.read',{'path':'/app/'+plugin_path})['text']=='revision one'
-    invoke('plugin.disable',{'id':'qa-sdk'})
-    assert invoke('vfs.read',{'path':'/app/'+plugin_path},'catch')['status']==404
-    invoke('plugin.enable',{'id':'qa-sdk'})
-    assert invoke('vfs.read',{'path':'/app/'+plugin_path})['text']=='revision one'
-    assert invoke('plugin.apply',{'id':'qa-invalid','files':[{'path':'../escape','text':'bad'}]},'catch')['status']==422
-    invoke('plugin.remove',{'id':'qa-sdk'})
+    # The former plugin.apply/revision overlay API was removed. Actual plugin
+    # directory/ZIP/conflict/cleanup behavior runs in test_plugins_runtime.
+    assert invoke('plugin.apply',{},'catch')['status']==404
     invoke('client.hello',{'client':'qa-window-a','context':{'project':'default'}})
     invoke('client.hello',{'client':'qa-window-b','context':{'project':'default'}})
     action=invoke('ui.invoke',{'client':'qa-window-a','action':'ui.toast','params':{'message':'SDK'}})
@@ -255,7 +245,7 @@ def main():
      assert 'sdk-model-ok' in invoke('stream.read',{'handle':stream})['text']
      invoke('stream.release',{'handle':stream})
      child_dir=home/'subagents';child_dir.mkdir(exist_ok=True)
-     (child_dir/'qa-child.md').write_text('---\nname: QA child\ndescription: SDK descendant identity probe\nmodel: qa-local-model\ntools: [qa.context]\nread_only: true\n---\nUse qa.context once, then report.\n',encoding='utf-8')
+     authored_extension(home,'subagents','qa-child','agent.md','---\nname: QA child\ndescription: SDK descendant identity probe\nmodel: qa-local-model\ntools: [qa.context]\nread_only: true\n---\nUse qa.context once, then report.\n')
      invoke('runtime.reload',{'domain':'modules'})
      parent=invoke('session.create',{'body':{'project_id':'default','title':'Child SDK scope','model_id':'qa-local-model','permission_profile':'full-access'}})['data']['id']
      mock.child_scope=True
@@ -275,21 +265,21 @@ def main():
     status,_,body=request(port,'GET','/api/v1/application/services');catalog=json.loads(body)['data'];assert status==200 and len(catalog)>200,(status,body)
     status,_,body=request(port,'POST','/api/v1/application/call',body=json.dumps({'method':'qa.echo','params':{'hello':'front-end'}}).encode(),headers={'Content-Type':'application/json'})
     assert status==200 and json.loads(body)['data']=={'hello':'front-end','hooked':True},(status,body)
-    duplicate=modules/'duplicate.c';duplicate.write_text(MODULE.replace('"qa.sdk","SDK fixture"','"qa.duplicate","SDK fixture"').replace('T.Id="qa.context"','T.Id="qa.duplicate-context"'),encoding='utf-8')
+    duplicate=modules/'duplicate/tool.c';authored_extension(home,'tools','duplicate','tool.c',MODULE.replace('"qa.sdk","SDK fixture"','"qa.duplicate","SDK fixture"').replace('T.Id="qa.context"','T.Id="qa.duplicate-context"'))
     assert invoke('runtime.reload',{'domain':'modules'},'catch')['status']==409
     assert invoke('qa.echo',{'retained':'old-catalog'})['retained']=='old-catalog'
-    duplicate.unlink();invoke('runtime.reload',{'domain':'modules'})
-    override=modules/'override.c';source=MODULE.replace('"qa.sdk","SDK fixture"','"qa.override","SDK fixture"').replace('T.Id="qa.context"','T.Id="qa.override-context"').replace('"qa.exclusive"','"qa.override-exclusive"').replace('"qa.echo"','"runtime.clock"')
-    override.write_text(source,encoding='utf-8')
+    shutil.rmtree(duplicate.parent);invoke('runtime.reload',{'domain':'modules'})
+    override=modules/'override/tool.c';source=MODULE.replace('"qa.sdk","SDK fixture"','"qa.override","SDK fixture"').replace('T.Id="qa.context"','T.Id="qa.override-context"').replace('"qa.exclusive"','"qa.override-exclusive"').replace('"qa.echo"','"runtime.clock"')
+    authored_extension(home,'tools','override','tool.c',source)
     assert invoke('runtime.reload',{'domain':'modules'},'catch')['status']==409
     override.write_text(source.replace(' mdo_hook_v1 HookSpec',' S.Flags=MDO_SERVICE_REPLACE_BUILTIN;\n mdo_hook_v1 HookSpec'),encoding='utf-8');invoke('runtime.reload',{'domain':'modules'})
     assert invoke('runtime.clock',{'replaced':True})=={'replaced':True,'hooked':True}
-    override.unlink();invoke('runtime.reload',{'domain':'modules'})
+    shutil.rmtree(override.parent);invoke('runtime.reload',{'domain':'modules'})
     assert 'monotonic_us' in invoke('runtime.clock')
     pending=invoke('operation.start',{'method':'qa.echo','params':{'delay_ms':500,'old_generation':True}})['id']
     discovery=invoke('operation.start',{'method':'qa.echo','params':{'delay_ms':1000,'discovery':True}})['id']
     old_generation=invoke('sdk.describe',{'id':'qa.echo'})['generation']
-    (modules/'sdk.c').write_text(MODULE.replace('"SDK echo"','"SDK echo new"').replace('*R=C->Api->Values->Clone(P);return MDO_RESULT_OK;','*R=C->Api->Values->Object();return MDO_RESULT_OK;'),encoding='utf-8')
+    (modules/'sdk/tool.c').write_text(MODULE.replace('"SDK echo"','"SDK echo new"').replace('*R=C->Api->Values->Clone(P);return MDO_RESULT_OK;','*R=C->Api->Values->Object();return MDO_RESULT_OK;'),encoding='utf-8')
     invoke('runtime.reload',{'domain':'modules'})
     assert invoke('operation.wait',{'id':pending,'timeout_ms':2000})['state']=='succeeded'
     assert invoke('operation.result',{'id':pending})['old_generation']
@@ -299,7 +289,7 @@ def main():
     assert discovered['description']=='SDK echo' and discovered['generation']==old_generation,discovered
     invoke('operation.release',{'id':pending})
     invoke('operation.release',{'id':discovery})
-    (modules/'sdk.c').write_text(MODULE,encoding='utf-8');invoke('runtime.reload',{'domain':'modules'})
+    (modules/'sdk/tool.c').write_text(MODULE,encoding='utf-8');invoke('runtime.reload',{'domain':'modules'})
    finally:
     child.terminate()
     try:child.wait(timeout=10)

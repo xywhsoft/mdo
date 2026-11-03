@@ -26,6 +26,8 @@ def run_probe(host: Path) -> None:
         base = Path(raw)
         site = base / "site"
         shutil.copytree(ROOT / "app", site)
+        from runtime_sources import seed_personal_defaults
+        seed_personal_defaults(site)
         port = free_port()
         config = site / "xs.json"
         config.write_text(json.dumps({"engine": {"workers": 1},
