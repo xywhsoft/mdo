@@ -211,6 +211,7 @@
   "timeline.failed": "Ошибка",
   "timeline.stopped": "Остановлено",
   "timeline.done": "Завершено",
+  "timeline.timing.call": "Вызов модели {count}",
   "timeline.modelTiming": "Время запроса",
   "timeline.timing.firstReasoning": "Первые рассуждения: {duration}",
   "timeline.timing.firstText": "Первый текст: {duration}",

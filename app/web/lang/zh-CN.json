@@ -196,6 +196,7 @@
   "timeline.failed": "失败",
   "timeline.stopped": "已停止",
   "timeline.done": "完成",
+  "timeline.timing.call": "第 {count} 次模型调用",
   "timeline.modelTiming": "请求耗时",
   "timeline.timing.firstReasoning": "首段思考：{duration}",
   "timeline.timing.firstText": "首段正文：{duration}",

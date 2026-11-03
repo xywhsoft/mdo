@@ -196,6 +196,7 @@
   "timeline.failed": "Failed",
   "timeline.stopped": "Stopped",
   "timeline.done": "Completed",
+  "timeline.timing.call": "Model call {count}",
   "timeline.modelTiming": "Request timing",
   "timeline.timing.firstReasoning": "First reasoning: {duration}",
   "timeline.timing.firstText": "First text: {duration}",

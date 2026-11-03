@@ -98,6 +98,7 @@ export function eventsToTimeline(events, historyLost = false,
   const tools = new Map();
   const modelStarts = new Map();
   const trackTiming = createModelTimingTracker();
+  const runTimings = new Map();
   const toolStageDurations = new Map();
   const runUsages = new Map();
   const streams = new Map();
@@ -271,6 +272,10 @@ export function eventsToTimeline(events, historyLost = false,
         }
         break;
       case "model_done": {
+        if(modelTiming) {
+          const key=`${runKey}:${epoch}`, calls=runTimings.get(key) || [];
+          calls.push({...modelTiming,turn:event.agent_turn});runTimings.set(key,calls);
+        }
         const usage = runUsages.get(`${runKey}:${epoch}`);
         if (usage) {
           const input = Number(event.input_tokens);
@@ -475,6 +480,7 @@ export function eventsToTimeline(events, historyLost = false,
         }
         if (answer) {
           answer.state = terminalState;
+          answer.modelTimings = runTimings.get(`${runKey}:${epoch}`) || [];
           const toolSeconds = toolStageDurations.get(`${runKey}:${epoch}`);
           if (Number.isFinite(toolSeconds) && toolSeconds > 0)
             answer.toolStageSeconds = toolSeconds;
@@ -971,17 +977,21 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
           `工具和等待合计 ${durationLabel(item.toolStageSeconds)}`));
       if (Number.isFinite(item.tokensPerSecond)) stats.push(`${item.tokensPerSecond.toFixed(1)} tok/s`);
       if (stats.length) actions.append(element("span", { className: "timeline-stats", text: stats.join(" · ") }));
-      if (item.modelTiming) {
-        const timing = item.modelTiming, details = element("details", { className: "timeline-model-timing" });
+      const timings = item.modelTimings?.length ? item.modelTimings : item.modelTiming ? [item.modelTiming] : [];
+      if (timings.length) {
+        const details = element("details", { className: "timeline-model-timing" });
         details.append(element("summary", { text: t("timeline.modelTiming", {}, "请求耗时") }));
+        for(const [index,timing] of timings.entries()) {
+        if(timings.length > 1) details.append(element("strong",{text:t("timeline.timing.call",{count:timing.turn || index+1},`第 ${timing.turn || index+1} 次模型调用`)}));
         for (const [key, value] of [["firstReasoning", timing.firstReasoningMs], ["firstText", timing.firstTextMs],
           ["retryWait", timing.retryWaitMs], ["lastFirstByte", timing.transport?.first_byte_ms],
           ["lastFirstToken", timing.transport?.first_token_ms]]) {
-          if (value != null && Number.isFinite(value)) details.append(element("p", { text:
+          if (value != null && Number.isFinite(value) && (!key.startsWith("last") || value > 0)) details.append(element("p", { text:
             t(`timeline.timing.${key}`, { duration: durationLabel(value / 1000) }, `${key}: ${durationLabel(value / 1000)}`) }));
         }
         details.append(element("p", { text: t("timeline.timing.attempts", { count: timing.attempts }, `请求次数：${timing.attempts}`) }));
         if (timing.requestId) details.append(element("p", { text: `Request ID: ${timing.requestId}` }));
+        }
         actions.append(details);
       }
     }
