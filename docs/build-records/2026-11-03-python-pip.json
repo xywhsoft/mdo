@@ -1,0 +1,238 @@
+{
+  "source_commit": "5530ed47",
+  "pip_lock": {
+    "version": "26.3",
+    "file": "pip-26.3-py3-none-any.whl",
+    "url": "https://files.pythonhosted.org/packages/07/25/ee8c38ae72d66b844ce8eb9711ba905dba21ca1a8a0c960057c41cd23337/pip-26.3-py3-none-any.whl",
+    "sha256": "f3b60b20ffaadd4415ed7957212a38ac63fa4c5fa375bd0f4a797777940fad13",
+    "bytes": 1950951,
+    "requires_python": ">=3.10"
+  },
+  "packages": [
+    {
+      "kind": "external-tools",
+      "id": "external-tool:mdo.python",
+      "alias": "python",
+      "name": "Python",
+      "entry": "tool.json",
+      "platforms": [
+        "windows-x86_64"
+      ],
+      "sort_order": 1000,
+      "tags": [
+        "推荐"
+      ],
+      "version": "3.13.7+pip.26.3",
+      "description": "运行 Python 脚本，处理数据并自动完成重复任务。",
+      "copyright": "",
+      "license": "PSF-2.0; pip: MIT; bundled dependency licenses included",
+      "manifest": {
+        "kind": "external-tools",
+        "id": "external-tool:mdo.python",
+        "alias": "python",
+        "name": "Python",
+        "entry": "tool.json",
+        "platforms": [
+          "windows-x86_64"
+        ],
+        "sort_order": 1000,
+        "tags": [
+          "推荐"
+        ],
+        "version": "3.13.7+pip.26.3",
+        "description": "运行 Python 脚本，处理数据并自动完成重复任务。",
+        "copyright": "",
+        "license": "PSF-2.0; pip: MIT; bundled dependency licenses included"
+      },
+      "platform": "windows-x86_64",
+      "sha256": "a28ba27eddda9f2fea78bfe00f08231e9c11108fa6a0beb8cd082271d8fa7cfd",
+      "size": 12972270,
+      "file": "python-3.13.7+pip.26.3-windows-x86_64.zip",
+      "recommended": false,
+      "upstream_version": "3.13.7"
+    },
+    {
+      "kind": "external-tools",
+      "id": "external-tool:mdo.python",
+      "alias": "python",
+      "name": "Python",
+      "entry": "tool.json",
+      "platforms": [
+        "linux-x86_64"
+      ],
+      "sort_order": 1000,
+      "tags": [
+        "推荐"
+      ],
+      "version": "3.12.15+pip.26.3",
+      "description": "运行 Python 脚本，处理数据并自动完成重复任务。",
+      "copyright": "",
+      "license": "PSF-2.0; pip: MIT; bundled dependency licenses included",
+      "manifest": {
+        "kind": "external-tools",
+        "id": "external-tool:mdo.python",
+        "alias": "python",
+        "name": "Python",
+        "entry": "tool.json",
+        "platforms": [
+          "linux-x86_64"
+        ],
+        "sort_order": 1000,
+        "tags": [
+          "推荐"
+        ],
+        "version": "3.12.15+pip.26.3",
+        "description": "运行 Python 脚本，处理数据并自动完成重复任务。",
+        "copyright": "",
+        "license": "PSF-2.0; pip: MIT; bundled dependency licenses included"
+      },
+      "platform": "linux-x86_64",
+      "sha256": "cda4741ede73bccabb8998e725acba1a1aa5bdf954767a1dce7286d45d169412",
+      "size": 15404880,
+      "file": "python-3.12.15+pip.26.3-linux-x86_64.zip",
+      "recommended": false,
+      "upstream_version": "3.12.15-r0"
+    },
+    {
+      "kind": "external-tools",
+      "id": "external-tool:mdo.python",
+      "alias": "python",
+      "name": "Python",
+      "entry": "tool.json",
+      "platforms": [
+        "android-arm64-v8a"
+      ],
+      "sort_order": 1000,
+      "tags": [
+        "推荐"
+      ],
+      "version": "3.14.8+pip.26.3",
+      "description": "运行 Python 脚本，处理数据并自动完成重复任务。",
+      "copyright": "",
+      "license": "PSF-2.0; pip: MIT; bundled dependency licenses included",
+      "manifest": {
+        "kind": "external-tools",
+        "id": "external-tool:mdo.python",
+        "alias": "python",
+        "name": "Python",
+        "entry": "tool.json",
+        "platforms": [
+          "android-arm64-v8a"
+        ],
+        "sort_order": 1000,
+        "tags": [
+          "推荐"
+        ],
+        "version": "3.14.8+pip.26.3",
+        "description": "运行 Python 脚本，处理数据并自动完成重复任务。",
+        "copyright": "",
+        "license": "PSF-2.0; pip: MIT; bundled dependency licenses included"
+      },
+      "platform": "android-arm64-v8a",
+      "sha256": "e1d58aa7b287a331e0c1a1abd86d2fd1e95d6d07b953db78d6ca119044c047ea",
+      "size": 11678771,
+      "file": "python-3.14.8+pip.26.3-android-arm64-v8a.zip",
+      "recommended": false,
+      "upstream_version": "3.14.8"
+    }
+  ],
+  "validation": {
+    "windows": {
+      "passed": true,
+      "pip": "3.13.7+pip.26.3",
+      "dependency_target_outside_tool": true,
+      "tool_directory_unchanged": true,
+      "excel_and_word_roundtrip": true,
+      "home_and_tool_directory_relocation": true
+    },
+    "linux": {
+      "passed": true,
+      "pip": "3.12.15+pip.26.3",
+      "dependency_target_outside_tool": true,
+      "tool_directory_unchanged": true,
+      "excel_and_word_roundtrip": true,
+      "home_and_tool_directory_relocation": true
+    },
+    "windows_cli_cases": 12,
+    "android_container": {
+      "passed": true,
+      "original_eight_tools_only": true,
+      "pip_in_python_directory_zip": true,
+      "no_added_native_images": true,
+      "native_images": 74,
+      "python_version": "3.14.8+pip.26.3",
+      "bytes": 80050309,
+      "device_test": false
+    },
+    "local": {
+      "passed": true,
+      "home": "E:\\software\\mdo\\mdo-home",
+      "version": "3.13.7+pip.26.3",
+      "prompt_allows_pip": true,
+      "excel_and_word_roundtrip": true,
+      "tool_directory_unchanged": true,
+      "dependencies": [
+        "openpyxl==3.1.5",
+        "python-docx==1.2.0"
+      ]
+    }
+  },
+  "publication": {
+    "published": true,
+    "other_heads_preserved": true,
+    "previous_python_versions_retained": true,
+    "service": "active",
+    "backup": "/home/xs/mdo-python-pip-20261103-5530ed47/catalog-before.db",
+    "heads": [
+      {
+        "platform": "android-arm64-v8a",
+        "version_id": "58ba8eb8edb345ac95dfbd46fe729e64",
+        "sha256": "e1d58aa7b287a331e0c1a1abd86d2fd1e95d6d07b953db78d6ca119044c047ea",
+        "bytes": 11678771,
+        "version": "3.14.8+pip.26.3"
+      },
+      {
+        "platform": "linux-x86_64",
+        "version_id": "75c49b1f466e4602abeee6655c6677a5",
+        "sha256": "cda4741ede73bccabb8998e725acba1a1aa5bdf954767a1dce7286d45d169412",
+        "bytes": 15404880,
+        "version": "3.12.15+pip.26.3"
+      },
+      {
+        "platform": "windows-x86_64",
+        "version_id": "571f49090fe543f8bc5bf71af34a4936",
+        "sha256": "a28ba27eddda9f2fea78bfe00f08231e9c11108fa6a0beb8cd082271d8fa7cfd",
+        "bytes": 12972270,
+        "version": "3.13.7+pip.26.3"
+      }
+    ]
+  },
+  "public_downloads": [
+    {
+      "platform": "windows-x86_64",
+      "version_id": "571f49090fe543f8bc5bf71af34a4936",
+      "sha256": "a28ba27eddda9f2fea78bfe00f08231e9c11108fa6a0beb8cd082271d8fa7cfd",
+      "bytes": 12972270,
+      "catalogue": true,
+      "content_type": "application/zip"
+    },
+    {
+      "platform": "linux-x86_64",
+      "version_id": "75c49b1f466e4602abeee6655c6677a5",
+      "sha256": "cda4741ede73bccabb8998e725acba1a1aa5bdf954767a1dce7286d45d169412",
+      "bytes": 15404880,
+      "catalogue": true,
+      "content_type": "application/zip"
+    },
+    {
+      "platform": "android-arm64-v8a",
+      "version_id": "58ba8eb8edb345ac95dfbd46fe729e64",
+      "sha256": "e1d58aa7b287a331e0c1a1abd86d2fd1e95d6d07b953db78d6ca119044c047ea",
+      "bytes": 11678771,
+      "catalogue": true,
+      "content_type": "application/zip"
+    }
+  ],
+  "application_republished": false,
+  "android_device_test": false
+}
