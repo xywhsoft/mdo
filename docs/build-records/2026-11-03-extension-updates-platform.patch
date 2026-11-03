@@ -1,0 +1,134 @@
+--- a/host/xywhsoft_ai/plugin/mdo/modules/ecosystem/main.c
++++ b/host/xywhsoft_ai/plugin/mdo/modules/ecosystem/main.c
+@@ -25,7 +25,7 @@
+  XAdminAuthGroupDecl Group={XADMIN_AUTH_SCOPE_ADMIN,"mdo.ecosystem","墨斗扩展","九类整目录扩展审核、发布及创作者管理",990005};
+  XAdminAuthDecl Review={XADMIN_AUTH_SCOPE_ADMIN,"mdo.ecosystem.review",0,"管理扩展与创作者","查看归档与源码、审核、下架、管理创作者额度",990005};
+  if(XAdmin_RegisterAuthGroup(Handle,&Group,&GroupId,NULL))return -1;Review.group_id=GroupId;if(XAdmin_RegisterAuth(Handle,&Review,&ReviewId,NULL))return -1;
+- const cstr Reads[]={"catalog","detail","archive","files","preview","resolve","plan"};
++ const cstr Reads[]={"catalog","detail","archive","files","preview","resolve","plan","updates"};
+  for(size_t I=0;I<sizeof(Reads)/sizeof(*Reads);I++){char* Path=xrtFormat("/api/v1/mdo/extensions/%s",Reads[I]);Ok=Path&&MdDirectoryRegister(Path,MdDirectoryRoute,false,false,0);xrtFree(Path);if(!Ok)return -1;}
+  if(!MdDirectoryRegister("/api/v1/mdo/extensions/uploads",MdDirectoryRoute,true,false,0)||!MdDirectoryRegister("/api/v1/mdo/extensions/creator",MdDirectoryRoute,true,false,0))return -1;
+  const cstr AdminApis[]={"","/detail","/archive","/files","/preview","/uploads"};
+--- a/host/xywhsoft_ai/plugin/mdo/modules/ecosystem/directory_routes.inc.c
++++ b/host/xywhsoft_ai/plugin/mdo/modules/ecosystem/directory_routes.inc.c
+@@ -1,13 +1,14 @@
+ #include <plugin_support.h>
+ #include <xs_plugin_work.h>
+ #include "directory_store.inc.c"
++#include "directory_updates.inc.c"
+ 
+ static MdDirectoryStore MdDirectory;
+ static XAdminPluginHandle MdDirectoryHandle;
+ static XAdminHostContext* MdDirectoryHost;
+ static const cstr MdDirectoryKinds[]={"agents","subagents","tools","mcp","skills","commands","external-tools","knowledge","plugins"};
+ static const cstr MdDirectoryNames[]={"Agent","SubAgent","Agent 工具","MCP","Skill","编辑器命令","外部工具","知识库","插件"};
+-enum {MDD_LIST=1,MDD_DETAIL,MDD_BEGIN,MDD_CHUNK,MDD_SEAL,MDD_CANCEL,MDD_UPLOAD,MDD_SUBMIT,MDD_REVIEW,MDD_WORK,MDD_PROFILE,MDD_GRANT,MDD_REQUEST,MDD_DECISION,MDD_REQUESTS,MDD_PUBLISH,MDD_DELETE_VERSION,MDD_DOWNLOAD,MDD_FILES,MDD_PREVIEW,MDD_PRESENTATION,MDD_AUDIT,MDD_RESOLVE,MDD_PLAN};
++enum {MDD_LIST=1,MDD_DETAIL,MDD_BEGIN,MDD_CHUNK,MDD_SEAL,MDD_CANCEL,MDD_UPLOAD,MDD_SUBMIT,MDD_REVIEW,MDD_WORK,MDD_PROFILE,MDD_GRANT,MDD_REQUEST,MDD_DECISION,MDD_REQUESTS,MDD_PUBLISH,MDD_DELETE_VERSION,MDD_DOWNLOAD,MDD_FILES,MDD_PREVIEW,MDD_PRESENTATION,MDD_AUDIT,MDD_RESOLVE,MDD_PLAN,MDD_UPDATES};
+ typedef struct MdDirectoryCall {unsigned Operation,Scope;int64 Actor,Owner;bool Admin,Proof;const xvalue* Input;const void* Raw;size_t RawBytes;uint64 Offset,Size;char Id[33],Hash[65],Error[512];xvalue* Output;xfile File;} MdDirectoryCall;
+ 
+ static xvalue* MdDirectoryUploadStatus(MdDirectoryCall* C){
+@@ -23,6 +24,7 @@
+ static int MdDirectoryWork(void* Data){
+  MdDirectoryCall* C=Data;bool Ok=false;
+  switch(C->Operation){
++ case MDD_UPDATES:C->Output=MdStoreUpdates(&MdDirectory,C->Input,C->Error);Ok=C->Output!=NULL;if(Ok)Ok=MdStoreApkUpdates(MdDirectoryHost->plugin_data_path,C->Input,C->Output);if(!Ok&&!C->Error[0])MdStoreError(C->Error,"Cannot inspect the published full APK");break;
+  case MDD_LIST:C->Output=MdStoreList(&MdDirectory,C->Actor,C->Admin,C->Scope,C->Input,C->Error);Ok=C->Output!=NULL;break;
+  case MDD_RESOLVE:C->Output=MdStoreResolve(&MdDirectory,MdoExtensionText(C->Input,"ref",MDO_EXTENSION_REF_BYTES),MdoExtensionText(C->Input,"platform",32),C->Error);Ok=C->Output!=NULL;break;
+  case MDD_PLAN:C->Output=MdStoreInstallPlan(&MdDirectory,C->Id,MdoExtensionText(C->Input,"platform",32),C->Error);Ok=C->Output!=NULL;break;
+@@ -75,8 +77,8 @@
+  XP_Reply(Resp,403,"CSRF verification failed",NULL);return false;
+ }
+ static xvalue* MdDirectoryFilter(XS_RequestObject Req){
+- const cstr TextFields[]={"kind","platform","q","state","work","path","ref"};const size_t Limits[]={32,32,240,16,32,4096,MDO_EXTENSION_REF_BYTES};xvalue* Out=ValueObject();bool Ok=Out!=NULL;
+- for(size_t I=0;Ok&&I<7;I++){char Buffer[4098];int N=xsReqQueryValue(Req,TextFields[I],Buffer,Limits[I]+2);if(N<0)continue;Ok=N<=(int)Limits[I]&&xrtUtf8Valid(xrtStrViewN(Buffer,(size_t)N),NULL)&&ValueSetText(Out,TextFields[I],Buffer);}
++ const cstr TextFields[]={"kind","platform","q","state","work","path","ref","refs"};const size_t Limits[]={32,32,240,16,32,4096,MDO_EXTENSION_REF_BYTES,4096};xvalue* Out=ValueObject();bool Ok=Out!=NULL;
++ for(size_t I=0;Ok&&I<8;I++){char Buffer[4098];int N=xsReqQueryValue(Req,TextFields[I],Buffer,Limits[I]+2);if(N<0)continue;Ok=N<=(int)Limits[I]&&xrtUtf8Valid(xrtStrViewN(Buffer,(size_t)N),NULL)&&ValueSetText(Out,TextFields[I],Buffer);}
+  const cstr Numbers[]={"offset","limit"};for(size_t I=0;Ok&&I<2;I++){char Buffer[24];int N=xsReqQueryValue(Req,Numbers[I],Buffer,sizeof(Buffer));if(N<0)continue;int64 Value=0;Ok=N<23&&(!strcmp(Buffer,"0")||XP_Positive(Buffer,&Value))&&Value<=(I?200:strstr(XAdmin_ReqPath(Req),"/archive")?(int64)MDO_EXTENSION_ARCHIVE_BYTES-1:100000)&&ValueSetInt(Out,Numbers[I],Value);}
+  char Protocol[8]={0};int HasProtocol=xsReqQueryValue(Req,"dependency_protocol",Protocol,sizeof(Protocol));if(Ok&&HasProtocol>=0)Ok=HasProtocol==1&&!strcmp(Protocol,"1")&&ValueSetInt(Out,"dependency_protocol",1);
+  char Page[24]={0};int HasPage=xsReqQueryValue(Req,"page",Page,sizeof(Page));if(Ok&&HasPage>=0){int64 Number=0,Limit=MdStoreInt(Out,"limit",20);Ok=!xrtValueObjectHas(Out,XRT_STR_LITERAL("offset"))&&HasPage<23&&XP_Positive(Page,&Number)&&Limit>=1&&Number<=100000/Limit+1&&ValueSetInt(Out,"offset",(Number-1)*Limit);}
+@@ -101,7 +103,8 @@
+  char Scope[24]={0};xsReqQueryValue(Req,"scope",Scope,sizeof(Scope));cstr Action=XP_Text(Input,"action",32);int64 ProfileOwner=0;char OwnerText[24]={0};if(C.Admin&&xsReqQueryValue(Req,"owner",OwnerText,sizeof(OwnerText))>=0&&XP_Positive(OwnerText,&ProfileOwner))C.Owner=ProfileOwner;
+  if(strstr(Path,"/uploads")){char Id[34]={0};if(Method==XHTTP_METHOD_GET){xsReqQueryValue(Req,"id",Id,sizeof(Id));C.Operation=MDD_UPLOAD;}else if(Method==XHTTP_METHOD_PUT){char Offset[24];int64 At=0;xsReqQueryValue(Req,"id",Id,sizeof(Id));int Count=xsReqQueryValue(Req,"offset",Offset,sizeof(Offset));if(Count>0&&Count<23&&(!strcmp(Offset,"0")||XP_Positive(Offset,&At))){C.Offset=(uint64)At;C.Raw=XAdmin_ReqBody(Req);C.RawBytes=XAdmin_ReqBodyLen(Req);C.Operation=MDD_CHUNK;}}else if(Action&&!strcmp(Action,"begin"))C.Operation=MDD_BEGIN;else{cstr BodyId=XP_Text(Input,"id",32);if(BodyId)snprintf(Id,sizeof(Id),"%s",BodyId);C.Operation=Action&&!strcmp(Action,"seal")?MDD_SEAL:Action&&!strcmp(Action,"cancel")?MDD_CANCEL:0;}if(MdStoreXid(Id))snprintf(C.Id,sizeof(C.Id),"%s",Id);
+  }else if(Method==XHTTP_METHOD_GET){
+-  if(strstr(Path,"/resolve")){C.Operation=MDD_RESOLVE;}
++  if(strstr(Path,"/updates")){C.Operation=MDD_UPDATES;}
++  else if(strstr(Path,"/resolve")){C.Operation=MDD_RESOLVE;}
+   else if(strstr(Path,"/plan")){char Version[34]={0};xsReqQueryValue(Req,"version",Version,sizeof(Version));if(MdStoreXid(Version))snprintf(C.Id,sizeof(C.Id),"%s",Version);C.Operation=MDD_PLAN;}
+   else if(strstr(Path,"/catalog")){C.Operation=MDD_LIST;C.Scope=0;}
+   else if(strstr(Path,"/detail")||strstr(Path,"/archive")||strstr(Path,"/files")||strstr(Path,"/preview")){char Version[34]={0},Proof[3]={0};xsReqQueryValue(Req,"version",Version,sizeof(Version));xsReqQueryValue(Req,"proof",Proof,sizeof(Proof));if(MdStoreXid(Version))snprintf(C.Id,sizeof(C.Id),"%s",Version);C.Proof=!strcmp(Proof,"1");C.Operation=strstr(Path,"/archive")?MDD_DOWNLOAD:strstr(Path,"/files")?MDD_FILES:strstr(Path,"/preview")?MDD_PREVIEW:MDD_DETAIL;}
+--- /dev/null
++++ b/host/xywhsoft_ai/plugin/mdo/modules/ecosystem/directory_updates.inc.c
+@@ -0,0 +1,44 @@
++/* Bounded public metadata lookup. Never read private versions or execute code. */
++static xvalue* MdStoreUpdates(MdDirectoryStore* S,const xvalue* Input,char Error[512]){
++ cstr Refs=MdoExtensionText(Input,"refs",4096),Platform=MdoExtensionText(Input,"platform",32);
++ if(!Refs||!Refs[0]||!MdoExtensionPlatform(Platform))return MdStoreError(Error,"Choose extension IDs and a supported platform"),NULL;
++ xvalue* Ids=xrtValueArray(),*Seen=xrtValueObject(),*Rows=xrtValueArray(),*Out=xrtValueObject();bool Ok=Ids&&Seen&&Rows&&Out;
++ for(cstr At=Refs;Ok&&*At;){size_t N=strcspn(At,",");char Ref[MDO_EXTENSION_REF_BYTES+1];
++  Ok=N&&N<=MDO_EXTENSION_REF_BYTES&&xrtValueCount(Ids)<24;
++  if(!Ok)break;memcpy(Ref,At,N);Ref[N]=0;
++  Ok=MdoExtensionRefValid(Ref)&&!xrtValueObjectHas(Seen,xrtStrView(Ref))&&xrtValueObjectSetNew(Seen,xrtStrView(Ref),xrtValueBool(true))&&xrtValueArrayAppendNew(Ids,xrtValueString(xrtStrView(Ref)));
++  At+=N;if(*At){At++;if(!*At)Ok=false;}
++ }
++ if(Ok){xrtMutexLock(S->Lock);
++  for(size_t I=0;Ok&&I<xrtValueCount(Ids);I++){xstrview Ref={0};xrtValueGetString(xrtValueArrayGet(Ids,I),&Ref);
++   xvalue* Raw=MdStoreResolveLocked(S,Ref.Data,Platform),*Row=Raw?MdStorePresentation(Raw,false):NULL;
++   if(Raw)Ok=Row&&xrtValueArrayAppend(Rows,Row);xrtValueRelease(Row);xrtValueRelease(Raw);
++  }xrtMutexUnlock(S->Lock);
++ }
++ Ok=Ok&&xrtValueObjectSet(Out,XRT_STR_LITERAL("items"),Rows)&&MdStorePut(Out,"platform",Platform);
++ xrtValueRelease(Ids);xrtValueRelease(Seen);xrtValueRelease(Rows);
++ if(!Ok){xrtValueRelease(Out);MdStoreError(Error,"Invalid or oversized extension update lookup");return NULL;}return Out;
++}
++
++/* Native Android programs come from the published full APK, never from a
++ * newer desktop/store ZIP. Inspect its small signed-APK index with bounded
++ * random reads; do not download/unpack program payloads to answer a check. */
++static bool MdStoreApkUpdates(cstr DeliveryRoot,const xvalue* Input,xvalue* Out){
++ cstr Platform=MdoExtensionText(Input,"platform",32);if(!DeliveryRoot||!Platform||strcmp(Platform,"android-arm64-v8a"))return true;
++ char* Path=xrtPathJoin(DeliveryRoot,"catalog.json");xfile F=Path?xrtOpen(Path,XFILE_READ):NULL;xrtFree(Path);uint64 Bytes=0;bool Ok=F&&xrtFileSize(F,&Bytes)&&Bytes&&Bytes<=1048576;char* Text=Ok?xrtMalloc((size_t)Bytes+1):NULL;Ok=Text&&xrtReadFull(F,Text,(size_t)Bytes,NULL);xrtClose(F);if(Ok)Text[Bytes]=0;
++ xvalue* Catalog=Ok?xrtJsonParse(xrtStrViewN(Text,(size_t)Bytes)):NULL;xrtFree(Text);const xvalue* Releases=xrtValueObjectGet(Catalog,XRT_STR_LITERAL("releases")),*Full=NULL;
++ for(size_t I=0;I<xrtValueCount(Releases);I++){const xvalue* Row=xrtValueArrayGet(Releases,I);cstr Platform=MdoExtensionText(Row,"platform",32),Edition=MdoExtensionText(Row,"edition",16),Status=MdoExtensionText(Row,"status",16);if(Platform&&Edition&&!strcmp(Platform,"android-arm64-v8a")&&!strcmp(Edition,"full")&&(!Status||strcmp(Status,"withdrawn"))&&MdStoreInt(Row,"build_id",0)>MdStoreInt(Full,"build_id",0))Full=Row;}
++ cstr Hash=MdoExtensionText(Full,"sha256",64);Path=MdStoreHashValid(Hash)?xrtFormat("%s/objects/%s",DeliveryRoot,Hash):NULL;F=Path?xrtOpen(Path,XFILE_READ):NULL;xrtFree(Path);MdoZip Zip={0};Text=F&&MdoZipOpenContainer(&Zip,F,true)?MdContentText(&Zip,"assets/mdo-runtime.json",131072,NULL):NULL;xvalue* Index=Text?xrtJsonParse(xrtStrView(Text)):NULL;xrtFree(Text);MdoZipClose(&Zip);xrtClose(F);
++ if(!Catalog||(Full&&!Index)){xrtValueRelease(Index);xrtValueRelease(Catalog);return false;}
++ xvalue* Rows=xrtValueArray();const xvalue* Previous=xrtValueObjectGet(Out,XRT_STR_LITERAL("items"));
++ for(size_t I=0;Rows&&I<xrtValueCount(Previous);I++){const xvalue* Row=xrtValueArrayGet(Previous,I);cstr Kind=MdoExtensionText(Row,"kind",32);if(Kind&&strcmp(Kind,"external-tools"))xrtValueArrayAppend(Rows,Row);}
++ cstr Build=MdoExtensionText(Index,"build_id",16),Edition=MdoExtensionText(Index,"edition",16);const xvalue* Tools=xrtValueObjectGet(Index,XRT_STR_LITERAL("extensions"));uint64 IndexBuild=0;bool Digits=Build&&strlen(Build)==8;for(cstr C=Build;Digits&&*C;C++){Digits=*C>='0'&&*C<='9';if(Digits)IndexBuild=IndexBuild*10+(unsigned)(*C-'0');}bool Valid=Rows&&Full&&Digits&&Edition&&!strcmp(Edition,"full")&&IndexBuild==(uint64)MdStoreInt(Full,"build_id",0)&&xrtValueType(Tools)==XVALUE_ARRAY&&xrtValueCount(Tools)<=64;
++ cstr Refs=MdoExtensionText(Input,"refs",4096);
++ for(size_t I=0;Valid&&I<xrtValueCount(Tools);I++){const xvalue* Tool=xrtValueArrayGet(Tools,I);cstr Id=MdoExtensionText(Tool,"logical_id",MDO_EXTENSION_REF_BYTES),Name=MdoExtensionText(Tool,"name",240),Version=MdoExtensionText(Tool,"version",128),Sha=MdoExtensionText(Tool,"sha256",64);bool Selected=false;
++  for(cstr At=Refs;Id&&At&&*At;){size_t N=strcspn(At,",");if(strlen(Id)==N&&!memcmp(Id,At,N))Selected=true;At+=N;if(*At)At++;}
++  if(!Selected||!Id||strncmp(Id,"external-tool:",14)||!MdoExtensionRefValid(Id)||!Name||!Version||!MdStoreHashValid(Sha))continue;
++  char VersionId[33];snprintf(VersionId,sizeof(VersionId),"apk-%.28s",Hash);xvalue* Row=xrtValueObject();bool Added=Row&&MdStorePut(Row,"id",Id)&&MdStorePut(Row,"kind","external-tools")&&MdStorePut(Row,"delivery","apk")&&MdStorePut(Row,"version_id",VersionId)&&MdStorePut(Row,"name",Name)&&MdStorePut(Row,"version",Version)&&MdStorePut(Row,"sha256",Sha)&&MdStorePut(Row,"submitter","墨斗")&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("apk_build_id"),xrtValueInt(MdStoreInt(Full,"build_id",0)))&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("bytes"),xrtValueInt(MdStoreInt(Full,"size",0)));
++  cstr Description=MdoExtensionText(Tool,"description",2048);if(Added&&Description)Added=MdStorePut(Row,"description",Description);if(Added)xrtValueArrayAppend(Rows,Row);xrtValueRelease(Row);
++ }
++ bool Complete=Rows&&xrtValueObjectSet(Out,XRT_STR_LITERAL("items"),Rows);xrtValueRelease(Rows);xrtValueRelease(Index);xrtValueRelease(Catalog);return Complete;
++}
+--- a/host/xywhsoft_ai/plugin/mdo/modules/ecosystem/extension_zip.h
++++ b/host/xywhsoft_ai/plugin/mdo/modules/ecosystem/extension_zip.h
+@@ -189,13 +189,20 @@
+         uint64 Next=0;for(size_t I=0;I<Z->Count;I++){if(Order[I]->Offset!=Next){xrtFree(Order);goto bad;}Next=Order[I]->End;}
+         xrtFree(Order);
+         if(Next!=Z->Central){
+-            /* Only the signed APK container may have its standard signing
+-             * block immediately before the central directory. Extension ZIPs
+-             * remain strictly contiguous. PackageManager verifies signatures. */
++            /* PackageManager verifies APK signatures. apksigner may insert
++             * zero padding to align the signing block to a 4 KiB boundary.
++             * Locate that block from its footer, not the last ZIP entry.
++             * Extension ZIPs remain strictly contiguous. */
+             uint8 Head[8],Tail[24];uint64 Gap=Z->Central-Next;
+-            if(!Apk||Next>Z->Central||Gap<32||Gap>16u*1024u*1024u||
+-               !MdoZipReadAt(Z,Next,Head,8)||!MdoZipReadAt(Z,Z->Central-24,Tail,24)||
+-               MdoZip64(Head)!=Gap-8||MdoZip64(Tail)!=Gap-8||memcmp(Tail+8,"APK Sig Block 42",16))goto bad;
++            if(!Apk||Next>Z->Central||Gap<32||Gap>16u*1024u*1024u+4095u||
++               !MdoZipReadAt(Z,Z->Central-24,Tail,24)||memcmp(Tail+8,"APK Sig Block 42",16))goto bad;
++            uint64 Size=MdoZip64(Tail);
++            if(Size<24||Size>16u*1024u*1024u-8u||Size>Gap-8)goto bad;
++            uint64 Start=Z->Central-Size-8,Padding=Start-Next;
++            if(!MdoZipReadAt(Z,Start,Head,8)||MdoZip64(Head)!=Size||Padding>4095u||
++               (Padding&&Start%4096u))goto bad;
++            if(Padding){uint8 Zeros[4096];if(!MdoZipReadAt(Z,Next,Zeros,(size_t)Padding))goto bad;
++                for(size_t I=0;I<(size_t)Padding;I++)if(Zeros[I])goto bad;}
+         }}
+     return true;
+ bad:MdoZipFail(Z,"Invalid ZIP entries, paths, types, sizes or overlapping data");

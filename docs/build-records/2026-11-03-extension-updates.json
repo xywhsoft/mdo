@@ -1,0 +1,72 @@
+{
+  "schema": "mdo.validation.extension-updates.v1",
+  "date": "2026-11-03",
+  "application_version": "0.8.6",
+  "version_code": "05000806",
+  "production_source_commit": "283c1d7df5b01c7c29b9447d09aedbf38260175e",
+  "tests_commit": "8a569b5870bfb93ba4bef9de5d2a33a93ed06ec6",
+  "windows_gui": {
+    "path": ".build/extension-updates-20261103/mdo.exe",
+    "sha256": "cf084d03170b8ea53c13a2cef4d44068fb1f3386a8b2089a7b4b6097de2c625f",
+    "bytes": 6691878,
+    "bootstrap": "passed"
+  },
+  "validation": {
+    "frontend_tests": 56,
+    "native_contracts": 16,
+    "native_dependency_regression": "passed",
+    "android_runtime_unit_tests": 9,
+    "android_original_eight_container": "passed",
+    "startup_without_ui": "passed",
+    "windows_store_python_upgrade": "3.13.7 -> 3.13.7+pip.26.3",
+    "windows_update_entry_points": [
+      "notification modal",
+      "local tool list"
+    ],
+    "linux_glibc_bootstrap_and_worker": "passed",
+    "android_device_tested": false,
+    "signed_android_apk_built": false,
+    "real_model_calls": false
+  },
+  "deployment": {
+    "platform_api_deployed": true,
+    "service": "xs.service",
+    "service_active": true,
+    "source_hashes": {
+      "main.c": {
+        "before": "597bf17c349be8984deea3077054074cabb848d3f8ae6ae795b97050e7e5430a",
+        "after": "545804e0b3aadf09f1b2fde248cb6473570e435f89ae0db5bd57cfee1328b58a"
+      },
+      "directory_routes.inc.c": {
+        "before": "2db21250fcb58594dbf9fe0e5d2d69d2cb482d116a1707b53b74c2cdec87e38c",
+        "after": "d3025122f226d1c98c5119376902b485577a719a9d0d097bf1940e0ebc878385"
+      },
+      "directory_updates.inc.c": {
+        "before": null,
+        "after": "dccec931ebf1b6ffe6ba6db376a57101bf0f32d347ab598605248b698a1ae1c9"
+      },
+      "extension_zip.h": {
+        "before": "74f203645f718a220f944fdce3e410c40f692cfc86bf460776ac04bb6759e16f",
+        "after": "3cb85853da99ed294748ee7db4eb5992c53c9e3ee4d883deb2f5f362faa881a7"
+      }
+    },
+    "latest_private_backup": "/home/xs/mdo-extension-updates-20261103-77112f93-final",
+    "account_session_billing_data_unchanged": true,
+    "official_client_downloads_updated": false,
+    "application_version_changed": false
+  },
+  "platform_integration_patch": "2026-11-03-extension-updates-platform.patch",
+  "private_evidence": ".build/extension-updates-20261103",
+  "screenshots": [
+    "updates-dialog.jpg",
+    "mobile-updates.jpg",
+    "local-tools-update.jpg",
+    "local-tools-light.jpg"
+  ],
+  "cleanup": {
+    "test_processes_stopped": true,
+    "temporary_browser_tab_closed": true,
+    "linux_temporary_home_removed": true,
+    "user_mdo_installation_unchanged": true
+  }
+}
