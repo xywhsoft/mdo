@@ -163,7 +163,8 @@ bool MdoApplicationRouteInvoke(const mdo_sdk_context_v1* C,const MdoApplicationR
     char Token[MDO_API_WRITE_TOKEN_CAPACITY];bool Ok=!Fields||xrtValueType(Fields)==XVALUE_OBJECT;
     for(size_t i=0;Ok&&i<xrtValueCount(Fields);i++){
         cstr Key=SdkKey(Fields,i),Value=SdkText(xrtValueObjectGet(Fields,xrtStrView(Key)));
-        Ok=Count<16&&Key&&Value&&!strpbrk(Key,"\r\n")&&!strpbrk(Value,"\r\n")&&
+        Ok=Count<16&&Key&&Value&&!strchr(Key,'\r')&&!strchr(Key,'\n')&&
+            !strchr(Value,'\r')&&!strchr(Value,'\n')&&
             !xrtStrCaseEqual(xrtStrView(Key),XRT_STR_LITERAL("X-Mdo-Write-Token"))&&
             !xrtStrCaseEqual(xrtStrView(Key),XRT_STR_LITERAL("Host"))&&!xrtStrCaseEqual(xrtStrView(Key),XRT_STR_LITERAL("Origin"));
         if(Ok)Headers[Count++]=(XS_FetchHeader){Key,Value};

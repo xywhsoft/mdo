@@ -1,9 +1,9 @@
 """Real native single-connection downloads; synthetic files and loopback only.
 
-Uses the project sources and existing host in place, without copying the app,
-SDK, or runtime. Includes a process restart against the same disposable Home.
+Uses a small owned source fixture and the existing host, without copying the
+SDK or runtime. Includes a process restart against the same disposable Home.
 """
-import argparse,hashlib,io,json,os,subprocess,tempfile,threading,time,uuid,zipfile
+import argparse,hashlib,io,json,os,subprocess,tempfile,threading,time,uuid,zipfile,shutil
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 from test_api_runtime import ROOT,free_port,request,wait_ready
@@ -68,9 +68,11 @@ class Publisher(BaseHTTPRequestHandler):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--host',type=Path,required=True);parser.add_argument('--serve-ui',action='store_true');parser.add_argument('--aria2',action='store_true');parser.add_argument('--aria2-extension-only',action='store_true');parser.add_argument('--policy-failure-only',action='store_true');args=parser.parse_args()
-    with ThreadingHTTPServer(('127.0.0.1',0),Publisher) as publisher,tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='native-download-') as raw:
+    # POSIX atomic no-replace directory publication is not supported by WSL's
+    # Windows mounts. Keep source in the project and use a tiny native-FS Home.
+    with ThreadingHTTPServer(('127.0.0.1',0),Publisher) as publisher,tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='native-download-') as raw,tempfile.TemporaryDirectory(dir=ROOT/'.build' if os.name=='nt' else None,prefix='native-download-home-') as raw_home:
         thread=threading.Thread(target=publisher.serve_forever,daemon=True);thread.start()
-        base=Path(raw);home=base/'home';port=free_port();stem='.download-qa-'+uuid.uuid4().hex
+        base=Path(raw);home=Path(raw_home);port=free_port();stem='.download-qa-'+uuid.uuid4().hex
         if args.aria2:
             tool=home/'data/qa-aria2.zip';tool.parent.mkdir(parents=True)
             with zipfile.ZipFile(tool,'w',compression=zipfile.ZIP_DEFLATED) as z:
@@ -78,7 +80,8 @@ def main():
                 z.writestr('tool.json',json.dumps(dict(program='aria2c.exe',commands=[dict(name='aria2c',entry='aria2c.exe')],prompt='Fixture downloader')))
                 z.write(ROOT/'tools/runtime/windows-x86_64/aria2/aria2c.exe','aria2c.exe')
         (base/'old.bin').write_bytes(b'Synthetic old application')
-        source=ROOT/'app'/(stem+'.c');config=ROOT/'app'/(stem+'.json')
+        site=base/'site';shutil.copytree(ROOT/'app',site)
+        source=site/(stem+'.c');config=site/(stem+'.json')
         source.write_text(f'''#define MDO_DISTRIBUTION_HOST "127.0.0.1"
 #define MDO_DISTRIBUTION_PORT {publisher.server_port}
 #define MDO_DISTRIBUTION_SECURE false
@@ -123,7 +126,7 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
         config.write_text(json.dumps({'engine':{'workers':3},'services':[{'enabled':True,'class':'http','name':'download-qa','ip':'127.0.0.1','port':port,'host_default':{'enabled':True,'name':'mdo','path':'web','devlang':'c','devfile':source.name}}]}),encoding='utf-8')
         log=(base/'host.log').open('wb');process=None
         def start():
-            p=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(home)],cwd=ROOT/'app',env=dict(os.environ,MDO_HOME=str(home)),stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            p=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(home)],cwd=site,env=dict(os.environ,MDO_HOME=str(home)),stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
             try:wait_ready(port,p)
             except Exception:print((base/'host.log').read_text(encoding='utf-8',errors='replace'));p.terminate();p.wait();raise
             return p
