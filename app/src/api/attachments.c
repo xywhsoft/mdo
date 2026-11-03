@@ -8,6 +8,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/sessions.h"
 #include "../../include/mdo/project_lifecycle.h"
+#include "../../include/mdo/session_file_policy.h"
 
 #define MDO_ATTACHMENT_ID_BYTES 16u
 #define MDO_ATTACHMENT_ID_LENGTH (MDO_ATTACHMENT_ID_BYTES * 2u)
@@ -905,4 +906,59 @@ bool MdoApiAttachmentRoute(MdoApiContext* Context)
         return MdoApiReplyError(Context, 404u, "attachment_not_found",
             "The image does not exist in this session", NULL);
     return MdoApiImageDownloadStart(Context, Project, Session, Id);
+}
+
+/* Raw files stay separate from vision parts. The generated, immutable leaf is
+ * scoped to this session, mounted as @uploads/, and included in its backup.
+ * Repeating a keyed PUT can only confirm identical bytes, never overwrite. */
+bool MdoApiUploadsRoute(MdoApiContext* Context)
+{
+    char Project[MDO_PROJECT_ID_CAPACITY], Session[MDO_SESSION_ID_CAPACITY];
+    char Leaf[50], Directory[MDO_SESSION_PATH_CAPACITY], Path[MDO_SESSION_PATH_CAPACITY];
+    char Alias[64]; char* Data = NULL; size_t Size = 0u;
+    bool Exists = false, Ok = false, Replay = false, Conflict = false;
+    xfileinfo Info; xstrview Type;
+    if (!MdoAttachmentSession(Context, Project, Session, true) ||
+        Context->Params[2].Size >= sizeof(Leaf))
+        return MdoApiReplyError(Context,404u,"session_not_found","An active session is required for file upload",NULL);
+    memcpy(Leaf,Context->Params[2].Data,Context->Params[2].Size);Leaf[Context->Params[2].Size]=0;
+    if (!MdoSessionUploadName(Leaf))
+        return MdoApiReplyError(Context,422u,"upload_name_invalid","Expected a generated upload ID and short extension",NULL);
+    if (!MdoAttachmentType(Context,&Type) || !xrtStrEqual(Type,XRT_STR_LITERAL("application/octet-stream")))
+        return MdoApiReplyError(Context,415u,"unsupported_media_type","Use application/octet-stream for raw files",NULL);
+    MdoApiBodyStatus Status=MdoApiBinaryBodyRead(Context,MDO_API_IMAGE_MAX_BYTES,&Data,&Size);
+    if (Status!=MDO_API_BODY_OK || !Size) {xrtFree(Data);return MdoApiReplyError(Context,Status==MDO_API_BODY_TOO_LARGE?413u:400u,
+        Status==MDO_API_BODY_TOO_LARGE?"file_too_large":"file_body_invalid","Files must be nonempty and at most 8 MiB",NULL);}
+    snprintf(Directory,sizeof(Directory),"sessions/%s/%s/uploads",Project,Session);
+    snprintf(Path,sizeof(Path),"%s/%s",Directory,Leaf);
+    if (!MdoApiAttachmentLock()) {xrtFree(Data);return MdoApiReplyError(Context,503u,"attachment_unavailable","File storage is unavailable",NULL);}
+    Ok=MdoHomeExternalStat(Path,&Exists,&Info);
+    if (Ok && Exists) {
+        xfile Stored=NULL;char* Bytes=NULL;
+        Ok=Info.Type==XFILE_TYPE_FILE && (Info.Available&XFILE_INFO_SIZE) && Info.Size==Size;
+        if (Ok) {Bytes=xrtMalloc(Size);Stored=MdoHomeOpenRead(Path);Ok=Bytes&&Stored&&xrtReadFull(Stored,Bytes,Size,NULL)&&!memcmp(Bytes,Data,Size);}
+        if(Stored&&!xrtClose(Stored))Ok=false;xrtFree(Bytes);Replay=Ok;Conflict=!Ok;
+    } else if (Ok) {
+        size_t Count=0u,Total=0u;xdir Dir=NULL;xdirentry Entry;xdirnext Next=XDIR_NEXT_END;
+        Ok=MdoHomeExternalStat(Directory,&Exists,&Info);
+        if(Ok&&Exists){
+            Ok=Info.Type==XFILE_TYPE_DIRECTORY&&(Dir=MdoHomeOpenDirectory(Directory,XDIR_STAT))!=NULL;
+            while(Ok&&(Next=xrtDirNext(Dir,&Entry))==XDIR_NEXT_ITEM){
+                if(Entry.Info.Type!=XFILE_TYPE_FILE || !(Entry.Info.Available&XFILE_INFO_SIZE) ||
+                    ++Count>=32u || Entry.Info.Size>64u*1024u*1024u-Total){Ok=false;break;}
+                Total+=(size_t)Entry.Info.Size;
+            }
+            if(Next==XDIR_NEXT_ERROR)Ok=false;if(Dir&&!xrtDirClose(Dir))Ok=false;
+        }
+        if(Ok)Ok=Size<=64u*1024u*1024u-Total&&MdoHomeAtomicWrite(Path,Data,Size,false);
+    }
+    MdoApiAttachmentUnlock();xrtFree(Data);
+    if(Conflict)return MdoApiReplyError(Context,409u,"file_upload_conflict","This upload identity has different content; nothing was overwritten",NULL);
+    if(!Ok)return MdoApiReplyError(Context,507u,"file_storage_full","The session file quota or storage limit was reached",NULL);
+    snprintf(Alias,sizeof(Alias),"@uploads/%s",Leaf);
+    xvalue* Reply=xrtValueObject();
+    if(!Reply||!MdoApiValueSetString(Reply,"path",Alias)||!MdoApiValueSetUInt(Reply,"size",Size)){
+        xrtValueRelease(Reply);return MdoApiReplyError(Context,503u,"attachment_unavailable","The file was saved but its response could not be created",NULL);
+    }
+    return MdoApiReplySuccessTake(Context,Replay?200u:201u,Reply,NULL);
 }

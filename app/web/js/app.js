@@ -79,6 +79,8 @@ import { newPromptContext } from "./features/chat/prompt-context.js";
 import { createComposerAddMenu } from "./features/chat/composer-add-menu.js";
 import { createSessionMentions } from "./features/chat/session-mentions.js";
 import { createSelectionQuote } from "./features/chat/selection-quote.js";
+import { createFileImporter, uploadLeaf } from "./features/chat/composer-files.js";
+import { createRequestRecovery } from "./api/request-recovery.js";
 import { createPromptHistory } from "./features/chat/prompt-history.js";
 import { loadCommands, parseCommand, runCommand } from "./features/chat/extension-commands.js";
 import { parseSkillSelection } from "./features/chat/skill-selection.js";
@@ -281,6 +283,7 @@ export async function boot() {
   let composerAttachments = [];
   const promptComposition = createCompositionTracker(prompt);
   let composerImages = null;
+  let composerFileImports = null;
   let newTaskController = null;
   let projectDraftSelection = null;
   let shortcuts;
@@ -312,7 +315,7 @@ export async function boot() {
 
   function localPurgeBusy() {
     return hasPendingApiWrites() || messageActionBusy || Boolean(messageEditingKey) ||
-      composerImages?.hasInFlight() || composerProfile.hasInFlight() || composerAgent?.isBusy() ||
+      composerImages?.hasInFlight() || composerFileImports?.hasInFlight() || composerProfile.hasInFlight() || composerAgent?.isBusy() ||
       submissionController?.hasInFlight() || promptQueue.hasInFlight() ||
       newTaskController?.isBusy() || newTaskController?.isPreparing() || newTaskController?.isMigrating();
   }
@@ -474,7 +477,7 @@ export async function boot() {
 
   function assertReplacementIdle(selected) {
     const key = `${selected.projectId}/${selected.sessionId}`;
-    if (activeRun || submittingCurrent() || composerImages?.isUploading())
+    if (activeRun || submittingCurrent() || composerImages?.isUploading() || composerFileImports?.isBusy())
       throw new Error(t("messageAction.waitForRun", {}, "请在当前运行结束后操作消息"));
     if (!draftStore.isLoaded(key))
       throw new Error(t("composer.hintLoadingDraft", {}, "正在读取草稿，请稍候"));
@@ -944,6 +947,35 @@ export async function boot() {
   const contextOwner = () => JSON.stringify([selectedDraftKey, promptQueue.stamp()]);
   composerContext = createComposerContext({ input: prompt, strip: $("#composer-contexts"), owner: contextOwner,
     onChange: () => prompt.dispatchEvent(new Event("input", { bubbles: true })) });
+  async function storeComposerFile(file, job) {
+    if (!job.current()) throw new DOMException("Editor changed", "AbortError");
+    const runtime = promptQueue.stamp();
+    const owner = await ensureSession(composerText(), composerProfile.selection());
+    const current = () => runtime === promptQueue.stamp() && navigation.get().view === "workspace" &&
+      navigation.get().projectId === owner.projectId && navigation.get().sessionId === owner.sessionId;
+    if (!current()) throw new DOMException("Editor changed", "AbortError");
+    const key = `${owner.projectId}/${owner.sessionId}`;
+    if (!await draftStore.ensureLoaded(key)) throw new Error(t("composer.newTaskSaveFailed"));
+    await loadSession(owner.projectId, owner.sessionId);
+    if (!current()) throw new DOMException("Editor changed", "AbortError");
+    job.rebind(contextOwner());
+    const leaf = uploadLeaf(file, promptQueue.newId());
+    const recovery = createRequestRecovery();
+    try {
+      // A raw keyed PUT is immutable: a lost ACK can safely replay only the
+      // same URI and File. The native handler proves equal bytes or rejects.
+      return await recovery.request(signal => {
+        if (!current()) throw new DOMException("Editor changed", "AbortError");
+        return api.uploadFile(owner.projectId, owner.sessionId, file, leaf, { signal });
+      });
+    } finally { recovery.dispose(); }
+  }
+  composerFileImports = createFileImporter({ input: prompt, owner: contextOwner,
+    add: item => composerContext.add(item), canAdd: item => composerContext.canAdd(item),
+    store: storeComposerFile, onBusy: () => {
+      const status = $("#composer-files-status"); status.hidden = !composerFileImports?.isBusy();
+      writeUiText(status, uiMessage("file.saving")); setRun(activeRun);
+    }, onError: showComposerError });
   function composerText() { return composerContext?.text() ?? prompt.value; }
   function restoreComposerText(text) { if (composerContext) composerContext.restore(text); else prompt.value = text; }
   const fileMentions = createFileMentions({ composer, input: prompt, navigation,
@@ -992,11 +1024,12 @@ export async function boot() {
   }
   const addMenu = createComposerAddMenu({ button: $("#composer-attach"), input: prompt,
     imageInput: $("#composer-file"), textInput: $("#composer-text-file"), owner: contextOwner,
-    add: item => composerContext.add(item) });
+    add: item => composerContext.add(item), importFiles: composerFileImports.importFiles });
   const selectionQuote = createSelectionQuote({ container: $("#timeline"), owner: () => ({
     ...navigation.get(), origin: promptQueue.stamp() }),
     writable: () => navigation.get().view === "workspace" && !prompt.disabled && !prompt.readOnly,
-    add: item => { if (composerContext.add(item)) prompt.focus(); } });
+    add: item => { const added = composerContext.add(item); if (added) prompt.focus(); return added; } });
+  window.addEventListener("pagehide", () => selectionQuote.destroy(), { once: true });
   navigation.subscribe(() => { addMenu.close(); sessionMentions.hide(); selectionQuote.hide(); messageEditDialog.cancel(); });
   const tokenMeter = createTokenMeter({
     root: $("#context-meter"), trigger: $("#context-meter-trigger"),
@@ -1219,6 +1252,7 @@ export async function boot() {
   });
   composerImages = createComposerImages({
     uploadImage: uploadImageWithRecovery, bindButton: false,
+    onFiles: composerFileImports.importFiles,
     composer, prompt, button: $("#composer-attach"), input: $("#composer-file"),
     strip: $("#composer-images"), modelSelect: $("#composer-model"),
     navigation, modelsStore,
@@ -1388,9 +1422,9 @@ export async function boot() {
     renderComposerAction(send, {
       running: Boolean(activeRun || slashCommands.pendingCount()),
       hasDraft: Boolean(prompt.value.trim() || composerContext?.hasContexts() ||
-        composerAttachments.length || composerImages?.isUploading()),
+        composerAttachments.length || composerImages?.isUploading() || composerFileImports?.isBusy()),
       sendDisabled: sendBlockedByState || extractingQueue || composerAgent?.isBusy() ||
-        ((composerImages?.isUploading() ||
+        ((composerImages?.isUploading() || composerFileImports?.isBusy() ||
           composerImages?.hasUnsupportedDraft()) && !localCommand),
       stopDisabled: composerStopDisabled(),
       stopBusy: Boolean(activeRun &&
@@ -2352,7 +2386,7 @@ export async function boot() {
     const origin = navigation.get();
     const originVersion = routeVersion;
     if (origin.sessionId) return origin;
-    const title = taskTitle(text, t("composer.imageTask", {}, "图片任务"));
+    const title = taskTitle(text, t("file.taskTitle"));
     const owner = await newTaskController.createForAttachment({
       projectId: origin.projectId || "default", title,
       profile });
@@ -2416,7 +2450,7 @@ export async function boot() {
       try { if (await slashCommands.expandIntoComposer(text)) return; }
       catch (error) { showComposerError(error); return; }
     }
-    if ((!text && !attachments.length && !(fromComposer && composerContext.hasContexts())) || composerImages.isUploading()) return;
+    if ((!text && !attachments.length && !(fromComposer && composerContext.hasContexts())) || composerImages.isUploading() || composerFileImports.isBusy()) return;
     const rawInput = fromComposer ? composerText() : text;
     const origin = navigation.get();
     const originVersion = routeVersion;

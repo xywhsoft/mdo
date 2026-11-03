@@ -284,6 +284,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       MdoApiSessionHistoryRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/attachments",
       XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiAttachmentsRoute, true },
+    { "/api/v1/projects/{project}/sessions/{session}/uploads/{file}",
+      XHTTP_METHOD_PUT, "PUT, OPTIONS", MdoApiUploadsRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/attachments/{attachment}/info",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS",
       MdoApiAttachmentInfoRoute, true },

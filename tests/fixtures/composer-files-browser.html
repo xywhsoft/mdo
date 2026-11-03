@@ -1,0 +1,33 @@
+<!doctype html><meta charset="utf-8"><title>mdo 文件与选区验收</title>
+<style>body{margin:0;font:14px system-ui}header{display:flex;gap:8px;padding:8px;flex-wrap:wrap}button{padding:6px}iframe{width:100%;height:calc(100vh - 100px);border:0}#result{margin:0;padding:4px;white-space:pre-wrap}</style>
+<header><button id="drop-json">拖入 JSON</button><button id="paste-json">粘贴 JSON 文件</button><button id="drop-pdf">拖入 PDF</button><button id="mixed-new">新任务混合附件</button><button id="cross-quote">跨消息选择</button><button id="key-quote">键盘选区</button><button id="inspect">检查状态</button></header>
+<pre id="result" role="status">等待操作</pre><iframe title="mdo 测试界面"></iframe>
+<script type="module">
+const frame=document.querySelector('iframe'),result=document.querySelector('#result');
+frame.src='/#/projects/default/sessions/'+new URLSearchParams(location.search).get('session');
+const win=()=>frame.contentWindow,doc=()=>frame.contentDocument;
+async function wait(test){const end=Date.now()+12000;while(Date.now()<end){if(test())return;await new Promise(r=>setTimeout(r,30));}throw Error('等待界面超时');}
+const report=value=>{result.textContent=JSON.stringify(value);};
+function filesEvent(kind,files){const w=win(),transfer=new w.DataTransfer();files.forEach(file=>transfer.items.add(file));
+  const event=kind==='paste'?new w.ClipboardEvent('paste',{clipboardData:transfer,bubbles:true,cancelable:true}):
+    new w.DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true});
+  doc().querySelector(kind==='paste'?'#prompt':'#composer').dispatchEvent(event);report({event:kind,handled:event.defaultPrevented});}
+function json(name){return new (win().File)(['{"项目":"墨斗","attachment":"'+name+'"}\n'],name,{type:'application/json'});}
+for(const [id,action] of Object.entries({
+ 'drop-json':()=>filesEvent('drop',[json('dragged.json')]),
+ 'paste-json':()=>filesEvent('paste',[json('pasted.json')]),
+ 'drop-pdf':()=>filesEvent('drop',[new (win().File)(['%PDF-1.4\nQA binary document\x00\xff'],'document.pdf',{type:'application/pdf'})]),
+ 'mixed-new':async()=>{doc().querySelector('#new-session').click();await wait(()=>!doc().querySelector('#prompt').disabled);
+   const raw=await (await fetch('/__qa/png')).arrayBuffer();filesEvent('drop',[json('mixed.json'),new (win().File)([raw],'sample.png',{type:'image/png'})]);},
+ 'cross-quote':async()=>{const bodies=[...doc().querySelectorAll('#timeline [data-kind="assistant"] .timeline-body')];
+   const first=bodies[0].firstChild.firstChild,last=bodies.at(-1).lastChild.lastChild,range=doc().createRange();
+   range.setStart(first,0);range.setEnd(last,last.textContent.length);win().getSelection().removeAllRanges();win().getSelection().addRange(range);
+   doc().dispatchEvent(new (win().PointerEvent)('pointerup',{bubbles:true}));report({selected:win().getSelection().toString()});},
+ 'key-quote':()=>{const range=doc().createRange();range.selectNodeContents(doc().querySelector('#timeline [data-kind="assistant"] .timeline-body'));
+   win().getSelection().removeAllRanges();win().getSelection().addRange(range);doc().dispatchEvent(new (win().Event)('selectionchange'));report({keyboardSelection:true});},
+ 'inspect':()=>report({chips:[...doc().querySelectorAll('#composer-contexts .prompt-context-open')].map(n=>({label:n.textContent,preview:n.title})),
+   images:doc().querySelectorAll('#composer-images .composer-image').length,error:doc().querySelector('#composer-error').textContent,
+   fileBusy:!doc().querySelector('#composer-files-status').hidden,quoteVisible:!doc().querySelector('.selection-quote-button').hidden,
+   width:doc().documentElement.clientWidth,scrollWidth:doc().documentElement.scrollWidth})
+}))document.getElementById(id).onclick=()=>Promise.resolve().then(action).catch(error=>report({error:String(error.stack)}));
+</script>

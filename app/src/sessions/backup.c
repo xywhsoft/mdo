@@ -598,7 +598,8 @@ bool MdoBackupValidate(const MdoSessionBackup* Backup,
         bool Lines = MdoBackupSuffix(File->Path, ".jsonl");
         bool Ui = strcmp(File->Path, "ui-events.jsonl") == 0;
         if ( !MdoBackupCheck(Limits, Cancel, Error) ) return false;
-        if ( strcmp(File->Path, "snapshot.json") == 0 || strcmp(File->Path, "journal.jsonl") == 0 ) continue;
+        if ( strcmp(File->Path, "snapshot.json") == 0 || strcmp(File->Path, "journal.jsonl") == 0 ||
+             strncmp(File->Path, "uploads/", 8u) == 0 ) continue; /* User files are opaque bytes, including .json/.bin. */
         if ( MdoBackupSuffix(File->Path, ".bin") ) {
             if ( !MdoBackupImage(Backup, xrtStrViewN(File->Path + 12u, 32u)) ) goto invalid;
             continue;

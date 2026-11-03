@@ -834,6 +834,14 @@ static bool MdoAgentsReplyLanguage(char** Prompt, xwork_error* Error)
 static const xvalue* MdoAgentsSourceSpec(const xvalue* Config,cstr Id);
 static bool MdoAgentsSourceEnabled(const xvalue* Spec,bool Default);
 #include "dependencies.inc.c"
+static char* MdoAgentsUploadDirectory(const MdoAgentOwner* Owner)
+{
+    if(!Owner->ProductProject[0]||!Owner->ProductSession[0])return NULL;
+    char Relative[384];bool Exists=false;xfileinfo Info;
+    snprintf(Relative,sizeof(Relative),"sessions/%s/%s/uploads",Owner->ProductProject,Owner->ProductSession);
+    if(!MdoHomeExternalStat(Relative,&Exists,&Info)||!Exists||Info.Type!=XFILE_TYPE_DIRECTORY)return NULL;
+    return MdoHomeExternalPath(Relative);
+}
 #include "context.inc.c"
 
 static xwork_approval_mode MdoAgentsApproval(const char* Profile,
@@ -1629,6 +1637,11 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
          !MdoAgentsValidateSkillTools(Owner, Session->Agent, &AgentInfo,
             AllowedEffects, Error) )
         goto fail;
+    {
+        char* Uploads=MdoAgentsUploadDirectory(Owner);
+        bool Mounted=!Uploads||xworkAgentMountDirectory(Session->Agent,"uploads",Uploads,Error);
+        xrtFree(Uploads);if(!Mounted)goto fail;
+    }
     Session->Owner = Owner;
     Owner = NULL;
     Session->AgentId = xrtStrDup(AgentInfo.Id);

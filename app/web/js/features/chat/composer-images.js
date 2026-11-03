@@ -77,7 +77,7 @@ function selectionError(key, fallback) {
 export function createComposerImages({ composer, prompt, button, input, strip,
   modelSelect, navigation, modelsStore, sessionStore, ensureSession, onChange,
   onBeforeRemove, onRemove,
-  onUploading, onError, onDiscardedUpload, uploadImage = api.uploadImage, bindButton = true }) {
+  onUploading, onError, onDiscardedUpload, onFiles, uploadImage = api.uploadImage, bindButton = true }) {
   let ids = [];
   const uploadJobs = new Map();
   const removals = new Set();
@@ -114,7 +114,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
   }
 
   function render() {
-    composer.dataset.dropLabel = t("image.dropHint", {}, "松开以添加图片");
+    composer.dataset.dropLabel = onFiles ? t("file.dropHint") : t("image.dropHint", {}, "松开以添加图片");
     const focused = strip.contains(document.activeElement)
       ? document.activeElement : null;
     const focusedId = focused?.dataset.imageId;
@@ -306,9 +306,15 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     }
   }
 
-  function addFiles(files) {
-    const candidates = [...files];
+  async function addFiles(files) {
+    let candidates = [...files];
     if (!candidates.length) return;
+    if (onFiles) {
+      const ordinary = candidates.filter(candidate => !(candidate.mime ?? imageUploadType(candidate.file ?? candidate)));
+      if (ordinary.length && !await onFiles(ordinary)) return;
+      candidates = candidates.filter(candidate => Boolean(candidate.mime ?? imageUploadType(candidate.file ?? candidate)));
+      if (!candidates.length) return;
+    }
     if (removingCurrent()) {
       onError(selectionError("image.waitForCurrent",
         uiText("image.waitForCurrent", {}, "请等待当前图片操作完成后再添加")));
@@ -383,7 +389,8 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     if (restorePromptFocus) prompt.focus({ preventScroll: true });
   });
   prompt.addEventListener("paste", (event) => {
-    const images = pastedImages(event.clipboardData);
+    if (event.defaultPrevented) return;
+    const images = onFiles ? imageTransferFiles(event.clipboardData) : pastedImages(event.clipboardData);
     if (!images.length) return;
     event.preventDefault();
     void addFiles(images);
@@ -409,8 +416,8 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     clearDragTarget();
     const files = imageTransferFiles(event.dataTransfer);
     if (!files.length) {
-      onError(selectionError("image.dropUnavailable",
-        uiText("image.dropUnavailable", {}, "无法读取拖放的文件，请使用“添加图片”选择")));
+      onError(selectionError(onFiles ? "file.dropUnavailable" : "image.dropUnavailable",
+        onFiles ? t("file.dropUnavailable") : uiText("image.dropUnavailable", {}, "无法读取拖放的文件，请使用“添加图片”选择")));
       return;
     }
     void addFiles(files);

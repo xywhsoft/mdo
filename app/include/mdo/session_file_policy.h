@@ -38,6 +38,18 @@ static inline bool MdoSessionFileSuffix(const char* Text, const char* Suffix)
     return Size >= Tail && strcmp(Text + Size - Tail, Suffix) == 0;
 }
 
+/* Generated upload leaves retain only a short extension, never a user path. */
+static inline bool MdoSessionUploadName(const char* Name)
+{
+    size_t Size = Name ? strlen(Name) : 0u;
+    if (Size < 34u || Size > 49u || Name[32] != '.' ||
+        !MdoSessionFileDigits(Name, 32u, true)) return false;
+    for (size_t i = 33u; i < Size; ++i)
+        if (!((Name[i] >= 'a' && Name[i] <= 'z') ||
+              (Name[i] >= '0' && Name[i] <= '9'))) return false;
+    return true;
+}
+
 /* Whitelist the current logical files; unknown content fails rather than
  * silently creating an allegedly complete bundle. No native path is exported. */
 static inline size_t MdoSessionFileLimit(const char* Path, bool Directory)
@@ -49,7 +61,7 @@ static inline size_t MdoSessionFileLimit(const char* Path, bool Directory)
              strcmp(Path, "attachments/events") == 0 ||
              strcmp(Path, "attachments/runs") == 0 ||
              strcmp(Path, "queue-receipts") == 0 || strcmp(Path, "queue-withdrawn") == 0 ||
-             strcmp(Path, "artifacts") == 0 )
+             strcmp(Path, "artifacts") == 0 || strcmp(Path, "uploads") == 0 )
             return 1u;
         return strncmp(Path, "artifacts/run-", 14u) == 0 && strlen(Path) == 34u &&
             MdoSessionFileDecimal(Path + 14u, 20u) ? 1u : 0u;
@@ -69,6 +81,8 @@ static inline size_t MdoSessionFileLimit(const char* Path, bool Directory)
     if ( strcmp(Path, "feedback.json") == 0 ) return 32u * 1024u;
     if ( strcmp(Path, "restore-inputs.json") == 0 ) return 8u * 1024u * 1024u;
     if ( strcmp(Path, "restore-origin.json") == 0 ) return 8u * 1024u * 1024u;
+    if ( strncmp(Path, "uploads/", 8u) == 0 )
+        return MdoSessionUploadName(Path + 8u) ? 8u * 1024u * 1024u : 0u;
     if ( strncmp(Path, "attachments/", 12u) == 0 ) {
         Name = Path + 12u; Size = strlen(Name);
         if ( Size == 36u && MdoSessionFileDigits(Name, 32u, true) &&

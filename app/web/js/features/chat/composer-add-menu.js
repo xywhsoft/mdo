@@ -6,7 +6,7 @@ import { replaceInputText } from "../../utils/text-edit.js";
 import { newPromptContext } from "./prompt-context.js";
 import { positionAnchoredMenu } from "../../utils/anchored-menu.js";
 
-export function createComposerAddMenu({ button, input, imageInput, textInput, add, owner = () => "" }) {
+export function createComposerAddMenu({ button, input, imageInput, textInput, add, owner = () => "", importFiles }) {
   const menu = element("div", { className: "composer-add-menu", attrs: { role: "menu", id: `${input.id}-add-menu` } });
   menu.hidden = true; document.body.append(menu);
   button.setAttribute("aria-haspopup", "menu"); button.setAttribute("aria-controls", menu.id); button.setAttribute("aria-expanded", "false");
@@ -54,6 +54,7 @@ export function createComposerAddMenu({ button, input, imageInput, textInput, ad
   textInput.addEventListener("change", async () => {
     const origin = pickerOwner;
     const selected = [...(textInput.files ?? [])]; textInput.value = "";
+    if (importFiles) { if (owner() === origin) await importFiles(selected); return; }
     for (const file of selected) {
       try {
         if (owner() !== origin || input.disabled || input.readOnly) return;

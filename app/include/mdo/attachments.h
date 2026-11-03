@@ -46,5 +46,7 @@ bool MdoSessionAttachmentPruneRemoved(const char* ProjectId,
     const char* SessionId);
 void MdoSessionAttachmentForkRollback(const char* ProjectId,
     const char* SessionId);
+bool MdoSessionUploadsClone(const char* ProjectId, const char* SourceSessionId,
+    const char* TargetSessionId);
 
 #endif

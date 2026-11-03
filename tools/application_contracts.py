@@ -51,7 +51,7 @@ DEFS={
  'ModelAdd':document('added:b verified:b agent_ready:b verification_saved:b model_id:s revision:u verification:o',('added','verified','model_id','revision')),
  'Ecosystem':document('items:a types:a installed:a catalogs:a operation:j draft:j state:s id:s'),
  'Directory':document('path:s parent:s separator:s directories:ss shortcuts:a truncated:b'),
- 'Attachment':document('id:s mime_type:s file_name:s size:u url:s created_at:i'),
+ 'Attachment':document('id:s mime_type:s file_name:s size:u url:s created_at:i path:s'),
  'SkillInvocation':document('id:s text:s',('id','text')),
  'PaneLayout':document('schema_version:u sidebar_width:u sidebar_open:b'),
  'SidebarGroup':obj({'id':{'type':'string','pattern':'^[0-9a-f]{32}$'},'name':{'type':'string','minLength':1,'maxLength':256,'description':'Nonblank name, at most 256 UTF-8 bytes.'}},('id','name'),True),
@@ -166,7 +166,7 @@ ProjectPurgePreviewRoute ProjectPurgeResultRoute ProjectWorkspaceFilesRoute Memo
 RunsRoute TasksRoute ApprovalsRoute AsksRoute WorkspaceFilesRoute ArtifactsRoute PermissionsRoute DiagnosticsRoute StorageRoute
 OperationsRoute ModelsReloadRoute SkillsReloadRoute SkillSourcesRoute ModulesReloadRoute McpReloadRoute McpSourcesRoute
 McpTemplatesRoute McpDisconnectRoute McpRefreshRoute OperationRoute SessionRestoreRoute SessionPurgeRoute SessionHistoryRoute AttachmentsRoute
-AttachmentInfoRoute AttachmentRoute SessionArtifactRoute SessionRecoveryRoute SessionClearRoute SessionExportRoute SessionBackupRoute
+AttachmentInfoRoute AttachmentRoute UploadsRoute SessionArtifactRoute SessionRecoveryRoute SessionClearRoute SessionExportRoute SessionBackupRoute
 RunRoute ScheduleHistoryRoute ScheduleRunRoute TaskOutputRoute TaskAsksRoute ArtifactRoute TaskRoute SessionTurnsRoute
 SessionConversationRoute SessionEventsRoute QueueDiscardRoute TodoRoute'''.split())
 
@@ -185,7 +185,7 @@ RESULT_GROUPS={
  'ModelAdd':'ModelAddRoute',
  'Directory':'DirectoriesRoute',
  'Document':'AgentPlanRoute',
- 'Attachment':'AttachmentsRoute AttachmentInfoRoute',
+ 'Attachment':'AttachmentsRoute AttachmentInfoRoute UploadsRoute',
  'SkillInvocation':'SkillInvokeRoute',
  'PaneLayout':'PaneLayoutRoute',
  'SidebarLayout':'SidebarLayoutRoute',
@@ -239,15 +239,16 @@ def contract(row):
     if handler=='RemoteRoute' and path.endswith('/ticket'):body_name=None;properties['body']=document('job_id:s',('job_id',),True)
     if handler=='CliToolsRoute' and method=='POST':properties['body']=document('action:s id:s tool:o enabled:b revision:u store_id:u query:s before:u name:s')
     if handler=='DistributionRoute' and method=='POST':properties['body']=document('action:s channel:s product:s')
-    raw=handler in ('BackupUploadChunkRoute','AttachmentRoute') and method=='PUT'
+    raw=handler in ('BackupUploadChunkRoute','AttachmentRoute','UploadsRoute') and method=='PUT'
     raw=raw or handler=='AttachmentsRoute' and method=='POST'
     raw=raw or handler=='DeviceTransfersRoute' and method=='PUT'
     if raw:properties['body_base64']={**S,'contentEncoding':'base64','description':'Raw request bytes encoded once as base64'};required.append('body_base64')
     elif body_name and method not in ('GET','DELETE'):
         properties['body']=ref(body_name+'Input')
         if handler!='UpdateRoute':required.append('body')
-    if raw and handler in ('AttachmentsRoute','AttachmentRoute'):
+    if raw and handler in ('AttachmentsRoute','AttachmentRoute','UploadsRoute'):
         properties['headers']['properties']={'Content-Type':{**S,'description':'Image media type, e.g. image/png'},'X-Mdo-File-Name':{**S,'description':'Optional original filename'}}
+        if handler=='UploadsRoute':properties['headers']['properties']['Content-Type']['description']='application/octet-stream; generated immutable file leaf in path.file'
     result_name=RESULT.get(handler,'Snapshot')
     if handler not in RESULT and handler.endswith(('ConversationRoute','TurnsRoute','EventsRoute','HistoryRoute','SourcesRoute','PreviewsRoute','RestoresRoute')):result_name='Page'
     output=obj({'status':{**U,'minimum':100,'maximum':599},'data':ref(result_name),'revision':S,'content_type':S,

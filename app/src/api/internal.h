@@ -305,6 +305,7 @@ bool MdoApiQueueCaptureTryLock(void);
 void MdoApiQueueCaptureUnlock(void);
 bool MdoApiRunStartRoute(MdoApiContext* pContext);
 bool MdoApiAttachmentsRoute(MdoApiContext* pContext);
+bool MdoApiUploadsRoute(MdoApiContext* pContext);
 bool MdoApiAttachmentRoute(MdoApiContext* pContext);
 bool MdoApiAttachmentInfoRoute(MdoApiContext* pContext);
 bool MdoApiAttachmentsInit(void);

@@ -231,11 +231,12 @@
           <textarea id="prompt" name="prompt" rows="1" maxlength="65536" placeholder="向墨斗描述任务…" data-i18n-placeholder="shell.prompt" autocomplete="off" aria-describedby="composer-hint"></textarea>
           <div class="composer-images" id="composer-images" aria-live="polite" hidden></div>
           <div id="composer-contexts" aria-live="polite" hidden></div>
+          <p id="composer-files-status" class="composer-image-uploading" role="status" data-i18n="file.saving" hidden>正在添加文件…</p>
           <div class="composer-toolbar" id="composer-profile-controls">
             <div class="composer-options">
               <button class="composer-attach" id="composer-attach" type="button" aria-label="添加上下文" data-i18n-aria-label="context.add" title="添加上下文" data-i18n-title="context.add"><span class="icon" data-icon="plus" aria-hidden="true"></span></button>
               <input id="composer-file" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
-              <input id="composer-text-file" type="file" accept="text/*,.txt,.md,.csv,.json,.log,.yaml,.yml,.xml,.toml" multiple hidden>
+              <input id="composer-text-file" type="file" multiple hidden>
                 <button class="composer-permission-trigger" id="composer-permission-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="composer-permission-panel">
                   <span class="icon" id="composer-permission-icon" data-icon="shield" aria-hidden="true"></span>
                 </button>

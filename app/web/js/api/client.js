@@ -227,6 +227,14 @@ async function sendImage(path, file, mime, method, signal) {
   return (await readEnvelope(response, path, method, signal)).data;
 }
 
+async function uploadFile(projectId, sessionId, file, leaf, options = {}) {
+  if (!/^[0-9a-f]{32}\.[a-z0-9]{1,16}$/.test(leaf)) throw new TypeError("Invalid upload identity");
+  const path = `/projects/${resourceId(projectId, "project")}/sessions/${resourceId(sessionId, "session")}/uploads/${leaf}`;
+  checkSignal(options.signal); checkWrite(path, { method: "PUT" });
+  return trackWrite(() => withSignal(options.signal,
+    () => sendImage(path, file, "application/octet-stream", "PUT", options.signal)));
+}
+
 function deleteImage(projectId, sessionId, id) {
   if (!/^[0-9a-f]{32}$/.test(id))
     throw new TypeError(uiErrorText("error.detail.attachmentIdIsInvalid", {}, "Attachment ID is invalid"));
@@ -250,6 +258,7 @@ export const api = Object.freeze({
   patch: (path, body, options = {}) => apiRequest(path, { ...options, method: "PATCH", body }),
   delete: (path, options = {}) => apiRequest(path, { ...options, method: "DELETE" }),
   uploadImage,
+  uploadFile,
   deleteImage,
   markImageDiscard,
 });

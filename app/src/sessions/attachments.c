@@ -5,6 +5,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/sessions.h"
 #include "../../include/mdo/project_lifecycle.h"
+#include "../../include/mdo/session_file_policy.h"
 #include "data_gate.h"
 #include "sidecars/binding.h"
 
@@ -412,6 +413,28 @@ done:
     return Ok;
 }
 
+bool MdoSessionUploadsClone(const char* ProjectId, const char* SourceSessionId, const char* TargetSessionId)
+{
+    char Directory[MDO_SESSION_PATH_CAPACITY];bool Exists=false;xfileinfo Info;
+    snprintf(Directory,sizeof(Directory),"sessions/%s/%s/uploads",ProjectId,SourceSessionId);
+    if(!MdoHomeExternalStat(Directory,&Exists,&Info))return false;
+    if(!Exists)return true;
+    xdir Dir=Info.Type==XFILE_TYPE_DIRECTORY?MdoHomeOpenDirectory(Directory,XDIR_STAT):NULL;
+    if(!Dir)return false;
+    xdirentry Entry;xdirnext Next=XDIR_NEXT_END;size_t Count=0,Total=0;bool Ok=true;
+    while(Ok&&(Next=xrtDirNext(Dir,&Entry))==XDIR_NEXT_ITEM){
+        char Name[50],Source[MDO_SESSION_PATH_CAPACITY],Target[MDO_SESSION_PATH_CAPACITY];
+        if(Entry.Name.Size>=sizeof(Name)||Entry.Info.Type!=XFILE_TYPE_FILE||
+            !(Entry.Info.Available&XFILE_INFO_SIZE)||++Count>32u||Entry.Info.Size>64u*1024u*1024u-Total){Ok=false;break;}
+        memcpy(Name,Entry.Name.Data,Entry.Name.Size);Name[Entry.Name.Size]=0;
+        if(!MdoSessionUploadName(Name)){Ok=false;break;}Total+=(size_t)Entry.Info.Size;
+        snprintf(Source,sizeof(Source),"%s/%s",Directory,Name);
+        snprintf(Target,sizeof(Target),"sessions/%s/%s/uploads/%s",ProjectId,TargetSessionId,Name);
+        Ok=MdoImageCopyFile(Source,Target,8u*1024u*1024u);
+    }
+    if(Next==XDIR_NEXT_ERROR)Ok=false;if(!xrtDirClose(Dir))Ok=false;return Ok;
+}
+
 bool MdoSessionAttachmentEventClone(const char* SourceProjectId,
     const char* SourceSessionId, uint64 SourceEventId,
     const char* TargetProjectId, const char* TargetSessionId,
@@ -538,6 +561,8 @@ void MdoSessionAttachmentForkRollback(const char* ProjectId,
         "sessions/%s/%s/attachments", ProjectId, SessionId);
     if ( Written > 0 && (size_t)Written < sizeof(Directory) )
         MdoImageRollbackFiles(Directory);
+    Written = snprintf(Directory,sizeof(Directory),"sessions/%s/%s/uploads",ProjectId,SessionId);
+    if(Written>0&&(size_t)Written<sizeof(Directory))MdoImageRollbackFiles(Directory);
     MdoProjectLeaseRelease(Lease);
     MdoSessionDataRelease(DataLease);
 }

@@ -1,12 +1,16 @@
 import { canAddPromptContext, newPromptContext, parsePromptContext, serializePromptContext } from "./prompt-context.js";
 import { promptContextChips } from "./context-chips.js";
-import { t } from "../../i18n.js";
+import { t, currentLocale } from "../../i18n.js";
 import { toast } from "../../utils/dom.js";
 
 export function createComposerContext({ input, strip, owner = () => "", onChange = () => {} }) {
   let contexts = [];
+  let painted = "";
   function render() {
     const origin = owner();
+    const next = JSON.stringify([origin, input.disabled, input.readOnly, currentLocale(), contexts]);
+    if (painted === next) return;
+    painted = next;
     strip.replaceChildren(promptContextChips(contexts, { disabled: input.disabled || input.readOnly,
       onRemove(id) {
         if (input.disabled || input.readOnly || origin !== owner()) return;
@@ -25,7 +29,9 @@ export function createComposerContext({ input, strip, owner = () => "", onChange
     contexts = [...contexts, item]; render(); onChange(); return true;
   }
   input.addEventListener("paste", event => {
-    if (event.defaultPrevented || input.disabled || input.readOnly || event.clipboardData?.files?.length) return;
+    if (event.defaultPrevented || input.disabled || input.readOnly || event.clipboardData?.files?.length ||
+      [...(event.clipboardData?.items ?? [])].some(item => item.kind === "file" ||
+        !item.kind && typeof item.getAsFile === "function")) return;
     const text = event.clipboardData?.getData("text/plain") || "";
     if (text.length < 2000 && text.split("\n").length < 30) return;
     const item = newPromptContext("text", t("context.pastedText", { count: text.length }), { content: text });
@@ -45,6 +51,7 @@ export function createComposerContext({ input, strip, owner = () => "", onChange
       contexts = parsed.contexts; render();
     },
     add, render,
+    canAdd: item => canAddPromptContext(input.value, contexts, item),
     clear() { input.value = ""; contexts = []; render(); },
   });
 }

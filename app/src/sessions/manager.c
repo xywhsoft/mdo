@@ -1406,6 +1406,9 @@ MdoSession* MdoSessionFork(MdoSession* Source,
             SnapshotPath, &SavedThrough, Error) ) goto done;
     if ( !MdoSessionEventBridgeClonePrefix(Bridge, ProjectId,
             SourceInfo.Id, SavedThrough, Error) ) goto done;
+    if(!MdoSessionUploadsClone(ProjectId,SourceInfo.Id,SessionId)){
+        MdoSessionsError(Error,XWORK_ERROR_IO,"cannot copy uploaded session files");goto done;
+    }
     xrtMutexUnlock(Source->Lock);
     SourceLocked = false;
 
