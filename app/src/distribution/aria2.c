@@ -42,7 +42,8 @@ static xvalue* ArRpc(MdoAria* A,cstr Method,xvalue* Params,xcancel* Cancel){
     Ok=Body&&xsFetch(&Req,&Res)&&Res.Status==200&&!Res.Redirects;
     xvalue* Envelope=Ok?xrtJsonParse(xrtStrViewN((cstr)Res.Body,Res.BodySize)):NULL;
     xvalue* Result=Envelope&&!xrtValueObjectHas(Envelope,XRT_STR_LITERAL("error"))?xrtValueClone(xrtValueObjectGet(Envelope,XRT_STR_LITERAL("result"))):NULL;
-    if(Body)xrtSecureZero(Body,N);if(Token)xrtSecureZero(Token,strlen(Token));
+    if(Body)xrtSecureZero(Body,N);
+    if(Token)xrtSecureZero(Token,strlen(Token));
     xrtFree(Body);xrtFree(Token);xrtValueRelease(Envelope);xsFetchResponseUnit(&Res);xrtValueRelease(Q);xrtValueRelease(P);return Result;
 }
 static xvalue* ArGid(MdoAria* A,cstr Method,xcancel* Cancel){xvalue* P=xrtValueArray();if(P)xrtValueArrayAppendNew(P,xrtValueString(xrtStrView(A->Gid)));xvalue* R=P?ArRpc(A,Method,P,Cancel):NULL;xrtValueRelease(P);return R;}
@@ -99,7 +100,9 @@ static bool ArVerify(MdoNativeDownload* T,cstr Path,uint64 Bytes,cstr Hash,xcanc
     if(Ok&&Report){memset(Report,0,sizeof(*Report));Report->Bytes=Bytes;snprintf(Report->ActualHash,sizeof(Report->ActualHash),"%s",Hex);}return Ok;
 }
 MdoAriaResult MdoAriaDownload(MdoNativeDownload* T,cstr Url,uint64 Bytes,cstr Hash,cstr Authorization,xcancel* Cancel,char** Relative,MdoTransferReport* Report){
-    if(Relative)*Relative=NULL;if(Report)memset(Report,0,sizeof(*Report));char Id[33];
+    if(Relative)*Relative=NULL;
+    if(Report)memset(Report,0,sizeof(*Report));
+    char Id[33];
     if(!Relative||!T||!MdoDownloadsIdentity(T,Id))return MDO_ARIA_UNAVAILABLE;
     MdoAria A={0};MdoAriaResult Result=MDO_ARIA_UNAVAILABLE;bool NetworkFallback=false;char* Path=ArPath(Id,"payload"),*Native=Path?MdoHomeExternalPath(Path):NULL;
     if(!Url||(!strncmp(Url,"https://",8)?false:strncmp(Url,"http://",7)!=0)||strchr(Url,'\r')||strchr(Url,'\n')||!Hash||strlen(Hash)!=64||!Bytes||!Path||!Native)goto done;
@@ -122,7 +125,12 @@ MdoAriaResult MdoAriaDownload(MdoNativeDownload* T,cstr Url,uint64 Bytes,cstr Ha
     if(Ok&&Authorization&&Authorization[0]){xvalue* H=xrtValueArray();Ok=!strchr(Authorization,'\r')&&!strchr(Authorization,'\n')&&strlen(Authorization)<=4200&&H&&xrtValueArrayAppendNew(H,xrtValueString(xrtStrView(Authorization)))&&xrtValueObjectSet(Options,XRT_STR_LITERAL("header"),H);xrtValueRelease(H);}
     if(Ok&&!MdoDownloadAriaOptions(Options,Url)){NetworkFallback=true;Ok=false;}
     Ok=Ok&&xrtValueArrayAppend(P,Options);xvalue* Reply=Ok?ArRpc(&A,"aria2.addUri",P,Cancel):NULL;xstrview Gid={0};Ok=xrtValueGetString(Reply,&Gid)&&Gid.Size==16&&!memchr(Gid.Data,0,16);
-    if(Ok)snprintf(A.Gid,sizeof(A.Gid),"%s",Gid.Data);xrtValueRelease(Reply);xrtValueRelease(P);xrtValueRelease(Uris);xrtValueRelease(Options);xrtFree(Dir);
+    if(Ok)snprintf(A.Gid,sizeof(A.Gid),"%s",Gid.Data);
+    xrtValueRelease(Reply);
+    xrtValueRelease(P);
+    xrtValueRelease(Uris);
+    xrtValueRelease(Options);
+    xrtFree(Dir);
     if(!Ok){fprintf(stderr,"[mdo] aria2 RPC submission failed\n");Result=MDO_ARIA_FALLBACK;goto done;}
     bool WasPaused=false;
     for(;;){

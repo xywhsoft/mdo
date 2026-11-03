@@ -12,10 +12,12 @@ static bool DnBypass(cstr Patterns,cstr Url){
     while(*Patterns){while(*Patterns==' '||*Patterns==','||*Patterns==';'||*Patterns=='\n'||*Patterns=='\r')Patterns++;
         cstr Start=Patterns;while(*Patterns&&*Patterns!=','&&*Patterns!=';'&&*Patterns!='\n'&&*Patterns!='\r')Patterns++;
         size_t N=(size_t)(Patterns-Start);while(N&&Start[N-1]==' ')N--;bool Left=N&&Start[0]=='*';if(Left){Start++;N--;}bool Right=N&&Start[N-1]=='*';if(Right)N--;
-        if(!N&&(Left||Right))return true;if(N>Length||(!Left&&!Right&&N!=Length))continue;
+        if(!N&&(Left||Right))return true;
+        if(N>Length||(!Left&&!Right&&N!=Length))continue;
         for(size_t Offset=Left&&!Right?Length-N:0;Offset+N<=Length;Offset++){
             size_t I=0;while(I<N&&tolower((unsigned char)Start[I])==tolower((unsigned char)Host[Offset+I]))I++;
-            if(I==N&&N)return true;if(!Left||!Right)break;
+            if(I==N&&N)return true;
+            if(!Left||!Right)break;
         }
     }return false;
 }

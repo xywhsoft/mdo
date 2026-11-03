@@ -72,7 +72,7 @@ test("actual live-change wiring refreshes runs and queue while a task request ha
   assert(begin>0 && end>begin);
   const context=vm.createContext({resourceRefresh:null,
     createResourceRefresh:options=>createResourceRefresh({...options,...c}),
-    document:{hidden:false,activeElement:null},stop:{},routeVersion:1,
+    document:{hidden:false,activeElement:null},send:{},routeVersion:1,
     liveConnection:{isConnected:()=>true},
     loadRuns:()=>reads.push(["runs",completed]),refreshSelectedQueue:()=>reads.push(["queue",completed]),
     loadTasks:()=>new Promise(()=>{}),loadApprovals(){},refreshSelectedAsks(){},loadRecovery(){},

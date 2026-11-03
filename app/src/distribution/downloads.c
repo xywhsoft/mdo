@@ -80,7 +80,9 @@ static xvalue* DlInfo(MdoNativeDownload* T){
     return V;
 }
 xvalue* MdoDownloadsFind(cstr Source,cstr Identity,cstr Hash){
-    if(!MdoDownloads.Lock)return NULL;xvalue* V=NULL;xrtMutexLock(MdoDownloads.Lock);
+    if(!MdoDownloads.Lock)return NULL;
+    xvalue* V=NULL;
+    xrtMutexLock(MdoDownloads.Lock);
     for(size_t I=0;I<DL_COUNT;I++){MdoNativeDownload* T=&MdoDownloads.Tasks[I];if(T->Record&&!T->Cancelled&&!strcmp(DlText(T->Record,"source"),Source)&&!strcmp(DlText(T->Record,"identity"),Identity)&&!strcmp(DlText(T->Record,"sha256"),Hash)){V=xrtValueClone(T->Record);break;}}
     xrtMutexUnlock(MdoDownloads.Lock);return V;
 }
@@ -98,7 +100,8 @@ MdoNativeDownload* MdoDownloadsBegin(cstr Source,cstr Identity,cstr Name,cstr Ha
     }
     if(MdoDownloads.Stopping||MdoDownloads.StorageFault||(Cancel&&xrtCancelRequested(Cancel))||(T&&(T->Active||(T->Cancelled&&T->DispatchCancel))))goto failed;
     if(!T&&!Empty){DlPrune(true);for(size_t I=0;I<DL_COUNT;I++)if(!MdoDownloads.Tasks[I].Record){Empty=&MdoDownloads.Tasks[I];break;}}
-    if(!T)T=Empty;if(!T)goto failed;
+    if(!T)T=Empty;
+    if(!T)goto failed;
     Original=T->Record;WasPaused=T->Paused;WasCancelled=T->Cancelled;T->Record=Original?xrtValueClone(Original):xrtValueObject();Replaced=true;if(!T->Record)goto failed;
     if(!Original){char* Id=xrtXidMakeString();bool Ok=Id&&DlPut(T->Record,"id",Id);xrtFree(Id);if(!Ok)goto failed;}
     T->Cancel=xrtCancelChild(Cancel);if(!T->Cancel)goto failed;
@@ -116,22 +119,33 @@ failed:
 }
 xcancel* MdoDownloadsCancelToken(MdoNativeDownload* T,xcancel* Fallback){return T?T->Cancel:Fallback;}
 bool MdoDownloadsControl(MdoNativeDownload* T,bool* Paused,xcancel* Cancel){
-    if(Paused)*Paused=false;if(!T)return !(Cancel&&xrtCancelRequested(Cancel));
+    if(Paused)*Paused=false;
+    if(!T)return !(Cancel&&xrtCancelRequested(Cancel));
     xrtMutexLock(MdoDownloads.Lock);bool Ok=!MdoDownloads.Stopping&&!T->Cancelled&&!(Cancel&&xrtCancelRequested(Cancel));
-    if(Paused)*Paused=T->Paused;xrtMutexUnlock(MdoDownloads.Lock);return Ok;
+    if(Paused)*Paused=T->Paused;
+    xrtMutexUnlock(MdoDownloads.Lock);
+    return Ok;
 }
 bool MdoDownloadsEngine(MdoNativeDownload* T,cstr Engine,cstr Fallback){
-    if(!T)return true;xrtMutexLock(MdoDownloads.Lock);
+    if(!T)return true;
+    xrtMutexLock(MdoDownloads.Lock);
     bool Ok=DlPut(T->Record,"engine",Engine)&&DlPut(T->Record,"fallback_reason",Fallback)&&DlUInt(T->Record,"speed",0)&&DlSave();
     T->SampleAt=xllmClockUs();T->SampleBytes=0;xrtMutexUnlock(MdoDownloads.Lock);return Ok;
 }
 bool MdoDownloadsIdentity(MdoNativeDownload* T,char Id[33]){
-    if(!T||!Id)return false;xrtMutexLock(MdoDownloads.Lock);snprintf(Id,33,"%s",DlText(T->Record,"id"));xrtMutexUnlock(MdoDownloads.Lock);return strlen(Id)==32;
+    if(!T||!Id)return false;
+    xrtMutexLock(MdoDownloads.Lock);
+    snprintf(Id,33,"%s",DlText(T->Record,"id"));
+    xrtMutexUnlock(MdoDownloads.Lock);
+    return strlen(Id)==32;
 }
 bool MdoDownloadsGate(MdoNativeDownload* T,xcancel* Cancel){
     if(!T)return !(Cancel&&xrtCancelRequested(Cancel));
     for(;;){xrtMutexLock(MdoDownloads.Lock);bool Stop=MdoDownloads.Stopping||T->Cancelled||(Cancel&&xrtCancelRequested(Cancel)),Paused=T->Paused;xrtMutexUnlock(MdoDownloads.Lock);
-        if(Stop)return false;if(!Paused)return true;xrtSleep(50);}
+        if(Stop)return false;
+        if(!Paused)return true;
+        xrtSleep(50);
+        }
 }
 bool MdoDownloadsCancelled(MdoNativeDownload* T){if(!T||!MdoDownloads.Lock)return false;xrtMutexLock(MdoDownloads.Lock);bool C=T->Cancelled;xrtMutexUnlock(MdoDownloads.Lock);return C;}
 bool MdoDownloadsProgress(MdoNativeDownload* T,uint64 Done,cstr Phase){
@@ -166,7 +180,10 @@ static bool DlPartial(const xvalue* R,bool RemoveFile){
     return MdoAriaCleanup(DlText(R,"id"))&&Ok;
 }
 bool MdoDownloadsEnd(MdoNativeDownload* T,bool Ok,cstr Code,cstr Error,xcancel* Cancel){
-    if(!T)return Ok;xrtMutexLock(MdoDownloads.Lock);T->Active=false;bool Discard=T->Cancelled;
+    if(!T)return Ok;
+    xrtMutexLock(MdoDownloads.Lock);
+    T->Active=false;
+    bool Discard=T->Cancelled;
     Ok=Ok&&!Discard&&!MdoDownloads.Stopping&&!(Cancel&&xrtCancelRequested(Cancel));
     cstr State=Discard?"cancelled":Ok?"ready":MdoDownloads.Stopping||(Cancel&&xrtCancelRequested(Cancel))?"paused":"failed";
     T->Paused=!strcmp(State,"paused");DlPut(T->Record,"state",State);DlPut(T->Record,"error",Ok||T->Paused||Discard?"":Error);DlPut(T->Record,"error_code",Ok||T->Paused||Discard?"":Code);DlUInt(T->Record,"speed",0);DlUInt(T->Record,"updated_at",MdoUtcUs());
@@ -220,7 +237,10 @@ static int32 DlWorker(void* Unused){
     }return 0;
 }
 bool MdoDownloadsAction(cstr Id,cstr Action,char Error[512]){
-    if(Error)Error[0]=0;if(!MdoDownloads.Lock||!Id||!Action)return false;xrtMutexLock(MdoDownloads.Lock);MdoNativeDownload* T=NULL;
+    if(Error)Error[0]=0;
+    if(!MdoDownloads.Lock||!Id||!Action)return false;
+    xrtMutexLock(MdoDownloads.Lock);
+    MdoNativeDownload* T=NULL;
     for(size_t I=0;I<DL_COUNT;I++)if(MdoDownloads.Tasks[I].Record&&!strcmp(DlText(MdoDownloads.Tasks[I].Record,"id"),Id)){T=&MdoDownloads.Tasks[I];break;}
     bool Ok=T&&!MdoDownloads.Stopping&&!MdoDownloads.StorageFault;
     xvalue* Previous=Ok?xrtValueClone(T->Record):NULL,*Removed=NULL;bool WasPaused=T&&T->Paused;
@@ -246,11 +266,16 @@ bool MdoDownloadsAction(cstr Id,cstr Action,char Error[512]){
         else if(strcmp(Action,"cancel")&&strcmp(Action,"cleanup")){xrtValueRelease(T->Record);T->Record=Previous;Previous=NULL;T->Paused=WasPaused;}
     }
     if(Removed){xrtValueRelease(Removed);memset(T,0,sizeof(*T));}xrtValueRelease(Previous);
-    if(!Ok&&Error)snprintf(Error,512,"Download state changed, the action is unavailable, or its record cannot be saved");xrtMutexUnlock(MdoDownloads.Lock);return Ok;
+    if(!Ok&&Error)snprintf(Error,512,"Download state changed, the action is unavailable, or its record cannot be saved");
+    xrtMutexUnlock(MdoDownloads.Lock);
+    return Ok;
 }
 bool MdoDownloadsInit(xnetengine* Engine){
     MdoDownloadNetworkSetEngine(Engine);
-    if(MdoDownloads.Lock)return true;MdoDownloads.Lock=xrtMutexCreate();MdoDownloads.Cancel=xrtCancelCreate();MdoDownloads.Engine=Engine;
+    if(MdoDownloads.Lock)return true;
+    MdoDownloads.Lock=xrtMutexCreate();
+    MdoDownloads.Cancel=xrtCancelCreate();
+    MdoDownloads.Engine=Engine;
     if(!MdoDownloads.Lock||!MdoDownloads.Cancel)return false;
     xvalue* A=DlRead(DL_RECORD);bool Exists=false;xfileinfo Info;size_t N=xrtValueCount(A);
     bool Repair=Exists&&xrtValueType(A)!=XVALUE_ARRAY;size_t Loaded=0;
@@ -278,7 +303,11 @@ bool MdoDownloadsInit(xnetengine* Engine){
 }
 void MdoDownloadsStop(void){if(!MdoDownloads.Lock)return;xrtMutexLock(MdoDownloads.Lock);MdoDownloads.Stopping=true;xrtCancelRequest(MdoDownloads.Cancel);for(size_t I=0;I<DL_COUNT;I++){if(MdoDownloads.Tasks[I].Cancel)xrtCancelRequest(MdoDownloads.Tasks[I].Cancel);if(MdoDownloads.Tasks[I].DispatchCancel)xrtCancelRequest(MdoDownloads.Tasks[I].DispatchCancel);}xrtMutexUnlock(MdoDownloads.Lock);}
 void MdoDownloadsUnit(void){
-    if(!MdoDownloads.Lock)return;MdoDownloadsStop();if(MdoDownloads.Thread){xrtThreadWait(MdoDownloads.Thread);xrtThreadDestroy(MdoDownloads.Thread);}
+    if(!MdoDownloads.Lock)return;
+    MdoDownloadsStop();
+    if(MdoDownloads.Thread){xrtThreadWait(MdoDownloads.Thread);
+    xrtThreadDestroy(MdoDownloads.Thread);
+    }
     for(;;){bool Active=false;xrtMutexLock(MdoDownloads.Lock);for(size_t I=0;I<DL_COUNT;I++)Active=Active||MdoDownloads.Tasks[I].Active;xrtMutexUnlock(MdoDownloads.Lock);if(!Active)break;xrtSleep(25);}
     for(size_t I=0;I<DL_COUNT;I++){xrtValueRelease(MdoDownloads.Tasks[I].Record);xrtCancelDestroy(MdoDownloads.Tasks[I].DispatchCancel);}
     xrtCancelDestroy(MdoDownloads.Cancel);xrtMutexDestroy(MdoDownloads.Lock);memset(&MdoDownloads,0,sizeof(MdoDownloads));

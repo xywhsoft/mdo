@@ -101,7 +101,7 @@ function schedulerFixture(read) {
     window: { setTimeout: c.setTimer, clearTimeout: c.clearTimer },
     document: { hidden: false, activeElement: null, body: {}, querySelector: () => null },
     liveConnection: { isConnected: () => false }, isTransientReadError,
-    terminalState: run => Boolean(run?.terminal), stop: {}, prompt: { disabled: false },
+    terminalState: run => Boolean(run?.terminal), send: {}, prompt: { disabled: false },
     shell: { dataset: {} }, showComposerError: error => errors.push(error),
     setRun: run => { applied.push(run); context.activeRun = run?.terminal ? null : run; },
     refreshSelectedTimeline: async () => {}, refreshSelectedAsks: async () => {},

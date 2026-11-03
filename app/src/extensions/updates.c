@@ -42,7 +42,9 @@ static bool MdoUpdatesFetch(xvalue* Inventory,xvalue** Result,char Error[512]){
   const xvalue* Items=xrtValueObjectGet(Response,XRT_STR_LITERAL("items"));Ok=Ok&&xrtValueType(Items)==XVALUE_ARRAY&&xrtValueCount(Items)<=End-Offset;
   xvalue* Seen=xrtValueObject();Ok=Ok&&Seen;
   for(size_t I=0;Ok&&I<xrtValueCount(Items);I++){const xvalue* Remote=xrtValueArrayGet(Items,I);cstr Id=MdoExtensionText(Remote,"id",MDO_EXTENSION_REF_BYTES);const xvalue* Local=MdoUpdatesFind(Inventory,Id);Ok=Local&&Id&&!xrtValueObjectHas(Seen,xrtStrView(Id))&&xrtValueObjectSetNew(Seen,xrtStrView(Id),xrtValueBool(true));
-   if(!Ok)break;const xvalue* Receipt=xrtValueObjectGet(Local,XRT_STR_LITERAL("installation"));uint64 Serial=MdoUpdatesNumber(Receipt,"serial");
+   if(!Ok)break;
+   const xvalue* Receipt=xrtValueObjectGet(Local,XRT_STR_LITERAL("installation"));
+   uint64 Serial=MdoUpdatesNumber(Receipt,"serial");
    if(!Serial&&!MdoUpdatesSame(MdoExtensionText(Local,"delivery",8),"apk")){cstr Version=MdoExtensionText(Receipt,"version_id",32);xvalue* Query=xrtValueObject(),*Prior=NULL;
     bool Read=Version&&Query&&MdoUpdatesPut(Query,"action","detail")&&MdoUpdatesPut(Query,"version_id",Version)&&MdoExtensionServiceRead(Query,MdoUpdates.Cancel,&Prior,Error);
     if(Read&&MdoUpdatesSame(MdoExtensionText(Prior,"xid",32),MdoExtensionText(Local,"work",32))&&MdoUpdatesSame(MdoExtensionText(Prior,"sha256",64),MdoExtensionText(Local,"sha256",64)))Serial=MdoUpdatesNumber(Prior,"serial");
@@ -72,15 +74,26 @@ static int32 MdoUpdatesWorker(void* Data){
  }return 0;
 }
 bool MdoExtensionUpdatesInit(void){
- if(MdoUpdates.Lock)return true;MdoUpdates.Lock=xrtMutexCreate();MdoUpdates.Cancel=xrtCancelCreate();bool Missing=false;char* Text=MdoExtensionRead(MDO_UPDATES_CACHE,true,2097152,&Missing);MdoUpdates.Cache=Text?xrtJsonParse(xrtStrView(Text)):NULL;xrtFree(Text);
+ if(MdoUpdates.Lock)return true;
+ MdoUpdates.Lock=xrtMutexCreate();
+ MdoUpdates.Cancel=xrtCancelCreate();
+ bool Missing=false;
+ char* Text=MdoExtensionRead(MDO_UPDATES_CACHE,true,2097152,&Missing);
+ MdoUpdates.Cache=Text?xrtJsonParse(xrtStrView(Text)):NULL;
+ xrtFree(Text);
  if(MdoUpdates.Cache&&!MdoUpdatesSame(MdoExtensionText(MdoUpdates.Cache,"platform",32),MdoExtensionRuntimePlatform())){xrtValueRelease(MdoUpdates.Cache);MdoUpdates.Cache=NULL;}
- if(!MdoUpdates.Cache)MdoUpdates.Cache=xrtValueObject();MdoUpdates.Busy=true;
+ if(!MdoUpdates.Cache)MdoUpdates.Cache=xrtValueObject();
+ MdoUpdates.Busy=true;
  if(!MdoUpdates.Lock||!MdoUpdates.Cancel||!MdoUpdates.Cache){MdoExtensionUpdatesUnit();return false;}MdoUpdates.Thread=xrtThreadCreate(MdoUpdatesWorker,NULL,0);if(!MdoUpdates.Thread){MdoExtensionUpdatesUnit();return false;}return true;
 }
 void MdoExtensionUpdatesUnit(void){if(MdoUpdates.Cancel)xrtCancelRequest(MdoUpdates.Cancel);if(MdoUpdates.Thread){xrtThreadStop(MdoUpdates.Thread);xrtThreadWait(MdoUpdates.Thread);xrtThreadDestroy(MdoUpdates.Thread);}xrtValueRelease(MdoUpdates.Cache);xrtCancelDestroy(MdoUpdates.Cancel);if(MdoUpdates.Lock)xrtMutexDestroy(MdoUpdates.Lock);memset(&MdoUpdates,0,sizeof(MdoUpdates));}
 bool MdoExtensionUpdatesRequest(void){if(!MdoUpdates.Lock)return false;xrtMutexLock(MdoUpdates.Lock);if(!MdoUpdates.Busy)MdoUpdates.Requested=true;xrtMutexUnlock(MdoUpdates.Lock);return true;}
 xvalue* MdoExtensionUpdatesSnapshot(void){
- if(!MdoUpdates.Lock)return NULL;char Error[512]={0};xvalue* Inventory=MdoUpdatesInventory(Error),*Out=NULL,*Rows=xrtValueArray();char Hash[65]={0};bool Read=Inventory&&MdoUpdatesDigest(Inventory,Hash);
+ if(!MdoUpdates.Lock)return NULL;
+ char Error[512]={0};
+ xvalue* Inventory=MdoUpdatesInventory(Error),*Out=NULL,*Rows=xrtValueArray();
+ char Hash[65]={0};
+ bool Read=Inventory&&MdoUpdatesDigest(Inventory,Hash);
  xrtMutexLock(MdoUpdates.Lock);Out=xrtValueDeepClone(MdoUpdates.Cache);bool Busy=MdoUpdates.Busy||MdoUpdates.Requested;char Message[512];snprintf(Message,sizeof(Message),"%s",Error[0]?Error:MdoUpdates.Error);xrtMutexUnlock(MdoUpdates.Lock);
  const xvalue* Cached=xrtValueObjectGet(Out,XRT_STR_LITERAL("items"));
  for(size_t I=0;Read&&Rows&&I<xrtValueCount(Cached);I++){const xvalue* R=xrtValueArrayGet(Cached,I),*Local=MdoUpdatesFind(Inventory,MdoExtensionText(R,"id",MDO_EXTENSION_REF_BYTES));if(Local&&MdoUpdatesSame(MdoExtensionText(Local,"sha256",64),MdoExtensionText(R,"installed_sha256",64)))xrtValueArrayAppend(Rows,R);}

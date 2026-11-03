@@ -73,12 +73,17 @@ static bool MdoTransferAttempt(xnetengine* Engine,cstr Path,cstr Relative,uint64
     xvalue* Saved=MdoTransferResumeRead(Relative);uint64 SavedSize=0;int64 SignedSize=0;const xvalue* Value=xrtValueObjectGet(Saved,XRT_STR_LITERAL("size"));
     if(!xrtValueGetUInt(Value,&SavedSize)&&xrtValueGetInt(Value,&SignedSize)&&SignedSize>0)SavedSize=(uint64)SignedSize;
     bool Same=SavedSize==Size&&!strcmp(MdoTransferText(Saved,"sha256"),Hash)&&!strcmp(MdoTransferText(Saved,"path"),Path);cstr Etag=MdoTransferText(Saved,"etag");
-    if(Same&&Etag[0]=='"'&&strlen(Etag)<sizeof(S.Validator)&&!strchr(Etag,'\r')&&!strchr(Etag,'\n'))snprintf(S.Validator,sizeof(S.Validator),"%s",Etag);xrtValueRelease(Saved);
+    if(Same&&Etag[0]=='"'&&strlen(Etag)<sizeof(S.Validator)&&!strchr(Etag,'\r')&&!strchr(Etag,'\n'))snprintf(S.Validator,sizeof(S.Validator),"%s",Etag);
+    xrtValueRelease(Saved);
     if(Existing>Size||(!Same&&Existing!=Size)){if(!xrtFileResize(S.File,0))goto done;Existing=0;}
     xrtSha256Init(&S.Sha);
     while(S.Total<Existing){size_t N=(size_t)(Existing-S.Total<sizeof(Buffer)?Existing-S.Total:sizeof(Buffer));if(!MdoDownloadsGate(Task,Cancel)||!xrtReadFull(S.File,Buffer,N,NULL)||!xrtSha256Update(&S.Sha,Buffer,N))goto done;S.Total+=N;}
     if(Existing==Size){if(!xrtSha256Final(&S.Sha,Digest))goto done;for(size_t I=0;I<32;I++)snprintf(Hex+I*2,3,"%02x",Digest[I]);if(!strcmp(Hex,Hash)){Ok=true;goto done;}
-        if(!xrtFileResize(S.File,0)||!xrtSeek(S.File,0,XSEEK_START,NULL))goto done;S.Total=0;xrtSha256Init(&S.Sha);Hex[0]=0;}
+        if(!xrtFileResize(S.File,0)||!xrtSeek(S.File,0,XSEEK_START,NULL))goto done;
+        S.Total=0;
+        xrtSha256Init(&S.Sha);
+        Hex[0]=0;
+        }
     char* Parent=MdoHomeExternalPath(Relative);if(Parent){char* Slash=strrchr(Parent,'/'),*Back=strrchr(Parent,'\\');if(Back&&(!Slash||Back>Slash))Slash=Back;if(Slash)*Slash=0;}
     bool Space=Parent&&MdoHomeDiskSpace(Parent,Size-S.Total);xrtFree(Parent);if(!Space){S.Code="space";S.Detail="Insufficient free disk space or unable to inspect the download volume";goto done;}
     if(!MdoDownloadsGate(Task,Cancel))goto done;
@@ -94,9 +99,12 @@ static bool MdoTransferAttempt(xnetengine* Engine,cstr Path,cstr Relative,uint64
     for(;;){xrtMutexLock(S.Lock);bool Done=S.Done,Success=S.Success;uint64 Total=S.Total;xrtMutexUnlock(S.Lock);if(Done){Ok=Success;break;}
         bool Paused=false;if(!MdoDownloadsControl(Task,&Paused,Cancel)||!MdoDownloadsProgress(Task,Total,"downloading"))(void)xrtHttpCallCancel(Call);
         else if(!Paused&&xrtHttpCallPaused(Call))(void)xrtHttpCallResume(Call);
-        if(Progress)Progress(Total,Size,ProgressData);xrtSleep(25);
+        if(Progress)Progress(Total,Size,ProgressData);
+        xrtSleep(25);
     }
-    if(!Ok)goto done;S.Code="checksum";S.Detail="Downloaded bytes do not match the expected size or SHA-256";
+    if(!Ok)goto done;
+    S.Code="checksum";
+    S.Detail="Downloaded bytes do not match the expected size or SHA-256";
     Ok=S.Total==Size&&MdoDownloadsGate(Task,Cancel)&&MdoDownloadsProgress(Task,S.Total,"verifying")&&xrtFlush(S.File)&&xrtSha256Final(&S.Sha,Digest);
     if(Ok){for(size_t I=0;I<32;I++)snprintf(Hex+I*2,3,"%02x",Digest[I]);Ok=!strcmp(Hex,Hash);}if(Ok&&Progress)Progress(Size,Size,ProgressData);
 done:
