@@ -21,4 +21,7 @@ bool MdoDownloadsEngine(MdoNativeDownload* Task,cstr Engine,cstr Fallback);
 bool MdoDownloadsIdentity(MdoNativeDownload* Task,char Id[33]);
 xvalue* MdoDownloadsList(void);
 bool MdoDownloadsAction(cstr Id,cstr Action,char Error[512]);
+/* An asynchronous producer must settle reserved tasks even when preflight
+ * fails before MdoDownloadsBegin. Active/completed downloads are untouched. */
+void MdoDownloadsRejectUnstarted(cstr Source,cstr Hash,cstr Error);
 #endif

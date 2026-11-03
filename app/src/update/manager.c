@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "../../include/mdo/update.h"
+#include "../../include/mdo/downloads.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/runs.h"
 #include "../../include/mdo/schedules.h"
@@ -243,6 +244,7 @@ static int32 MdoUpdateThread(ptr Data)
         xrtMutexLock(g_MdoUpdate.Lock); g_MdoUpdate.Status = Status;
         g_MdoUpdate.NextCheck = MdoDeadlineAfterUs(MDO_UPDATE_CHECK_INTERVAL);
         xrtMutexUnlock(g_MdoUpdate.Lock);
+        if(Command==2)MdoDownloadsRejectUnstarted("update",Status.Hash,Status.Message);
         if (Status.Required && Status.Available) MdoUpdateStopTasks();
     }
     return 0;

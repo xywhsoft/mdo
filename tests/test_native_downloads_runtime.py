@@ -67,7 +67,7 @@ class Publisher(BaseHTTPRequestHandler):
         except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):pass
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--host',type=Path,required=True);parser.add_argument('--serve-ui',action='store_true');parser.add_argument('--aria2',action='store_true');parser.add_argument('--aria2-extension-only',action='store_true');args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--host',type=Path,required=True);parser.add_argument('--serve-ui',action='store_true');parser.add_argument('--aria2',action='store_true');parser.add_argument('--aria2-extension-only',action='store_true');parser.add_argument('--policy-failure-only',action='store_true');args=parser.parse_args()
     with ThreadingHTTPServer(('127.0.0.1',0),Publisher) as publisher,tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='native-download-') as raw:
         thread=threading.Thread(target=publisher.serve_forever,daemon=True);thread.start()
         base=Path(raw);home=base/'home';port=free_port();stem='.download-qa-'+uuid.uuid4().hex
@@ -149,7 +149,26 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
             row=until(lambda:next((r for r in rows() if r['identity']=='/qa/'+mode and r['state']=='downloading' and r.get('received',0)>0),None))
             return row,t,result
         try:
+            if args.policy_failure_only:
+                task_id='d'*32;path='/mdo/blob/'+HASH
+                index=home/'data/downloads/tasks.json';index.parent.mkdir(parents=True,exist_ok=True)
+                index.write_text(json.dumps([dict(id=task_id,source='update',identity=path,name='mdo',sha256=HASH,bytes=len(PAYLOAD),received=0,state='paused',updated_at=1,context=dict(path=path,relative='data/update/new.exe',build_id=90000001))]),encoding='utf-8')
+                blocked=home/'data/update/policy.json';blocked.mkdir(parents=True)
             process=start()
+            if args.policy_failure_only:
+                api('POST',f'/download-tasks/{task_id}/resume',{})
+                failed=until(lambda:next((r for r in rows() if r['id']==task_id and r['state']=='failed'),None))
+                assert not failed['active'] and failed['error_code']=='resume' and 'persist' in failed['error'],failed
+                until(lambda:not api('GET','/update')['busy'])
+                blocked.rmdir()
+                api('POST',f'/download-tasks/{task_id}/retry',{})
+                ready=until(lambda:next((r for r in rows() if r['id']==task_id and r['state']=='ready'),None))
+                assert hashlib.sha256((home/'data/update/new.exe').read_bytes()).hexdigest()==HASH
+                assert not ready['active']
+                api('POST',f'/download-tasks/{task_id}/forget',{})
+                assert not any(r['id']==task_id for r in rows())
+                print('PASS update preflight failure settles reserved tasks; repaired storage permits retry and releases dispatch ownership')
+                return
             if args.aria2_extension_only:
                 assert transfer('extension')['success']
                 extension=next(r for r in rows() if r['source']=='extension');assert extension['engine']=='aria2',extension

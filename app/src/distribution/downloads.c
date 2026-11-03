@@ -215,6 +215,23 @@ xvalue* MdoDownloadsList(void){
     for(size_t I=0;I<DL_COUNT;I++)if(MdoDownloads.Tasks[I].Record){xvalue* V=DlInfo(&MdoDownloads.Tasks[I]);if(V)xrtValueArrayAppendNew(A,V);}
     xrtMutexUnlock(MdoDownloads.Lock);return A;
 }
+void MdoDownloadsRejectUnstarted(cstr Source,cstr Hash,cstr Error){
+    if(!MdoDownloads.Lock||!Source||!Hash)return;
+    xrtMutexLock(MdoDownloads.Lock);bool Changed=false;
+    for(size_t I=0;I<DL_COUNT;I++){
+        MdoNativeDownload* T=&MdoDownloads.Tasks[I];
+        if(T->Active||!T->DispatchCancel||(!DlState(T,"starting")&&!DlState(T,"cancelled"))||
+           strcmp(DlText(T->Record,"source"),Source)||strcmp(DlText(T->Record,"sha256"),Hash))continue;
+        T->Paused=MdoDownloads.Stopping&&!T->Cancelled;
+        DlPut(T->Record,"state",T->Cancelled?"cancelled":T->Paused?"paused":"failed");
+        DlPut(T->Record,"error_code",T->Cancelled||T->Paused?"":"resume");
+        DlPut(T->Record,"error",T->Cancelled||T->Paused?"":Error&&*Error?Error:"Download could not be started");
+        DlUInt(T->Record,"updated_at",MdoUtcUs());DlUInt(T->Record,"speed",0);
+        xrtCancelDestroy(T->DispatchCancel);T->DispatchCancel=NULL;Changed=true;
+    }
+    if(Changed)(void)DlSave();
+    xrtMutexUnlock(MdoDownloads.Lock);
+}
 static int32 DlWorker(void* Unused){
     (void)Unused;
     for(;;){xrtMutexLock(MdoDownloads.Lock);bool Stop=MdoDownloads.Stopping;MdoNativeDownload* T=NULL;xvalue* R=NULL;
