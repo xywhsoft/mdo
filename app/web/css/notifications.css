@@ -28,3 +28,6 @@
 .warning-entry-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
 [data-settings-toolpacks] code { display:block; font-size:12px; overflow-wrap:anywhere; }
 [data-settings-toolpacks] progress { width:100%; }
+.notification-indicator{position:relative}
+.notification-indicator[data-tone="extensions"]{display:inline-flex;gap:2px;width:auto}
+.notification-count{min-width:1rem;padding:0 .2rem;line-height:1rem;font-size:.65rem;border-radius:1rem;background:var(--text);color:var(--surface);text-align:center;pointer-events:none}

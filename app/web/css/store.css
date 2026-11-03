@@ -16,3 +16,10 @@
 .single-resource-store .store-search{display:flex;width:100%;flex-wrap:wrap;gap:8px;padding:0;margin:0 0 14px}
 .single-resource-store .store-search a{display:inline-flex;align-items:center;text-decoration:none;white-space:nowrap}
 .single-resource-store .store-search input{min-width:160px}
+.extension-updates-list{display:flex;flex-direction:column;gap:0}
+.extension-update-row{display:flex;align-items:center;gap:1rem;padding:1rem 0;border-bottom:1px solid var(--border)}
+.extension-update-info{display:flex;flex:1;min-width:0;flex-direction:column;gap:.4rem;overflow-wrap:anywhere}
+.extension-update-info small,.extension-update-info>span{color:var(--muted);font-size:.85rem}
+.extension-update-info details p{white-space:pre-wrap;margin:.5rem 0}
+.extension-update-row>button{flex:none;white-space:nowrap}
+.extension-update-button[hidden]{display:none}

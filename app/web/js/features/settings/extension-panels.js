@@ -4,6 +4,7 @@ import { setUiText as writeUiText, uiMessage, t as uiText, subscribeLocale, t } 
 import { localDependencyPanel } from "./extension-dependencies.js";
 import { createExtensionBrowser, actionMenu, extensionToggle, detailTabs, browserText } from "../../components/extension-browser.js";
 import { createSingleResourceStore } from "./single-resource-store.js";
+import { createExtensionUpdateButton } from "./extension-updates.js";
 import { customizableResource, resourceCredits, storeReadOnlyMessage } from "./resource-credits.js";
 import { createSkillWorkbench } from "./skill-workbench.js";
 import { createDirectoryEditor } from "./directory-editor.js";
@@ -260,7 +261,7 @@ export function createExtensionPanels() {
         rows.push({ ...extensionPresentation(item),key: item.id||item.directory_id, kind, title: item.name || item.id, description: descriptionText(kind,item), byline: credits?.submitter,
           meta: credits ? [...credits.meta, owner?.source === "store" || item.store_managed ? browserText("storeInstalled", "商店安装") : item.source==="manual" ? browserText("custom", "自定义") : item.source==="store" ? browserText("storeInstalled", "商店安装") : label("builtin", "内置")] : [owner?.author, owner?.version, item.source==="manual" ? browserText("custom", "自定义") : item.source==="store" ? browserText("storeInstalled", "商店安装") : label("builtin", "内置")],
           badge: { text: status, tone: !item.valid || item.state === "failed" ? "error" : "" },
-          toggle: canToggle ? extensionToggle(toggle, item.enabled, item.name || item.id) : null, primary, actions: controls,
+          update:createExtensionUpdateButton({...item,kind}),toggle: canToggle ? extensionToggle(toggle, item.enabled, item.name || item.id) : null, primary, actions: controls,
           detail: () => {
             const description = element("div", {}, [element("p", { text: descriptionText(kind,item) }), !item.valid ? element("p", { className: "extension-error", text: item.error }) : null]);
             description.append(localDependencyPanel(kind,item));if(credits)description.append(credits.facts());if(!editable)description.append(element("p",{className:"extension-help",text:storeReadOnlyMessage(item)}));

@@ -9,8 +9,9 @@ export function matchesNotice(n, device, locale, signedIn, now = Date.now()) {
     && (!n.starts_at || now >= n.starts_at * 1000) && (!n.ends_at || now < n.ends_at * 1000)
     && (n.audience !== "signed_in" || signedIn) && (n.audience !== "signed_out" || !signedIn);
 }
-export function buildNotices({ distribution = {}, update, account, diagnostics, diagnosticsFailed = false, locale, preferences = {}, now = Date.now(), copy }) {
+export function buildNotices({ distribution = {}, update, extensionUpdates, account, diagnostics, diagnosticsFailed = false, locale, preferences = {}, now = Date.now(), copy }) {
   const notices = [];
+  if(extensionUpdates?.items?.length)notices.push({id:"extension-updates",revision:extensionUpdates.items.map(row=>row.version_id).sort().join(","),title:copy.extensionUpdates||"Extension updates",body:String(extensionUpdates.items.length),count:extensionUpdates.items.length,icon:"extensions",rank:2,action:"extension_updates",persistent:true});
   if(update?.available)notices.push({id:"app-update",revision:update.sha256,title:copy.update,body:update.notes||copy.updateBody,icon:"update",rank:0,action:"update",persistent:true});
   if (account?.state === "signed_out") notices.push({ id: "account-guide", revision: 1, title: copy.login, body: copy.accountBody, icon: "account", rank: 3, action: "account" });
   const warnings=[];

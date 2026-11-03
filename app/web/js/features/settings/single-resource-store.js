@@ -12,8 +12,10 @@ import { customizableResource, resourceCredits, storeReadOnlyMessage } from "./r
 import { openLayer } from "../../components/layers.js";
 import { renderSourceMarkdown } from "../../utils/source-markdown.js";
 import { downloadRegistry, downloadActive } from "../../state/downloads.js";
-import { extensionInstaller } from "../../state/extension-installs.js";
+import { extensionInstaller, extensionInstallState } from "../../state/extension-installs.js";
 import { extensionPresentation } from "../../components/extension-presentation.js";
+import { updateExtensions } from "./extension-updates.js";
+import { extensionUpdates, isExtensionUpdate } from "../../state/extension-updates.js";
 
 const names = { agents:"Agent", subagents:"SubAgent", get tools() { return uiMessage("ecosystem.toolTitle", {}, "Agent 工具"); }, get mcp() { return uiMessage("ui.singleResourceStore.mcpService", {}, "MCP 服务"); }, skills:"Skill", get commands() { return uiMessage("ecosystem.commands", {}, "编辑器命令"); }, get "external-tools"() { return uiMessage("settings.toolpacks", {}, "外部工具"); }, get knowledge() { return uiMessage("settings.knowledge", {}, "知识库"); }, get plugins() { return uiMessage("settings.extensions", {}, "插件"); } };
 const text = (tag, value, className = "") => element(tag, { text: value, className });
@@ -30,12 +32,13 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
   const live=(n,target)=>!disposed&&n===epoch&&target===device();
   const call=async(body,signal=controller?.signal)=>(await api.post("/ecosystem",{kind,...body},{signal})).data;
   const owned=row=>Object.values(installed).find(local=>local.kind===kind&&local.directory_id===row.xid&&local.source==="store");
+  const sameVersion=row=>{const local=owned(row),old=local?.installation;return Boolean(local&&(old?.version_id===row.version_id||old?.sha256===row.sha256||!isExtensionUpdate(local,row)&&extensionUpdates.find(local)?.version_id!==row.version_id));};
   const installer=policy.installer||extensionInstaller,registry=policy.registry||downloadRegistry,installControls=new Map(),completed=new Set();
   let promptController=null,promptVersion="";
   const installation=row=>registry.list(device()).find(job=>job.source==="install"&&job.versionIds?.includes(row.version_id));
   function updateInstallButtons(){for(const [control,row] of installControls){
-    const job=installation(row),same=owned(row)?.installation?.version_id===row.version_id,active=job&&downloadActive(job),pending=promptVersion===row.version_id;
-    const state=active||pending?"installing":job?.state==="failed"?"failed":job?.state==="unknown"?"unknown":job?.state==="complete"&&(same||busy)?"complete":"";
+    const job=installation(row),same=sameVersion(row),active=job&&downloadActive(job),pending=promptVersion===row.version_id;
+    const phase=extensionInstallState(job,row.id),state=active||pending?"installing":same?"complete":phase==="failed"?"failed":phase==="unknown"?"unknown":phase==="complete"&&busy?"complete":"";
     control.dataset.installState=state;
     const label=state==="installing"?uiText("extensionInstall.installing", {}, "正在安装"):state==="complete"?uiText("extensionBrowser.manage", {}, "管理"):state==="failed"?uiText("extensionInstall.failed", {}, "安装失败，点击重试"):state==="unknown"?uiText("extensionInstall.uncertain", {}, "状态待确认"):same?uiText("extensionBrowser.manage", {}, "管理"):owned(row)?uiText("extensionBrowser.update", {}, "更新"):policy.installLabel?.()||uiText("extensionBrowser.install", {}, "安装");
     control.setAttribute("aria-label",label);control.setAttribute("aria-busy",String(state==="installing"));control.title=job?.error||label;
@@ -44,13 +47,14 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
     control.disabled=busy||active||pending||Boolean(selected&&(!targetState().connected||targetState().runtimeChanged||selected.mode==="view"));
   }}
   function installButton(row){const control=button("",()=>{
-    const job=installation(row),same=owned(row)?.installation?.version_id===row.version_id;
+    const job=installation(row),same=sameVersion(row);
     if(job?.state==="unknown"){document.querySelector("#open-downloads")?.click();return;}
     if(same)return onManage?onManage(owned(row)):detail(row);
     return beginInstall(row);
   },true);installControls.set(control,row);updateInstallButtons();return control;}
   async function beginInstall(row){
     if(disposed||promptVersion)return;if(policy.beforeInstall&&!await policy.beforeInstall())return;
+    if(owned(row))return updateExtensions([row]);
     const target=device();promptController=new AbortController();promptVersion=row.version_id;updateInstallButtons();
     try{
       const plan=await call({action:"install_plan",version_id:row.version_id},promptController.signal);
@@ -74,8 +78,8 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
     browser.rememberFocus();const form=element("form",{className:"store-search eb-toolbar"}),input=element("input",{attrs:{type:"search",maxlength:"240",placeholder:uiMessage("ui.singleResourceStore.searchValue1AuthorsOrUses", { value1: names[kind] }, "搜索{value1}、作者或用途"),"aria-label":uiMessage("ui.singleResourceStore.searchValue1", { value1: names[kind] }, "搜索{value1}")}});input.value=query;input.addEventListener("input",()=>{query=input.value;});
     const select=element("select",{attrs:{"aria-label":uiMessage("task.meta.state", {}, "状态")}});for(const [value,label]of [["all",uiText("extensionBrowser.all", {}, "全部状态")],["installed",uiText("store.installed", {}, "已安装")],["updates",uiText("extensionBrowser.updates", {}, "可更新")],["new",uiText("extensionBrowser.notInstalled", {}, "未安装")]])select.append(element("option",{text:label,attrs:{value}}));select.value=state;select.addEventListener("change",()=>{state=select.value;render();});
     form.append(input,select,element("button",{text:uiMessage("store.searchButton", {}, "搜索"),className:"secondary-button",attrs:{type:"submit"}}),button(uiMessage("resource.refresh", {}, "刷新"),()=>load()));form.addEventListener("submit",e=>{e.preventDefault();query=input.value.trim();void load();});for(const b of form.querySelectorAll("button"))b.disabled=busy;
-    const rows=items.filter(row=>{const local=owned(row),same=local?.installation?.version_id===row.version_id;return state==="all"||state==="installed"&&local||state==="updates"&&local&&!same||state==="new"&&!local;}).map(row=>{
-      const local=owned(row),same=local?.installation?.version_id===row.version_id,credits=resourceCredits({...row,source:"store"}),primary=installButton(row);
+    const rows=items.filter(row=>{const local=owned(row),same=sameVersion(row);return state==="all"||state==="installed"&&local||state==="updates"&&local&&!same||state==="new"&&!local;}).map(row=>{
+      const local=owned(row),same=sameVersion(row),credits=resourceCredits({...row,source:"store"}),primary=installButton(row);
       return {...extensionPresentation(row),key:row.version_id,kind,title:row.name,byline:credits.submitter,description:row.description,meta:credits.meta,badge:{text:same?uiText("store.installed", {}, "已安装"):local?uiText("extensionBrowser.updates", {}, "可更新"):""},primary,onSelect:()=>loadDetail(row)};
     });
     browser.setItems(rows,{sort:true,busy,pageKey:JSON.stringify([applied,state]),onNext:items.length<total?()=>load(true):null,empty:uiText("ui.singleResourceStore.noMatchingValue1", { value1: names[kind] }, "暂无匹配的{value1}。")});root.replaceChildren(form,browser.root);
@@ -119,7 +123,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
       }catch(e){if(current())writeUiText(message, uiMessage("ui.singleResourceStore.value1TheArchiveTaskIsRetainedForRetryOr", { value1: errorMessage(e) }, "{value1}。归档任务已保留，可重试；也可在下载任务中取消。"));}finally{if(current()){saving=false;view.closeButton.disabled=false;submit.disabled=false;for(const c of form.elements)c.disabled=false;}}
     });
   }
-  function localActions(receipt){if(receipt?.source!=="store"||receipt.kind!==kind)return[];return[button(uiMessage("ui.singleResourceStore.checkStoreUpdates", {}, "检查商店更新"),()=>{query=receipt.alias||receipt.name||"";state="all";void load();onBrowse();})];}
+  function localActions(){return[];}
   async function importPackage(file){
     if(policy.beforeInstall&&!await policy.beforeInstall())return;
     if(!(file instanceof Blob))throw Error(uiText("ui.singleResourceStore.selectAZipOfTheEntireExtensionDirectoryJson", {}, "请选择整个扩展目录的 ZIP 文件；JSON 包已停止支持"));const view=modal(uiText("ui.singleResourceStore.importValue1Zip", { value1: names[kind] }, "导入{value1} ZIP"));if(!view)return;const message=text("p",`${file.name||"extension.zip"} · ${file.size} B`),identity=element("input",{attrs:{maxlength:"96",placeholder:uiMessage("ui.singleResourceStore.localDirectoryName", {}, "本机目录名称")}}),trust=element("input",{attrs:{type:"checkbox"}});view.body.append(message,identity,element("label",{},[trust,text("span",uiMessage("ui.singleResourceStore.iReviewedThisZipAndTrustItsContents", {}, "我已检查此 ZIP 并信任其内容")) ]));

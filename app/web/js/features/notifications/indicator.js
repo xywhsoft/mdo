@@ -1,5 +1,6 @@
 const SVG = "http://www.w3.org/2000/svg";
 const symbols = {
+  extensions:'<path d="M20 7v5h-5M4 17v-5h5M5.5 8a7 7 0 0 1 11.6-3L20 8M4 16l2.9 3a7 7 0 0 0 11.6-3" fill="none" stroke="currentColor" stroke-width="1.7"/>',
   error: '<circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M12 6.5v7M12 17h.01" stroke="white" stroke-width="2.2"/>',
   warning: '<path d="M10.3 3.6a2 2 0 0 1 3.4 0L22 18a2 2 0 0 1-1.7 3H3.7A2 2 0 0 1 2 18Z" fill="currentColor"/><path d="M12 8v6M12 17.5h.01" stroke="#422006" stroke-width="2.1"/>',
   success: '<circle cx="12" cy="12" r="10" fill="currentColor"/><path d="m7 12 3.2 3.2L17 8.5" stroke="white" stroke-width="2.2" fill="none"/>',
@@ -9,7 +10,7 @@ const symbols = {
 };
 export function noticeTone(notice) {
   if (notice.rank === 0 || notice.rank === 1 || notice.icon === "update") return "update";
-  return ["error", "warning", "success", "coupon", "more"].includes(notice.icon) ? notice.icon : "info";
+  return ["error", "warning", "success", "coupon", "more", "extensions"].includes(notice.icon) ? notice.icon : "info";
 }
 export function bubbleText(notice, copy) {
   return { title: notice.rank === 0 ? copy.newVersion : notice.title, body: notice.body || "" };
@@ -74,10 +75,10 @@ export function createNoticeIndicators({ hosts, copy, onOpen }) {
     const owner = scope;
     const button = document.createElement("button"); button.type = "button";
     button.className = "notification-indicator"; button.dataset.noticeId = n.id;
-    button.dataset.tone = noticeTone(n); button.setAttribute("aria-controls", n.action === "warnings" && !n.online ? "warning-details-dialog" : n.action === "update" && !n.online ? "update-dialog" : "notice-content-dialog"); button.setAttribute("aria-haspopup", "dialog");
-    button.setAttribute("aria-label", n.title);
+    button.dataset.tone = noticeTone(n); button.setAttribute("aria-controls", n.action === "extension_updates" ? "extension-updates-dialog" : n.action === "warnings" && !n.online ? "warning-details-dialog" : n.action === "update" && !n.online ? "update-dialog" : "notice-content-dialog"); button.setAttribute("aria-haspopup", "dialog");
+    button.setAttribute("aria-label", n.title+(n.count?" · "+n.count:""));
     if (noticeTone(n) === "update") button.textContent = copy().updateBadge;
-    else button.append(createNoticeIcon(n));
+    else {button.append(createNoticeIcon(n));if(n.count)button.append(Object.assign(document.createElement("small"),{className:"notification-count",textContent:n.count>99?"99+":String(n.count)}));}
     button.addEventListener("click", () => { if (!destroyed && owner === scope) open(n.id); });
     button.addEventListener("pointerenter", () => { hovering = true; show(button, n.id); });
     button.addEventListener("pointerleave", () => { hovering = false; leave(); });

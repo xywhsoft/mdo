@@ -11,6 +11,7 @@ import { createSingleResourceStore } from "./single-resource-store.js";
 import { createDirectoryEditor } from "./directory-editor.js";
 import { directoryManifest, changeDirectory } from "./directory-documents.js";
 import { resourceCredits } from "./resource-credits.js";
+import { createExtensionUpdateButton } from "./extension-updates.js";
 
 const node = (tag, text = "", className = "") => element(tag, { text, className });
 const button = (text, run, primary = false) => { const b = element("button", { text, className: primary ? "primary-button" : "secondary-button", attrs: { type: "button" } }); b.addEventListener("click", () => { Promise.resolve().then(run).catch(e => { if(e?.name!=="AbortError") toast(errorMessage(e),"error"); }); }); return b; };
@@ -152,7 +153,7 @@ export function createPluginWorkbench(root) {
       actions.push(...store.localActions(item));
       actions.push(button(uiMessage("store.uninstall", {}, "卸载"),async()=>{if(!confirm(uiMessage("ui.pluginWorkbench.uninstallTheEntireDirectoryForValue1", { value1: item.name||spec.name||item.id }, "卸载 {value1} 的整个目录？")))return;const result=await changeDirectory("plugins",item,"remove");if(!result)return;changed();toast(result.pending_remove?uiMessage("ui.pluginWorkbench.disabledTheEntireDirectoryWillBeDeletedAfterRestarting", {}, "已停用，重启 mdo 后删除整个目录"):uiMessage("ui.pluginWorkbench.pluginDirectoryUninstalled", {}, "插件目录已卸载"));}));
       const stopLocale = subscribeLocale(render);
-  return { key: item.id, title: spec.name || item.id, byline: credits.submitter, description: spec.description || uiText("ui.pluginWorkbench.legacyPluginFormat", {}, "旧格式插件"), meta: [...new Set([spec.version, ...credits.meta].filter(Boolean))], badge: { text: statusText[item.state] || item.state, tone: item.state === "failed" ? "error" : "" }, primary: extensionToggle(button(item.enabled ? uiMessage("resource.disable", {}, "停用") : uiMessage("resource.enable", {}, "启用"), () => toggle(item)), item.enabled, spec.name || item.id), actions, onSelect: () => details(item) };
+  return { key: item.id, update:createExtensionUpdateButton({...record,...spec,kind:"plugins"}),title: spec.name || item.id, byline: credits.submitter, description: spec.description || uiText("ui.pluginWorkbench.legacyPluginFormat", {}, "旧格式插件"), meta: [...new Set([spec.version, ...credits.meta].filter(Boolean))], badge: { text: statusText[item.state] || item.state, tone: item.state === "failed" ? "error" : "" }, primary: extensionToggle(button(item.enabled ? uiMessage("resource.disable", {}, "停用") : uiMessage("resource.enable", {}, "启用"), () => toggle(item)), item.enabled, spec.name || item.id), actions, onSelect: () => details(item) };
     });
     browser.setItems(rows, { pageKey: JSON.stringify([query, filter]), empty: uiText("ui.pluginWorkbench.noLocalPluginsCreateOneOrVisitThePlugin", {}, "暂无本机插件，可以创建插件或前往插件商店。") }); root.append(browser.root);
   }

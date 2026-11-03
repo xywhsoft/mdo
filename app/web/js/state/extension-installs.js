@@ -3,6 +3,8 @@ import { createApplicationClient } from "../api/application.js";
 import { targetState } from "../api/target.js";
 import { downloadActive, downloadRegistry } from "./downloads.js";
 
+export function extensionInstallState(job,root){return job?.results?.find(row=>row.id===root)?.state||job?.state||"";}
+
 // SDK operations own their cancellation and durable admission receipt. A page
 // or details window can close without stopping an accepted installation.
 export function createExtensionInstaller({ registry = downloadRegistry, sdk = createApplicationClient(() => ({ extension: "mdo.extension-store" })), target = () => targetState().selected?.id || "local", notify = () => {} } = {}) {
@@ -28,7 +30,7 @@ export function createExtensionInstaller({ registry = downloadRegistry, sdk = cr
     const receipt = result?.data ?? result;
     if (receipt?.runtime_ready !== true && receipt?.runtime_ready !== false) throw Error(t("extensionInstall.interrupted"));
     const error = receipt.runtime_ready === false ? receipt.runtime_error || t("extensionInstall.runtimeAttention") : "";
-    update(device,row.operationId,{state:error ? "failed" : "complete",error});
+    update(device,row.operationId,{state:error ? "failed" : "complete",error,results:receipt.results||[]});
     notify(row,receipt);
     try { await sdk.call("operation.release",{id:row.operationId}); } catch { /* The completed admission receipt remains queryable. */ }
   }
@@ -70,8 +72,19 @@ export function createExtensionInstaller({ registry = downloadRegistry, sdk = cr
       throw error;
     } finally { schedule(); }
   }
+  async function enqueueBatch(plans,metadata={}){
+    if(disposed||!plans.length||plans.some(plan=>!plan.ready||!plan.id||!plan.revision))throw Error(t("extensionInstall.invalidPlan"));
+    const device=target(),items=[...new Map(plans.flatMap(plan=>plan.items||[]).filter(item=>item.operation==="install").map(item=>[item.id,item])).values()];
+    const versionIds=items.map(item=>item.version_id),roots=plans.map(plan=>plan.root);
+    const existing=registry.list(device).find(row=>row.source==="install"&&row.roots?.some(root=>roots.includes(root))&&(downloadActive(row)||row.state==="unknown"));if(existing)return existing;
+    const id="sdk-"+crypto.randomUUID().replaceAll("-","");
+    update(device,id,{...metadata,roots,versionIds,state:"queued",error:"",total:items.reduce((sum,item)=>sum+(item.bytes||0),0),done:0});
+    try{const job=await sdk.start("product.ecosystem.post",{body:{action:"update_batch",plans:plans.map(plan=>({id:plan.id,revision:plan.revision})),trust_code:true,queued:true}},id);if(target()===device)await finish(device,{...metadata,operationId:id},job);return registry.list(device).find(row=>row.operationId===id)||{operationId:id,state:"queued"};}
+    catch(error){update(device,id,{state:error.status?"failed":"unknown",error:error.message});throw error;}
+    finally{schedule();}
+  }
   const stop=registry.subscribe(schedule);
-  return {enqueue,refresh,async cancel(row) {const device=target();await sdk.cancel(row.operationId);if(device===target())update(device,row.operationId,{state:"cancelling"});void refresh();},destroy(){disposed=true;clearTimeout(timer);stop();}};
+  return {enqueue,enqueueBatch,refresh,async cancel(row) {const device=target();await sdk.cancel(row.operationId);if(device===target())update(device,row.operationId,{state:"cancelling"});void refresh();},destroy(){disposed=true;clearTimeout(timer);stop();}};
 }
 
 export const extensionInstaller=createExtensionInstaller({notify(row,receipt){

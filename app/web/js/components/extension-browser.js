@@ -163,6 +163,7 @@ export function createExtensionBrowser({ kind, onClose } = {}) {
         openButton.append(extensionIcon(row.kind || kind), info); openButton.addEventListener("click", () => open(row.key));
         const controls = el("div", "eb-actions");
         if (row.badge?.text) controls.append(el("span", `eb-badge ${row.badge.tone === "error" ? "eb-error" : ""}`, row.badge.text));
+        if (row.update) controls.append(row.update);
         if (row.primary) controls.append(row.primary);
         if (row.toggle) controls.append(row.toggle);
         if (row.actions?.length) controls.append(actionMenu(row.actions));

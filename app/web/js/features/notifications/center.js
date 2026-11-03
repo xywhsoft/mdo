@@ -9,6 +9,8 @@ import { createNoticePreferences } from "./preferences.js";
 import { createExternalToolsPanel } from "./external-directory-tools.js";
 import { createWarningPanel } from "./warning-panel.js";
 import { createRequestRecovery } from "../../api/request-recovery.js";
+import { extensionUpdates } from "../../state/extension-updates.js";
+import { createExtensionUpdateCenter } from "../settings/extension-updates.js";
 
 const words = {
   "zh-CN": { title: "通知", update: "应用更新", updateBody: "安装后保留配置、项目和会话。", toolsUpdate: "扩展工具包更新", install: "扩展工具包安装", login: "登录账号", toolsBody: "扩展工具包提供 BusyBox 常用命令、curl 网络下载、jq 数据处理和 SSH/SCP/SFTP 远程连接。Python 可用于脚本和数据处理。请从 设置 → 扩展能力 → 扩展工具包 进入安装和更新。", accountBody: "登录后可使用联网搜索、自己的设备中继、在线模型及用量查询。账号令牌保存在本机服务中。点击账号即可直接登录。", android: "Android 不支持单独安装、更新或卸载扩展工具包。系统限制在可写目录中执行原生程序，因此工具必须随完整版 APK 安装和更新。请安装同签名、版本号更大的完整版，覆盖升级会保留配置、项目和会话。", later: "稍后提醒", close: "关闭", tools: "扩展工具包", check: "检查更新", core: "常用工具包", python: "Python（可选）", full: "查看完整版更新", busy: "正在处理…", missing: "尚未安装", installed: "已安装", failure: "操作失败，请重试" },
@@ -42,16 +44,19 @@ export function createNotificationCenter({ updatePanel, navigation, openAccount 
   const indicators = createNoticeIndicators({ hosts: entries, copy, onOpen: openNotice });
   const key = () => targetState().selected ? `${targetState().selected.owner}/${targetState().selected.id}` : "local";
   const preferences = () => choices.forRun(key(), distribution.notification_session);
-  const notices = () => buildNotices({ distribution, update, account, diagnostics, diagnosticsFailed, locale: currentLocale(), preferences: preferences(), copy: copy() });
+  const notices = () => buildNotices({ distribution, update, extensionUpdates:extensionUpdates.get(), account, diagnostics, diagnosticsFailed, locale: currentLocale(), preferences: preferences(), copy:{...copy(),extensionUpdates:uiErrorText("extensionUpdates.title")} });
+  const extensionUpdatePanel=createExtensionUpdateCenter();
+  const stopExtensionUpdates=extensionUpdates.subscribe(()=>render());
   const warningPanel=createWarningPanel({scope:()=>`${key()}/${distribution.notification_session||""}`,refresh:refreshDiagnostics,
     onLater:n=>{choices.record(key(),distribution.notification_session,n,true);render();},onSettings:section=>navigation.openSettings(section)});
   function button(text, action) { const e = node("button", text, "secondary-button"); e.type = "button"; e.addEventListener("click", action); return e; }
-  function close() { const own = view; view = null; own?.layer.dispose(); warningPanel.close(); }
+  function close() { const own = view; view = null; own?.layer.dispose(); warningPanel.close();extensionUpdatePanel.close(); }
   function openNotice(n) {
     if (destroyed || !n) return;
     indicators.hide(); close(); choices.record(key(), distribution.notification_session, n); render(); indicators.hide();
     if (!n.online) {
       if (n.action === "warnings") { warningPanel.open(n); return; }
+      if (n.action === "extension_updates") { extensionUpdatePanel.open(); return; }
       if (n.action === "update") { updatePanel?.open(); return; }
       if (n.action === "tools") { openTools(); return; }
       if (n.action === "account") { openAccount(); return; }
@@ -127,7 +132,7 @@ export function createNotificationCenter({ updatePanel, navigation, openAccount 
     if (pending || destroyed) return false; pending = true; const generation = epoch;
     const checking = refreshDiagnostics();
     try {
-      const results = await Promise.allSettled([api.get("/distribution"), api.get("/update"), api.get("/account"), api.get("/cli-tools")]);
+      const results = await Promise.allSettled([api.get("/distribution"), api.get("/update"), api.get("/account"), api.get("/cli-tools"),extensionUpdates.refresh()]);
       if (generation !== epoch || destroyed) return;
       if (results[0].status === "fulfilled") {
         const next=results[0].value.data;
@@ -139,7 +144,7 @@ export function createNotificationCenter({ updatePanel, navigation, openAccount 
       if (results[3].status === "fulfilled") cli=results[3].value.data;distribution.cli=cli;
       render();
       return await checking;
-    } finally { pending = false; clearTimeout(timer); if (!destroyed && generation!==epoch) queueMicrotask(refresh);else if (!destroyed) timer = setTimeout(refresh, distribution.busy || update?.busy || (cli.tasks??[]).some(t=>["queued","running","installing","uploading"].includes(t.state)) ? 1000 : 30000); }
+    } finally { pending = false; clearTimeout(timer); if (!destroyed && generation!==epoch) queueMicrotask(refresh);else if (!destroyed) timer = setTimeout(refresh, distribution.busy || update?.busy || extensionUpdates.get().busy || (cli.tasks??[]).some(t=>["queued","running","installing","uploading"].includes(t.state)) ? 1000 : 30000); }
   }
   let scope = key();
   const locale = subscribeLocale(render), target = subscribeTarget(() => {
@@ -148,6 +153,7 @@ export function createNotificationCenter({ updatePanel, navigation, openAccount 
   });
   const route = navigation.subscribe(state => { renderTools();if (state.view === "settings" && state.settingsSection === "toolpacks") void refresh(); });
   const foreground = () => { if (!document.hidden) void refresh(); }; document.addEventListener("visibilitychange", foreground);
+  const openFullUpdate=async event=>{if(event.detail?.target!==(targetState().selected?.id||"local"))return;close();await updatePanel?.refresh();if(event.detail?.target===(targetState().selected?.id||"local"))updatePanel?.open();};window.addEventListener("mdo-open-full-update",openFullUpdate);
   render(); void refresh();
-  return { refresh, destroy() { destroyed = true; resetDiagnostics(); clearTimeout(timer); close(); indicators.destroy(); externalPanel.destroy(); locale(); target(); route(); document.removeEventListener("visibilitychange", foreground); } };
+  return { refresh, destroy() { destroyed = true; resetDiagnostics(); clearTimeout(timer); close(); indicators.destroy(); extensionUpdatePanel.destroy();stopExtensionUpdates();window.removeEventListener("mdo-open-full-update",openFullUpdate);externalPanel.destroy(); locale(); target(); route(); document.removeEventListener("visibilitychange", foreground); } };
 }
