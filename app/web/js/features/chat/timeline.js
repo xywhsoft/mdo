@@ -22,6 +22,7 @@ import { modelErrorMessage, modelErrorTitle } from "../../utils/model-errors.js"
 import { modelRetryNode, modelRetryInlineNode, updateModelRetryCountdowns } from "./model-retry.js";
 import { createModelTimingTracker } from "./model-timing.js";
 import { createStreamScroll } from "./stream-scroll.js";
+import { bootstrapStore } from "../../state/bootstrap.js";
 
 export function searchResultTop(row, content, searchBottom, viewportBottom, lineHeight = 24) {
   const room = Math.max(0, viewportBottom - searchBottom);
@@ -991,7 +992,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
       if (Number.isFinite(item.tokensPerSecond)) stats.push(`${item.tokensPerSecond.toFixed(1)} tok/s`);
       if (stats.length) actions.append(element("span", { className: "timeline-stats", text: stats.join(" · ") }));
       const timings = item.modelTimings?.length ? item.modelTimings : item.modelTiming ? [item.modelTiming] : [];
-      if (timings.length) {
+      if (handlers.showDebugTimings() && timings.length) {
         const details = element("details", { className: "timeline-model-timing" });
         details.append(element("summary", { text: t("timeline.modelTiming", {}, "请求耗时") }));
         for(const [index,timing] of timings.entries()) {
@@ -1018,7 +1019,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
 
 export function createTimelineView({ container, welcome, toBottom, store, sessionStore = null,
   onFork, onEdit, onRetry, onSearchCount, onLoadOlder, onLoadIndex, onRevealTurn, onReload,
-  showReadError = true }) {
+  showReadError = true, runtimeStore = bootstrapStore }) {
   const busySessions = new Set();
   const renderedRows = new Map();
   let retryTimer = 0;
@@ -1029,6 +1030,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   }
   const handlers = {
     onFork, onEdit, onRetry,
+    showDebugTimings: () => runtimeStore.get().data?.debug === true,
     isBusy: (key) => busySessions.has(key),
     async runAction(key, action) {
       if (busySessions.has(key)) return;
@@ -1098,7 +1100,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       retained.add(item.key);
       // Run completion affects process defaults, not already settled body rows.
       const { turnState, ...renderedItem } = item;
-      const signature = JSON.stringify([renderedItem, writable]);
+      const signature = JSON.stringify([renderedItem, writable, handlers.showDebugTimings()]);
       let row = renderedRows.get(item.key);
       if (!row || (row.signature !== signature && !row.node.dataset.inlineEditing)) {
         const node = timelineNode(item, handlers, projectId,
@@ -1357,6 +1359,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
 
   const unsubscribe = store.subscribe(queueRender);
   const unsubscribeSession = sessionStore?.subscribe(() => queueRender(store.get()));
+  const unsubscribeRuntime = runtimeStore.subscribe(() => queueRender(store.get()));
   const unsubscribeLocale = subscribeLocale(() => {
     renderedRows.clear();
     queueRender(store.get());
@@ -1385,7 +1388,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       scroller.removeEventListener("scroll", onScroll);
       container.removeEventListener("click", rememberProcessToggle);
       container.removeEventListener("scroll", rememberContentScroll, true);
-      unsubscribe(); unsubscribeSession?.(); unsubscribeLocale();
+      unsubscribe(); unsubscribeSession?.(); unsubscribeRuntime(); unsubscribeLocale();
       historyNavigation?.destroy(); historyButton?.remove();
       if (frame) cancelAnimationFrame(frame);
     },

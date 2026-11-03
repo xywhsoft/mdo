@@ -35,6 +35,18 @@ static cstr MdoApiPersistenceText(MdoPersistenceMode Mode)
     }
 }
 
+static bool MdoApiDebugMode(void)
+{
+    for ( uint32 i = 0u; i < xsAppArgumentCount(); i++ ) {
+        cstr Argument = xsAppArgument(i);
+        if ( Argument == NULL ) continue;
+        if ( strcmp(Argument, "--home") == 0 ) { ++i; continue; }
+        if ( strcmp(Argument, "-debug") == 0 || strcmp(Argument, "--debug") == 0 )
+            return true;
+    }
+    return false;
+}
+
 static xvalue* MdoApiBootstrapData(const MdoBootstrapSnapshot* Snapshot)
 {
     xvalue* Data = xrtValueObject();
@@ -57,6 +69,7 @@ static xvalue* MdoApiBootstrapData(const MdoBootstrapSnapshot* Snapshot)
 
     if ( Ok ) Ok =
         MdoApiValueSetString(Data, "version", MDO_VERSION_TEXT) &&
+        MdoApiValueSetBool(Data, "debug", MdoApiDebugMode()) &&
         MdoApiValueSetBool(Data, "ready", Snapshot->Ready) &&
         MdoApiValueSetString(Data, "stage", MdoApiBootstrapStageText(Snapshot->Stage)) &&
         MdoApiValueSetUInt(Data, "stage_code", (uint64)Snapshot->Stage) &&
