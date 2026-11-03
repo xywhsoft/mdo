@@ -8,6 +8,7 @@
     "src/extensions/operations.c",
     "src/extensions/tasks.c",
     "src/extensions/service.c",
+    "src/extensions/updates.c",
     "src/projects/lifecycle.c",
     "src/config/config.c",
     "src/config/service.c",

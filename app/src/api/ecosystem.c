@@ -3,6 +3,7 @@
 #include "../../include/mdo/extension_manifest.h"
 #include "../../include/mdo/extension_tasks.h"
 #include "../../include/mdo/extension_service.h"
+#include "../../include/mdo/extension_updates.h"
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/skills.h"
 #include "internal.h"
@@ -11,7 +12,9 @@
 static bool EcoHandleInput(MdoApiContext* C,xvalue* Input){
  char Error[512]={0};xvalue* Out=NULL;cstr Action=MdoExtensionText(Input,"action",24);bool Ok=false;
  const cstr Retired[]={"package","resources","files","base64","format","min_build_id","single_kind","artifact","references"};for(size_t I=0;I<sizeof(Retired)/sizeof(*Retired);I++)if(xrtValueObjectHas(Input,xrtStrView(Retired[I]))){xrtValueRelease(Input);return MdoApiReplyError(C,422,"extension_json_retired","Extensions are complete directory ZIP files; embedded file payloads and legacy package fields are unsupported",NULL);}
- if(Action&&!strcmp(Action,"installed")){
+ if(Action&&!strcmp(Action,"updates")){Out=MdoExtensionUpdatesSnapshot();Ok=Out!=NULL;}
+ else if(Action&&!strcmp(Action,"check_updates")){Ok=MdoExtensionUpdatesRequest();Out=Ok?MdoExtensionUpdatesSnapshot():NULL;Ok=Ok&&Out;}
+ else if(Action&&!strcmp(Action,"installed")){
   const cstr Kinds[]={"agents","subagents","tools","mcp","skills","commands","external-tools","knowledge","plugins"};Out=xrtValueObject();Ok=Out!=NULL;
   for(size_t I=0;Ok&&I<9;I++){xvalue* Rows=MdoExtensionsList(Kinds[I],Error);Ok=Rows!=NULL;for(size_t J=0;Ok&&J<xrtValueCount(Rows);J++){const xvalue* Row=xrtValueArrayGet(Rows,J);cstr Id=MdoExtensionText(Row,"directory_id",96);char* Key=Id?xrtFormat("%s:%s",Kinds[I],Id):NULL;Ok=Key&&xrtValueObjectSet(Out,xrtStrView(Key),Row);xrtFree(Key);}xrtValueRelease(Rows);}
  }else if(Action&&!strcmp(Action,"migrate_builtins")){
@@ -19,6 +22,7 @@ static bool EcoHandleInput(MdoApiContext* C,xvalue* Input){
   if(Ok){Ok=MdoExtensionsMigrateBuiltins(Error)&&MdoModuleManagerReload()&&MdoSkillManagerReload();MdoExtensionsMutationEnd();}
   if(Ok)Out=MdoExtensionsSnapshot(Error);else if(!Error[0])snprintf(Error,sizeof(Error),"Confirm restoration from the current application's builtin archives; another extension operation may be running");
  }else if(Action&&!strcmp(Action,"install_plan"))Ok=MdoExtensionServicePlan(Input,C->SendCancel,&Out,Error);
+ else if(Action&&!strcmp(Action,"update_batch"))Ok=MdoExtensionServiceUpdateBatch(Input,C->SendCancel,&Out,Error);
  else if(Action&&!strcmp(Action,"dependency_plan")){xvalue* Request=xrtValueClone(Input);cstr Operation=MdoExtensionText(Input,"operation",16);Ok=Request&&Operation&&MdoApiValueSetString(Request,"action",Operation)&&MdoExtensionsPlan(Request,NULL,&Out,Error);xrtValueRelease(Request);}
  else if(Action&&!strcmp(Action,"apply_plan")){xvalue* Plan=MdoExtensionsPlanRead(MdoExtensionText(Input,"plan_id",32),MdoExtensionText(Input,"revision",64),Error);cstr Operation=MdoExtensionText(Plan,"action",16);if(Operation)Ok=!strcmp(Operation,"install")?MdoExtensionServiceApplyPlan(Input,C->SendCancel,&Out,Error):MdoExtensionsApplyPlan(Input,NULL,C->SendCancel,&Out,Error);xrtValueRelease(Plan);}
  else if(Action&&!strcmp(Action,"discard_plan")){Ok=MdoExtensionsPlanDiscard(MdoExtensionText(Input,"plan_id",32),MdoExtensionText(Input,"revision",64),Error);if(Ok)Out=xrtValueObject();}
@@ -65,10 +69,10 @@ void MdoApiEcosystemUnit(void)
 }
 bool MdoApiEcosystemRoute(MdoApiContext* c)
 {
-    if(c->Request->head->MethodCode==XHTTP_METHOD_GET){xvalue* input=xrtValueObject();MdoApiValueSetString(input,"action","installed");return EcoHandleInput(c,input);}
-    char* raw=NULL;size_t length=0;MdoApiBodyStatus read=MdoApiBinaryBodyRead(c,16384,&raw,&length);
+    if(c->Request->head->MethodCode==XHTTP_METHOD_GET){xvalue* input=xrtValueObject();bool Updates=c->Target.Query.Size==13&&!memcmp(c->Target.Query.Data,"scope=updates",13);MdoApiValueSetString(input,"action",Updates?"updates":"installed");return EcoHandleInput(c,input);}
+    char* raw=NULL;size_t length=0;MdoApiBodyStatus read=MdoApiBinaryBodyRead(c,65536,&raw,&length);
     if(read!=MDO_API_BODY_OK)return MdoApiReplyBodyError(c,read);
-    xjsonreadconfig limits;xrtJsonReadConfigInit(&limits);limits.MaxInputBytes=16384;limits.MaxStringBytes=8192;limits.MaxDepth=8;limits.MaxValues=256;
+    xjsonreadconfig limits;xrtJsonReadConfigInit(&limits);limits.MaxInputBytes=65536;limits.MaxStringBytes=8192;limits.MaxDepth=8;limits.MaxValues=1024;
     xvalue* input=xrtJsonRead(xrtStrViewN(raw,length),&limits);xrtFree(raw);
     if(!input)return MdoApiReplyError(c,422,"ecosystem_request_invalid","Expected a bounded JSON object",NULL);
     if(c->ApplicationResponse)return EcoHandleInput(c,input);

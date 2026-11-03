@@ -1,4 +1,5 @@
 #include "../../include/mdo/distribution.h"
+#include "../../include/mdo/extension_updates.h"
 #include <stdio.h>
 #include "../../include/mdo/extensions.h"
 #include "../../include/mdo/extension_tasks.h"
@@ -252,11 +253,13 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         MdoSkillCatalogRelease(pSkills);
         MdoModuleCatalogRelease(pModules);
     }
+    if(!MdoExtensionUpdatesInit())fprintf(stderr,"[mdo] extension update manager unavailable\n");
     return true;
 }
 
 void MdoBootstrapUnit(void)
 {
+    MdoExtensionUpdatesUnit();
     MdoApplicationInstancesStop();
     MdoModuleManagerStop();
     MdoCommandManagerUnit();
