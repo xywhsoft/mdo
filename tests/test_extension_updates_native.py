@@ -36,6 +36,8 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  QaFlag(R,"publish_and_install_old_versions_then_publish_updates",Ok);
  xvalue* Query=SdkParse("{\"refs\":\"knowledge:qa.a,knowledge:qa.b,knowledge:qa.missing\",\"platform\":\"windows-x86_64\"}");xvalue* Lookup=MdStoreUpdates(&QaStore,Query,E);QaFlag(R,"batch_lookup_is_public_and_omits_missing_private_works",Lookup&&xrtValueCount(SdkGet(Lookup,"items"))==2);xrtValueRelease(Lookup);
  SdkPut(Query,"refs","knowledge:qa.a,knowledge:qa.a");Lookup=MdStoreUpdates(&QaStore,Query,E);QaFlag(R,"duplicate_lookup_ids_rejected",Lookup==NULL);xrtValueRelease(Lookup);SdkPut(Query,"refs","knowledge:qa.a,");Lookup=MdStoreUpdates(&QaStore,Query,E);QaFlag(R,"malformed_lookup_rejected",Lookup==NULL);xrtValueRelease(Lookup);xrtValueRelease(Query);
+ Query=SdkParse("{\"refs\":\"external-tool:mdo.python,knowledge:qa.a\",\"platform\":\"android-arm64-v8a\"}");Lookup=MdStoreUpdates(&QaStore,Query,E);Root=xrtFormat("%s/delivery",SdkField(P,"root"));bool Apk=Lookup&&MdStoreApkUpdates(Root,Query,Lookup);const xvalue* ApkRow=xrtValueArrayGet(SdkGet(Lookup,"items"),1);QaFlag(R,"android_update_is_bound_to_actual_published_full_apk",Apk&&xrtValueCount(SdkGet(Lookup,"items"))==2&&!strcmp(SdkField(ApkRow,"delivery"),"apk")&&!strcmp(SdkField(ApkRow,"version"),"3.14.8+pip.26.3")&&MdStoreInt(ApkRow,"apk_build_id",0)==99999999);xrtFree(Root);xrtValueRelease(Lookup);
+ Lookup=MdStoreUpdates(&QaStore,Query,E);Root=xrtFormat("%s/delivery-legacy",SdkField(P,"root"));Apk=Lookup&&MdStoreApkUpdates(Root,Query,Lookup);QaFlag(R,"unindexed_apk_does_not_offer_unavailable_store_programs",Apk&&xrtValueCount(SdkGet(Lookup,"items"))==1);xrtFree(Root);xrtValueRelease(Lookup);xrtValueRelease(Query);
  bool Started=Ok&&QaMdoExtensionUpdatesInit()&&QaMdoExtensionUpdatesRequest();uint64 End=MdoDeadlineAfterUs(8000000);xvalue* Snapshot=NULL;
  do{xrtValueRelease(Snapshot);Snapshot=QaMdoExtensionUpdatesSnapshot();if(MdoUpdatesNumber(Snapshot,"checked_at")&&!MdoGraphBool(Snapshot,"busy",false))break;xrtSleep(20);}while(Started&&!MdoDeadlineExpired(End));
  QaFlag(R,"background_worker_finds_all_four_updates",Started&&Snapshot&&xrtValueCount(SdkGet(Snapshot,"items"))==4);
@@ -45,6 +47,8 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  QaTransientReads=1;QaReadStatus=403;QaMdoExtensionUpdatesRequest();End=MdoDeadlineAfterUs(3000000);
  do{xrtValueRelease(Snapshot);Snapshot=QaMdoExtensionUpdatesSnapshot();if(SdkField(Snapshot,"message")&&SdkField(Snapshot,"message")[0])break;xrtSleep(20);}while(!MdoDeadlineExpired(End));
  QaFlag(R,"failed_check_keeps_known_updates",Snapshot&&xrtValueCount(SdkGet(Snapshot,"items"))==4&&MdoGraphBool(Snapshot,"stale",false));xrtValueRelease(Snapshot);QaReadStatus=0;QaTransientReads=0;QaMdoExtensionUpdatesUnit();
+ xvalue* Early=QaUpdatePlan(SdkField(New[1],"version_id"),E),*Newer=QaDependencyPublish(&QaStore,SdkField(P,"root"),"a-newer",SdkField(New[0],"xid"),(uint64)MdStoreInt(New[0],"work_revision",0),E),*Late=QaUpdatePlan(SdkField(New[2],"version_id"),E),*Mixed=xrtValueObject(),*MixedPlans=xrtValueArray(),*Rejected=NULL;
+ for(size_t I=0;I<2;I++){const xvalue* Plan=I?Late:Early;xvalue* Ref=xrtValueObject();SdkPut(Ref,"id",SdkField(Plan,"id"));SdkPut(Ref,"revision",SdkField(Plan,"revision"));xrtValueArrayAppend(MixedPlans,Ref);xrtValueRelease(Ref);}xrtValueObjectSet(Mixed,XRT_STR_LITERAL("plans"),MixedPlans);xrtValueObjectSetNew(Mixed,XRT_STR_LITERAL("trust_code"),xrtValueBool(true));QaFlag(R,"changed_shared_publication_rejected_before_any_install",Newer&&!QaMdoExtensionServiceUpdateBatch(Mixed,NULL,&Rejected,E));xrtValueRelease(Rejected);xrtValueRelease(Mixed);xrtValueRelease(MixedPlans);xrtValueRelease(Early);xrtValueRelease(Late);xrtValueRelease(New[0]);New[0]=Newer;
  xvalue* Batch=xrtValueObject(),*Plans=xrtValueArray();
  for(size_t I=1;I<4;I++){Plan=QaUpdatePlan(SdkField(New[I],"version_id"),E);xvalue* Item=xrtValueObject();Ok=Ok&&Plan&&SdkPut(Item,"id",SdkField(Plan,"id"))&&SdkPut(Item,"revision",SdkField(Plan,"revision"))&&xrtValueArrayAppend(Plans,Item);xrtValueRelease(Plan);xrtValueRelease(Item);}
  xrtValueObjectSet(Batch,XRT_STR_LITERAL("plans"),Plans);xrtValueRelease(Plans);xrtValueObjectSetNew(Batch,XRT_STR_LITERAL("trust_code"),xrtValueBool(true));
@@ -61,8 +65,13 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
 '''
 def main():
  p=argparse.ArgumentParser();p.add_argument('--url',required=True);p.add_argument('--home',type=Path,required=True);p.add_argument('--project',default='default');a=p.parse_args();out=ROOT/'.build/extension-updates-native';out.mkdir(exist_ok=True);fixture=out/('case-'+uuid.uuid4().hex[:8]);fixture.mkdir();shutil.copyfile(sdk_root()/'lib/sqlite3.h',fixture/'sqlite3.h')
+ for legacy in (False,True):
+  delivery=fixture/('delivery-legacy' if legacy else 'delivery');(delivery/'objects').mkdir(parents=True)
+  apk=delivery/'fixture.apk';index=dict(edition='full',build_id='99999999',extensions=[dict(id='python',asset='assets/mdo-extensions/python.zip',sha256='1'*64,bytes=123,**({} if legacy else dict(logical_id='external-tool:mdo.python',name='Python',version='3.14.8+pip.26.3',description='Python runtime')))])
+  with zipfile.ZipFile(apk,'w') as z:z.writestr('assets/mdo-runtime.json',json.dumps(index))
+  sha=__import__('hashlib').sha256(apk.read_bytes()).hexdigest();size=apk.stat().st_size;apk.rename(delivery/'objects'/sha);(delivery/'catalog.json').write_text(json.dumps(dict(releases=[dict(platform='android-arm64-v8a',edition='full',build_id=99999999,status='published',sha256=sha,size=size)])),encoding='utf-8')
  for name in 'abcd':
-  for stage in ('old','new'):
+  for stage in (('old','new','newer') if name=='a' else ('old','new')):
    path=fixture/f'{name}-{stage}.zip';directory_zip(path,'knowledge',alias=name,version='1.0.0')
    with zipfile.ZipFile(path) as z:files={n:z.read(n) for n in z.namelist()}
    meta=json.loads(files['extension.json']);meta.update(id='knowledge:qa.'+name,dependencies=[] if name in 'ad' else [dict(id='knowledge:qa.a')]);files['extension.json']=json.dumps(meta);files['index.md']=stage+' reference'

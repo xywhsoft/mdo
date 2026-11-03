@@ -49,6 +49,8 @@ class RuntimeAliases(unittest.TestCase):
                     with zipfile.ZipFile(io.BytesIO(payload)) as tool:
                         self.assertIsNone(tool.testzip())
                         manifest=json.loads(tool.read('extension.json'))
+                        self.assertEqual(extension['logical_id'],manifest['id'])
+                        self.assertEqual(extension['version'],manifest['version'])
                         self.assertEqual(manifest['kind'],'external-tools')
                         self.assertIn('tool.json',tool.namelist())
                         self.assertNotIn('files',manifest)

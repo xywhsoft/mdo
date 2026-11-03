@@ -70,9 +70,12 @@ static xvalue* MdoExtServiceBatchReplan(const xvalue* Old,const xvalue* Complete
 bool MdoExtensionServiceUpdateBatch(const xvalue* Input,xcancel* Cancel,xvalue** Result,char Error[512]){
  *Result=NULL;const xvalue* Plans=xrtValueObjectGet(Input,XRT_STR_LITERAL("plans"));size_t Count=xrtValueCount(Plans);
  if(!MdoExtServicePlanBool(Input,"trust_code")||xrtValueType(Plans)!=XVALUE_ARRAY||!Count||Count>128)return MdoExtServiceError(Error,"Confirm between one and 128 inspected update plans");
- xvalue* Saved=xrtValueArray(),*Seen=xrtValueObject(),*Completed=xrtValueObject(),*Rows=xrtValueArray(),*Items=xrtValueArray();bool Ok=Saved&&Seen&&Completed&&Rows&&Items;
+ xvalue* Saved=xrtValueArray(),*Seen=xrtValueObject(),*Pins=xrtValueObject(),*Completed=xrtValueObject(),*Rows=xrtValueArray(),*Items=xrtValueArray();bool Ok=Saved&&Seen&&Pins&&Completed&&Rows&&Items;
  for(size_t I=0;Ok&&I<Count;I++){const xvalue* R=xrtValueArrayGet(Plans,I);xvalue* Plan=MdoExtensionsPlanRead(MdoExtensionText(R,"id",32),MdoExtensionText(R,"revision",64),Error);cstr Root=MdoExtensionText(Plan,"root",MDO_EXTENSION_REF_BYTES);
-  Ok=Root&&!xrtValueObjectHas(Seen,xrtStrView(Root))&&MdoExtServicePlanBool(Plan,"ready")&&xrtValueObjectSetNew(Seen,xrtStrView(Root),xrtValueBool(true))&&xrtValueArrayAppend(Saved,Plan);xrtValueRelease(Plan);
+  Ok=Root&&!xrtValueObjectHas(Seen,xrtStrView(Root))&&MdoExtServicePlanBool(Plan,"ready")&&xrtValueObjectSetNew(Seen,xrtStrView(Root),xrtValueBool(true))&&xrtValueArrayAppend(Saved,Plan);
+  const xvalue* Packages=xrtValueObjectGet(Plan,XRT_STR_LITERAL("items"));
+  for(size_t J=0;Ok&&J<xrtValueCount(Packages);J++){const xvalue* P=xrtValueArrayGet(Packages,J);if(!xrtValueObjectHas(P,XRT_STR_LITERAL("manifest")))continue;cstr Id=MdoExtensionText(P,"id",MDO_EXTENSION_REF_BYTES),Version=MdoExtensionText(P,"version_id",32),Hash=MdoExtensionText(P,"sha256",64);char Pin[100];snprintf(Pin,sizeof(Pin),"%s:%s",Version?Version:"",Hash?Hash:"");cstr Prior=Id?MdoExtensionText(Pins,Id,99):NULL;Ok=Id&&Version&&Hash&&(!Prior||!strcmp(Prior,Pin))&&MdoExtServicePut(Pins,Id,Pin);if(!Ok)MdoExtServiceError(Error,"Shared dependency versions changed during inspection; check updates again");}
+  xrtValueRelease(Plan);
  }
  size_t Failed=0;
  for(size_t I=0;Ok&&I<Count;I++){const xvalue* Old=xrtValueArrayGet(Saved,I);char Why[512]={0};bool Cancelled=Cancel&&xrtCancelRequested(Cancel);xvalue* Fresh=!Cancelled?MdoExtServiceBatchReplan(Old,Completed,Why):NULL,*Request=xrtValueObject(),*Receipt=NULL;
@@ -86,5 +89,5 @@ bool MdoExtensionServiceUpdateBatch(const xvalue* Input,xcancel* Cancel,xvalue**
  }
  xvalue* Out=Ok?xrtValueObject():NULL;Ok=Ok&&Out&&xrtValueObjectSet(Out,XRT_STR_LITERAL("results"),Rows)&&xrtValueObjectSet(Out,XRT_STR_LITERAL("items"),Items)&&xrtValueObjectSetNew(Out,XRT_STR_LITERAL("runtime_ready"),xrtValueBool(!Failed));
  if(Ok&&Failed){char Message[128];snprintf(Message,sizeof(Message),"%zu of %zu extension updates need attention",Failed,Count);Ok=MdoExtServicePut(Out,"runtime_error",Message);}
- xrtValueRelease(Saved);xrtValueRelease(Seen);xrtValueRelease(Completed);xrtValueRelease(Rows);xrtValueRelease(Items);if(!Ok){xrtValueRelease(Out);return false;}*Result=Out;return true;
+ xrtValueRelease(Saved);xrtValueRelease(Seen);xrtValueRelease(Pins);xrtValueRelease(Completed);xrtValueRelease(Rows);xrtValueRelease(Items);if(!Ok){xrtValueRelease(Out);return false;}*Result=Out;return true;
 }

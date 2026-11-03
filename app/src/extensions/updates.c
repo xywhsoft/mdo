@@ -5,6 +5,7 @@
 #include "../../include/mdo/extension_files.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/time.h"
+#include "../../include/mdo/distribution.h"
 
 #define MDO_UPDATES_CACHE "data/cache/extension-updates.json"
 #define MDO_UPDATES_INTERVAL_US (21600ULL*1000000ULL)
@@ -18,17 +19,19 @@ static xvalue* MdoUpdatesInventory(char Error[512]){
  xvalue* All=MdoExtensionsSnapshot(Error),*Rows=xrtValueArray();bool Ok=All&&Rows;
  for(size_t I=0;Ok&&I<xrtValueCount(All);I++){const xvalue* R=xrtValueArrayGet(All,I),*Receipt=xrtValueObjectGet(R,XRT_STR_LITERAL("installation"));
   cstr Source=MdoExtensionText(R,"source",16),Id=MdoExtensionText(R,"id",MDO_EXTENSION_REF_BYTES),Work=MdoExtensionText(Receipt,"xid",32),Hash=MdoExtensionText(Receipt,"sha256",64);
-  if(!Source||strcmp(Source,"store")||!MdoExtensionRefValid(Id)||!Work||!Hash)continue;
+  bool Apk=false;
 #if defined(__ANDROID__)
-  if(MdoUpdatesSame(MdoExtensionText(R,"kind",32),"external-tools"))continue;
+  Apk=MdoUpdatesSame(MdoExtensionText(R,"kind",32),"external-tools")&&Source&&!strcmp(Source,"builtin");
 #endif
+  if(!Source||(!Apk&&strcmp(Source,"store"))||!MdoExtensionRefValid(Id)||(!Apk&&!Work)||!Hash)continue;
   xvalue* Item=xrtValueObject();const cstr Fields[]={"id","kind","directory_id","name","version","enabled"};Ok=Item!=NULL;
   for(size_t J=0;Ok&&J<6;J++){const xvalue* V=xrtValueObjectGet(R,xrtStrView(Fields[J]));if(V)Ok=xrtValueObjectSet(Item,xrtStrView(Fields[J]),V);}
-  Ok=Ok&&MdoUpdatesPut(Item,"work",Work)&&MdoUpdatesPut(Item,"sha256",Hash)&&xrtValueObjectSet(Item,XRT_STR_LITERAL("installation"),Receipt)&&xrtValueArrayAppend(Rows,Item);xrtValueRelease(Item);
+  Ok=Ok&&MdoUpdatesPut(Item,"work",Work?Work:"")&&MdoUpdatesPut(Item,"delivery",Apk?"apk":"store")&&MdoUpdatesPut(Item,"sha256",Hash)&&xrtValueObjectSet(Item,XRT_STR_LITERAL("installation"),Receipt)&&xrtValueArrayAppend(Rows,Item);xrtValueRelease(Item);
  }xrtValueRelease(All);if(!Ok){xrtValueRelease(Rows);return NULL;}return Rows;
 }
 static const xvalue* MdoUpdatesFind(const xvalue* Rows,cstr Id){for(size_t I=0;Id&&I<xrtValueCount(Rows);I++){const xvalue* R=xrtValueArrayGet(Rows,I);if(MdoUpdatesSame(Id,MdoExtensionText(R,"id",MDO_EXTENSION_REF_BYTES)))return R;}return NULL;}
 static bool MdoUpdatesCandidate(const xvalue* Local,const xvalue* Remote,uint64 Serial){
+ if(MdoUpdatesSame(MdoExtensionText(Local,"delivery",8),"apk"))return MdoUpdatesSame(MdoExtensionText(Remote,"delivery",8),"apk")&&MdoUpdatesSame(MdoExtensionText(Local,"id",MDO_EXTENSION_REF_BYTES),MdoExtensionText(Remote,"id",MDO_EXTENSION_REF_BYTES))&&MdoUpdatesNumber(Remote,"apk_build_id")>MdoBuildId()&&!MdoUpdatesSame(MdoExtensionText(Local,"sha256",64),MdoExtensionText(Remote,"sha256",64));
  return Serial&&MdoUpdatesNumber(Remote,"serial")>Serial&&MdoUpdatesSame(MdoExtensionText(Local,"id",MDO_EXTENSION_REF_BYTES),MdoExtensionText(Remote,"id",MDO_EXTENSION_REF_BYTES))&&MdoUpdatesSame(MdoExtensionText(Local,"work",32),MdoExtensionText(Remote,"xid",32))&&MdoUpdatesSame(MdoExtensionText(Local,"kind",32),MdoExtensionText(Remote,"kind",32))&&!MdoUpdatesSame(MdoExtensionText(Local,"sha256",64),MdoExtensionText(Remote,"sha256",64));
 }
 static bool MdoUpdatesFetch(xvalue* Inventory,xvalue** Result,char Error[512]){
@@ -40,7 +43,7 @@ static bool MdoUpdatesFetch(xvalue* Inventory,xvalue** Result,char Error[512]){
   xvalue* Seen=xrtValueObject();Ok=Ok&&Seen;
   for(size_t I=0;Ok&&I<xrtValueCount(Items);I++){const xvalue* Remote=xrtValueArrayGet(Items,I);cstr Id=MdoExtensionText(Remote,"id",MDO_EXTENSION_REF_BYTES);const xvalue* Local=MdoUpdatesFind(Inventory,Id);Ok=Local&&Id&&!xrtValueObjectHas(Seen,xrtStrView(Id))&&xrtValueObjectSetNew(Seen,xrtStrView(Id),xrtValueBool(true));
    if(!Ok)break;const xvalue* Receipt=xrtValueObjectGet(Local,XRT_STR_LITERAL("installation"));uint64 Serial=MdoUpdatesNumber(Receipt,"serial");
-   if(!Serial){cstr Version=MdoExtensionText(Receipt,"version_id",32);xvalue* Query=xrtValueObject(),*Prior=NULL;
+   if(!Serial&&!MdoUpdatesSame(MdoExtensionText(Local,"delivery",8),"apk")){cstr Version=MdoExtensionText(Receipt,"version_id",32);xvalue* Query=xrtValueObject(),*Prior=NULL;
     bool Read=Version&&Query&&MdoUpdatesPut(Query,"action","detail")&&MdoUpdatesPut(Query,"version_id",Version)&&MdoExtensionServiceRead(Query,MdoUpdates.Cancel,&Prior,Error);
     if(Read&&MdoUpdatesSame(MdoExtensionText(Prior,"xid",32),MdoExtensionText(Local,"work",32))&&MdoUpdatesSame(MdoExtensionText(Prior,"sha256",64),MdoExtensionText(Local,"sha256",64)))Serial=MdoUpdatesNumber(Prior,"serial");
     xrtValueRelease(Query);xrtValueRelease(Prior);if(!Read){Ok=false;break;}

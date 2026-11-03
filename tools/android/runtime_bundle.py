@@ -89,6 +89,6 @@ def add_runtime(archive,root:Path,edition:str,build_id:int,revision:int):
                 row=package_tool(source,metadata,Path(temporary),extra)
                 asset='mdo-extensions/'+tool+'.zip'
                 archive.write(Path(temporary)/row['file'],'assets/'+asset,compress_type=zipfile.ZIP_STORED)
-                extensions.append(dict(id=tool,asset='assets/'+asset,sha256=row['sha256'],bytes=row['size']))
+                extensions.append(dict(id=tool,logical_id=row['id'],name=metadata['name'],version=metadata['version'],description=metadata['description'],asset='assets/'+asset,sha256=row['sha256'],bytes=row['size']))
     release=json.loads((ROOT/'app/release.json').read_text(encoding='utf-8'))
     archive.writestr('assets/mdo-runtime.json',json.dumps(dict(edition=edition,build_id=str(build_id),version_code=release['version_code'].replace('.','').upper(),extensions=extensions,files=files),separators=(',',':')))
