@@ -65,6 +65,7 @@ import { createSubmissionController } from "./features/chat/submission-controlle
 import { createNewTaskController, taskTitle } from "./features/chat/new-task-controller.js";
 import { createNewTaskComposerFocus } from "./features/chat/new-task-composer-focus.js";
 import { createComposerImages, unsupportedModelError } from "./features/chat/composer-images.js";
+import { renderComposerAction } from "./features/chat/composer-action.js";
 import { createComposerProject } from "./features/chat/composer-project.js";
 import { createImagePreview } from "./features/chat/image-preview.js";
 import { createSlashCommands } from "./features/chat/slash-commands.js";
@@ -191,7 +192,7 @@ export async function boot() {
   const composer = $("#composer");
   trackComposerMenuRoom(composer);
   const send = $("#send");
-  const stop = $("#stop");
+  let sendBlockedByState = true;
   const composerError = $("#composer-error");
   let composerErrorState = null;
   const composerHint = $("#composer-hint");
@@ -896,7 +897,7 @@ export async function boot() {
         const capturedRun = activeRun && activeRun.id === scope.runId;
         if (!capturedRun && !cancelled)
           throw new Error(t("slash.noActiveRun", {}, "当前没有运行中的任务"));
-        if (capturedRun) stop.click();
+        if (capturedRun) stopComposer();
         },
         "ui.session": async params => {
         const session = sessionDetailStore.get().data;
@@ -926,7 +927,7 @@ export async function boot() {
     composer, input: prompt, contextKey: () => String(routeVersion),
     skillProject: () => navigation.get().projectId || "default",
     commandScope: () => ({ projectId: navigation.get().projectId || "default", sessionId: navigation.get().sessionId || "", runId: activeRun?.id || "" }),
-    onPendingChange: count => { stop.hidden = !activeRun && !count; },
+    onPendingChange: () => syncSendDisabled(),
     onExecute: executeApplicationActions,
   });
   const applicationUi = createApplicationUi({ navigation, executeActions: executeApplicationActions,
@@ -1220,6 +1221,7 @@ export async function boot() {
       composerAttachments = attachments;
       draftStore.edit(selectedDraftKey, composerText(), attachments);
       tokenMeter.refresh();
+      syncSendDisabled();
     },
     async onBeforeRemove(owner, id) {
       const key = `${owner.projectId}/${owner.sessionId}`;
@@ -1346,7 +1348,6 @@ export async function boot() {
   });
   const resourcePanels = createResourcePanels();
 
-  let sendBlockedByState = true;
   function syncSendDisabled() {
     const localCommand = slashCommands.isExact(prompt.value.trim());
     const extractingQueue = Boolean((queueEditKey && queueEditKey === selectedKey) ||
@@ -1354,21 +1355,29 @@ export async function boot() {
     prompt.readOnly = extractingQueue;
     composerContext?.render();
     $("#composer-attach").disabled = extractingQueue;
-    send.disabled = sendBlockedByState || extractingQueue || composerAgent?.isBusy() ||
-      ((composerImages?.isUploading() ||
-        composerImages?.hasUnsupportedDraft()) && !localCommand);
+    const phase = runStops.phase(activeRun?.id);
+    const stopLabel = phase === "waiting"
+      ? uiMessage("shell.stopWaiting", {}, "连接恢复后停止任务")
+      : phase || activeRun?.cancel_requested
+        ? uiMessage("task.stopping", {}, "正在停止…") : uiMessage("shell.stop");
+    renderComposerAction(send, {
+      running: Boolean(activeRun || slashCommands.pendingCount()),
+      hasDraft: Boolean(prompt.value.trim() || composerContext?.hasContexts() ||
+        composerAttachments.length || composerImages?.isUploading()),
+      sendDisabled: sendBlockedByState || extractingQueue || composerAgent?.isBusy() ||
+        ((composerImages?.isUploading() ||
+          composerImages?.hasUnsupportedDraft()) && !localCommand),
+      stopDisabled: composerStopDisabled(),
+      stopBusy: Boolean(activeRun &&
+        (activeRun.cancel_requested || runStops.has(activeRun.id))),
+      queue: Boolean(activeRun || (!navigation.get().sessionId && newTaskController?.isBusy())),
+      stopLabel,
+    });
   }
 
-  function syncStopBusy() {
-    stop.disabled = purgeRecovery.isPaused() || (isRemoteTarget() &&
+  function composerStopDisabled() {
+    return purgeRecovery.isPaused() || (isRemoteTarget() &&
       (targetState().runtimeChanged || targetState().selected.mode === "view"));
-    const phase = runStops.phase(activeRun?.id);
-    const label = phase === "waiting" ? t("shell.stopWaiting", {}, "连接恢复后停止任务")
-      : phase || activeRun?.cancel_requested ? t("task.stopping", {}, "正在停止…") : t("shell.stop");
-    writeUiAttribute(stop, "title", label);
-    writeUiAttribute(stop, "aria-label", label);
-    stop.setAttribute("aria-disabled", String(Boolean(activeRun &&
-      (activeRun.cancel_requested || runStops.has(activeRun.id)))));
   }
 
   function setRun(run) {
@@ -1386,9 +1395,6 @@ export async function boot() {
       : stopPhase || activeRun?.cancel_requested ? uiMessage("task.stopping", {}, "正在停止…")
       : runAwaitingRelease(activeRun, timelineStore.get().data)
         ? uiMessage("task.finishing", {}, "正在结束上一轮…") : runStateText(shown.state));
-    send.hidden = false;
-    stop.hidden = !activeRun && !slashCommands.pendingCount();
-    syncStopBusy();
     const route = navigation.get();
     const creatingNewTask = !route.sessionId &&
       Boolean(newTaskController?.isBusy());
@@ -1432,9 +1438,6 @@ export async function boot() {
     composerProfile.setRunActive(Boolean(activeRun),
       creatingNewTask || messageActionBusy || purgeRecovery.isPaused());
     composerAgent?.sync();
-    writeUiAttribute(send, "aria-label", activeRun || creatingNewTask
-      ? uiMessage("composer.queue", {}, "加入待发送队列")
-      : uiMessage("shell.send", {}, "发送任务"));
     writeUiText(composerHint, purgeRecovery.isPaused()
       ? !purgeRecovery.requiresReview()
         ? purgeRecovery.get().error && !purgeRecovery.get().busy ? errorMessage(purgeRecovery.get().error)
@@ -1733,7 +1736,7 @@ export async function boot() {
         // Cancellation releases the read; selection guards also fence later
         // timeline and queue refreshes after its authoritative result.
         if (!stillPollingRun()) { resumeCurrentRun(); return; }
-        const returnFocus = document.activeElement === stop;
+        const returnFocus = document.activeElement === send;
         setRun(run);
         responseApplied = true;
         await Promise.all([refreshSelectedTimeline(), refreshSelectedAsks()]);
@@ -1753,7 +1756,7 @@ export async function boot() {
             return;
           }
           if (returnFocus &&
-              (document.activeElement === stop ||
+              (document.activeElement === send ||
                 document.activeElement === document.body) &&
               !prompt.disabled &&
               shell.dataset.sidebar !== "open" &&
@@ -2423,7 +2426,7 @@ export async function boot() {
     };
     if (stillSelected()) {
       if (activeRun?.id === runId) setRun(run);
-      if (owner.returnFocus && document.activeElement === stop && !prompt.disabled)
+      if (owner.returnFocus && document.activeElement === send && !prompt.disabled)
         prompt.focus({ preventScroll: true });
     }
     // The stop is already acknowledged. Failed background refreshes must not
@@ -2433,22 +2436,27 @@ export async function boot() {
         ...(terminalState(run) ? [loadRecovery()] : [])] : [])])
       .then(() => { if (stillSelected() && terminalState(run)) void dispatchQueued(); });
   }
-  stop.addEventListener("click", () => {
+  function stopComposer() {
+    if (composerStopDisabled()) return;
     void slashCommands.cancel().catch(error => toast(errorMessage(error), "error"));
-    if (activeRun && !stop.disabled)
-      runStops.request(activeRun, document.activeElement === stop);
+    if (activeRun) runStops.request(activeRun, document.activeElement === send);
+  }
+  send.addEventListener("click", event => {
+    if (send.dataset.action !== "stop") return;
+    event.preventDefault();
+    stopComposer();
   });
 
   function resizePrompt() {
     prompt.style.height = "auto";
     prompt.style.height = `${Math.min(prompt.scrollHeight, 336)}px`;
+    syncSendDisabled();
   }
   window.addEventListener("resize", resizePrompt);
   prompt.addEventListener("input", () => {
     resizePrompt();
     draftStore.edit(selectedDraftKey, composerText(), composerAttachments);
     tokenMeter.refresh();
-    syncSendDisabled();
   });
   prompt.addEventListener("keydown", (event) => {
     if (slashCommands.onKeyDown(event)) return;
@@ -2781,7 +2789,7 @@ export async function boot() {
       : $("#close-settings").click(),
     onToggleTheme: toggleTheme,
     onSessionSearch: () => sessionSearch.open(),
-    onStop: () => stop.click(), isRunning: () => Boolean(activeRun),
+    onStop: stopComposer, isRunning: () => Boolean(activeRun),
     isDrawerOpen: () => mobileLayout.matches && shell.dataset.sidebar === "open",
     closeDrawers,
   });
@@ -2844,11 +2852,11 @@ export async function boot() {
     enabled: () => !document.hidden,
     operations: {
       async runs() {
-        const focusStop = document.activeElement === stop;
+        const focusStop = document.activeElement === send;
         const version = routeVersion;
         await loadRuns();
         if (focusStop && !activeRun && version === routeVersion && !prompt.disabled &&
-            (document.activeElement === stop || document.activeElement === document.body) &&
+            (document.activeElement === send || document.activeElement === document.body) &&
             shell.dataset.sidebar !== "open" && !document.querySelector("dialog[open]"))
           prompt.focus({ preventScroll: true });
       },
