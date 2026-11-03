@@ -163,7 +163,18 @@ def runtime_probes(host: Path, packed: Path, *, optional_tools_stage: Path | Non
                                       optional_tools_platform=optional_tools_platform))
         else:
             run(runtime_probe_command(probe, host, packed))
-    return len(probes)
+    count = len(probes)
+    # Native fallback and the managed aria2 subprocess are separate paths.
+    # This fixture currently installs a Windows artifact; other platforms must
+    # report the missing acceptance rather than silently claiming coverage.
+    if any(probe.name == "test_native_downloads_runtime.py" for probe in probes):
+        aria = ROOT / "tools/runtime/windows-x86_64/aria2/aria2c.exe"
+        if os.name == "nt" and aria.is_file():
+            run([sys.executable, str(TESTS / "test_native_downloads_runtime.py"), "--host", str(host), "--aria2"])
+            count += 1
+        else:
+            print("[qa] ARTIFACT CHECK NOT RUN: managed aria2: Windows fixture/tool artifact unavailable", flush=True)
+    return count
 
 
 def packed_probe_commands(packed: Path, output: Path) -> list[list[str]]:
@@ -174,7 +185,7 @@ def packed_probe_commands(packed: Path, output: Path) -> list[list[str]]:
         "test_packed_restore.py", "test_packed_compaction_failure.py",
         "test_packed_compaction_recovery.py", "test_packed_fork_recovery.py",
         "test_packed_message_edit_recovery.py", "test_packed_recovery_ack.py",
-        "test_grep_regex_packed.py",
+        "test_grep_regex_packed.py", "test_packed_native_downloads.py",
     )
     commands = []
     for name in names:
@@ -350,6 +361,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
                         help="explicit independent tool payload stage containing input.json")
     parser.add_argument("--optional-tools-platform",
                         help="tool stage platform (defaults to the current Windows/Linux platform)")
+    parser.add_argument("--platform-root", type=Path,
+                        help="platform checkout for the real archive Range sender acceptance probe")
     parser.add_argument("--observe-seconds", type=int, default=5,
                         choices=range(5, 61), metavar="5..60")
     return parser.parse_args(argv)
@@ -372,6 +385,10 @@ def main(argv: list[str] | None = None) -> int:
         packer = host.with_name("xsw.exe") if os.name == "nt" else host
 
         run([sys.executable, "-m", "unittest", "discover", "-s", "tests"])
+        if args.platform_root:
+            run([sys.executable, str(TESTS / "test_aria2_platform.py"), "--platform-root", str(args.platform_root)])
+        else:
+            print("[qa] PLATFORM CHECK NOT RUN: archive Range sender: pass --platform-root", flush=True)
         frontend_checks()
         build = [
             sys.executable, str(ROOT / "tools/build_mdo.py"),

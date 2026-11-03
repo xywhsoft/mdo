@@ -15,6 +15,21 @@ from test_optional_tools_runtime import run as optional_tool_probe
 
 
 class ReleaseGateTests(unittest.TestCase):
+    def test_download_gate_runs_both_engines_or_reports_missing_artifact(self):
+        class Inventory:
+            def glob(self, pattern):
+                return [Path("test_native_downloads_runtime.py")] if pattern == "test_*_runtime.py" else []
+            def __truediv__(self, name):
+                return Path(name)
+        with patch.object(qa_release, "TESTS", Inventory()), patch.object(qa_release, "run") as run, patch("builtins.print") as emit:
+            count = qa_release.runtime_probes(Path("host"), Path("packed"))
+            available = qa_release.os.name == "nt" and (ROOT / "tools/runtime/windows-x86_64/aria2/aria2c.exe").is_file()
+            self.assertEqual(count, 2 if available else 1)
+            if available:
+                self.assertIn("--aria2", run.call_args_list[-1].args[0])
+            else:
+                self.assertTrue(any("managed aria2" in call.args[0] for call in emit.call_args_list))
+
     def test_windows_deliveries_require_the_installer_resource(self):
         with tempfile.TemporaryDirectory(prefix="release-resources-") as raw:
             package = Path(raw)
@@ -80,7 +95,8 @@ class ReleaseGateTests(unittest.TestCase):
     def test_packed_recovery_probes_use_this_candidate_and_required_report(self):
         candidate = Path("final-candidate")
         commands = qa_release.packed_probe_commands(candidate, Path("qa-output"))
-        self.assertEqual(len(commands), 13)
+        self.assertEqual(len(commands), 14)
+        self.assertTrue(any(c[1].endswith("test_packed_native_downloads.py") for c in commands))
         for command in commands:
             self.assertTrue(Path(command[1]).is_file())
             self.assertEqual(command[2:4], ["--packed", str(candidate)])
