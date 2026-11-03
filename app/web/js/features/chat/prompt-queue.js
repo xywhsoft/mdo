@@ -191,7 +191,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     const uncertain = saved[0]?.state === "sending";
     // This page still owns the dispatch while exclusive() is running. A
     // persisted sending item without that owner needs review after reload.
-    const sendingLocally = uncertain && busy.has(key);
+    const sendingLocally = uncertain && (busy.has(key) || meta.managed && !meta.paused);
     const acceptedRun = uncertain && Boolean(saved[0]?.run_id);
     const claimedRun = uncertain && saved[0]?.start_claimed === true;
     const stagedHead = saved[0]?.state === "staged";
@@ -439,6 +439,10 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     find(projectId, sessionId, id) {
       return queues.get(sessionKey(projectId, sessionId))?.find((item) =>
         item.id === id) ?? null;
+    },
+    snapshot(projectId, sessionId) {
+      const key = sessionKey(projectId, sessionId);
+      return { ...(metadata.get(key) ?? {}), items: [...(queues.get(key) ?? [])] };
     },
     receipt(projectId, sessionId, id) {
       return transport.readReceipt(sessionKey(projectId, sessionId), id);

@@ -3493,5 +3493,10 @@
   "extensionUpdates.reviewBody": "本次更新还涉及以下依赖或权限变化。确认后将加入下载任务，自动下载并更新。",
   "extensionUpdates.updateFull": "更新完整版",
   "extensionUpdates.updated": "已更新",
-  "extensionUpdates.catalogChanged": "检查期间共享依赖发布了新版本，请重新检查后再更新。"
+  "extensionUpdates.catalogChanged": "检查期间共享依赖发布了新版本，请重新检查后再更新。",
+  "submission.pending": "正在提交的消息",
+  "submission.saving": "正在保存消息…",
+  "submission.preparing": "正在准备回复…",
+  "submission.queued": "已排队，等待上一条消息结束…",
+  "submission.images": "附加图片：{count}"
 }

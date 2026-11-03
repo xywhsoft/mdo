@@ -74,10 +74,10 @@ static void MdoQueueDispatchSession(const MdoSessionInfo* Session)
             Last.Size = sizeof(Last);
             bool Found = Queue.LastRunId[0] && MdoRunSnapshotFind(Runs, Queue.LastRunId, &Last);
             if ( Queue.LastRunId[0] && (!Found || !Last.Terminal ||
-                 (Last.State != XWORK_RUN_SUCCEEDED && !Head->Priority)) ) {
+                 ((Last.State == XWORK_RUN_CANCELLED || Last.CancelRequested) && !Head->Priority)) ) {
                 Queue.Paused = true;
                 snprintf(Queue.Error, sizeof(Queue.Error), "%s", !Found ? "queue_previous_run_unknown" :
-                    Last.State == XWORK_RUN_CANCELLED ? "queue_stopped" : "queue_previous_run_failed");
+                    Last.State == XWORK_RUN_CANCELLED || Last.CancelRequested ? "queue_stopped" : "queue_previous_run_failed");
                 (void)MdoQueueWrite(Path, &Queue);
             } else {
                 Head->State = MDO_QUEUE_SENDING;

@@ -150,7 +150,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
     }
   }
 
-  async function submit({ projectId, text, profile, fromComposer = true }) {
+  async function submit({ projectId, text, profile, fromComposer = true, submissionId }) {
     if (isWritePaused()) return false;
     if (blocked || preparing || migrating)
       throw new Error(t("composer.newTaskBusy"));
@@ -169,8 +169,8 @@ export function createNewTaskController({ draftStore, newId, createSession,
       if (!await draftStore.flush(projectKey))
         throw new Error(t("composer.newTaskSaveFailed"));
     }
-    const id = task && !draftStore.submissions("").length
-      ? task.session_id : newId();
+    const id = submissionId || (task && !draftStore.submissions("").length
+      ? task.session_id : newId());
     const item = { id, text, attachments: [], interrupt: false,
       state: "prepared", profile: { ...profile } };
     if (!task) {

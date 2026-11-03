@@ -3493,5 +3493,10 @@
   "extensionUpdates.reviewBody": "These updates also change dependencies or permissions. Confirm to queue their download and installation.",
   "extensionUpdates.updateFull": "Update full edition",
   "extensionUpdates.updated": "Updated",
-  "extensionUpdates.catalogChanged": "A shared dependency changed during inspection. Check again before updating."
+  "extensionUpdates.catalogChanged": "A shared dependency changed during inspection. Check again before updating.",
+  "submission.pending": "Messages being submitted",
+  "submission.saving": "Saving message…",
+  "submission.preparing": "Preparing reply…",
+  "submission.queued": "Queued, waiting for the previous message to finish…",
+  "submission.images": "Attached images: {count}"
 }

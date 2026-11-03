@@ -709,6 +709,24 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
                 "Expected a bounded prompt, item ID and first flag", NULL);
         }
     }
+    char Predecessor[MDO_RUN_ID_CAPACITY] = {0};
+    if ( Add && Managed ) {
+        xwork_error Error;
+        MdoRunSnapshot* Runs = MdoRunSnapshotCreate(&Error);
+        if ( !Runs ) {
+            if ( AttachmentLocked ) MdoApiAttachmentUnlock();
+            MdoApiJsonBodyUnit(&Body);
+            return MdoApiReplyError(Context, 503u, "queue_unavailable",
+                "The current run could not be inspected", NULL);
+        }
+        for ( size_t i = 0u; i < MdoRunSnapshotCount(Runs); ++i ) {
+            MdoRunInfo Run = {0}; Run.Size = sizeof(Run);
+            if ( MdoRunSnapshotAt(Runs, i, &Run) && !Run.Terminal &&
+                 !strcmp(Run.ProjectId, ProjectId) && !strcmp(Run.SessionId, SessionId) )
+                snprintf(Predecessor, sizeof(Predecessor), "%s", Run.Id);
+        }
+        MdoRunSnapshotRelease(Runs);
+    }
     xrtMutexLock(g_MdoQueueLock);
     Ok = MdoQueueRead(Path, ProjectId, SessionId, &Queue);
     if ( Ok && Add ) {
@@ -733,7 +751,10 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
                     Text.Size > MDO_QUEUE_MAX_TOTAL_TEXT - Queue.TextBytes;
                 if ( !Queue.Count && Managed ) {
                     Queue.Paused = false; Queue.Error[0] = '\0';
-                    Queue.LastRunId[0] = '\0'; Queue.CancelRunId[0] = '\0';
+                    /* Preserve the current predecessor even when it finishes
+                     * before the dispatcher next scans this new queue. */
+                    snprintf(Queue.LastRunId, sizeof(Queue.LastRunId), "%s", Predecessor);
+                    Queue.CancelRunId[0] = '\0';
                 }
                 Queue.Managed = Queue.Managed || Managed;
                 if ( !Full ) Ok = MdoQueueInsert(&Queue, Id, Text,

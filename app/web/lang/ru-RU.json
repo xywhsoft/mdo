@@ -3493,5 +3493,10 @@
   "extensionUpdates.reviewBody": "Обновления также изменяют зависимости или разрешения. Подтвердите загрузку и установку.",
   "extensionUpdates.updateFull": "Обновить полную версию",
   "extensionUpdates.updated": "Обновлено",
-  "extensionUpdates.catalogChanged": "Во время проверки изменилась общая зависимость. Проверьте обновления снова."
+  "extensionUpdates.catalogChanged": "Во время проверки изменилась общая зависимость. Проверьте обновления снова.",
+  "submission.pending": "Отправляемые сообщения",
+  "submission.saving": "Сохранение сообщения…",
+  "submission.preparing": "Подготовка ответа…",
+  "submission.queued": "В очереди, ожидание завершения предыдущего сообщения…",
+  "submission.images": "Прикреплено изображений: {count}"
 }

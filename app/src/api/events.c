@@ -196,6 +196,8 @@ static bool MdoApiSessionEventValueLimit(const MdoSessionEventInfo* Event,
             Event->ContextWindowTokens) &&
         MdoApiValueSetUInt(Item, "task_state", Event->TaskState) &&
         MdoApiValueSetUInt(Item, "task_revision", Event->TaskRevision);
+    if (Ok && Event->QueueItemId[0])
+        Ok = MdoApiValueSetString(Item, "queue_item_id", Event->QueueItemId);
     if (Ok) Ok = MdoApiValueSetUInt(Item, "input_tokens", Event->InputTokens) &&
         MdoApiValueSetUInt(Item, "output_tokens", Event->OutputTokens) &&
         MdoApiValueSetUInt(Item, "total_tokens", Event->TotalTokens);
