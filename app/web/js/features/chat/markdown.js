@@ -143,10 +143,12 @@ export function createMarkdownRenderer({ parse = parseMarkdown, onLayout = () =>
         Promise.resolve().then(() => parse(source, { signal: cancel.signal }))
           .then(resolve, reject).finally(() => cancel.signal.removeEventListener("abort", aborted));
       });
-      if (entry.dead || stopped || entry.version !== version) return;
+      // Appended tokens must not starve parsing: a completed prefix remains
+      // useful, with the newer suffix kept readable in the plain-text tail.
+      if (entry.dead || stopped || (entry.version !== version && !entry.source.startsWith(source))) return;
       if (tree?.schema_version !== 1 || tree.engine !== "md4c" || !Array.isArray(tree.nodes)) throw new Error("Invalid Markdown response");
       paint(entry, tree, source);
-      if (entry.final && !cache.has(source)) {
+      if (entry.final && entry.source === source && !cache.has(source)) {
         const bytes = source.length + JSON.stringify(tree).length;
         if (bytes <= 4 * 1024 * 1024) {
           cache.set(source, { tree, bytes }); cacheBytes += bytes;
