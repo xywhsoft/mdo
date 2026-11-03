@@ -17,6 +17,7 @@ export function extensionUpdateState(row){
   const job=jobFor(row);
   return preparing.has(row.id)?"preparing":job&&downloadActive(job)?job.state:extensionInstallState(job,row.id)||"available";
 }
+export function extensionUpdateActionable(row){const state=extensionUpdateState(row);return !["unknown","complete","preparing"].includes(state)&&!downloadActive({state});}
 export function extensionUpdateNeedsReview(plan,installed){
   if(!plan.ready)return true;
   return (plan.items||[]).some(item=>{
@@ -42,7 +43,7 @@ export function createExtensionUpdateButton(item){
 }
 export async function updateExtensions(candidates){
   if(candidates.some(row=>row.delivery==="apk")){if(!writable())return null;const owner=device();await api.post("/update",{edition:"full"});if(owner===device())window.dispatchEvent(new CustomEvent("mdo-open-full-update",{detail:{target:owner}}));return null;}
-  const owner=device(),rows=candidates.filter(row=>!preparing.has(row.id)&&!downloadActive({state:extensionUpdateState(row)})&&extensionUpdateState(row)!=="unknown");if(!rows.length||!writable())return null;
+  const owner=device(),rows=candidates.filter(extensionUpdateActionable);if(!rows.length||!writable())return null;
   if(rows.length>128)throw Error(text("batchLimit"));rows.forEach(row=>preparing.add(row.id));updateControls();
   const plans=[];let queued=false;
   const current=()=>device()===owner&&writable();
@@ -80,7 +81,7 @@ export function createExtensionUpdateCenter(){
       const control=createExtensionUpdateButton(row);control.dataset.updateId=row.id;entry.append(info,control);list.append(entry);
     }
     layer.body.replaceChildren(status,list);layer.footer.replaceChildren();
-    const check=button(text("check"),()=>extensionUpdates.refresh({check:true}));check.disabled=data.busy||!writable();const available=data.items.filter(row=>row.delivery!=="apk"&&!downloadActive({state:extensionUpdateState(row)})&&extensionUpdateState(row)!=="unknown"&&extensionUpdateState(row)!=="preparing");
+    const check=button(text("check"),()=>extensionUpdates.refresh({check:true}));check.disabled=data.busy||!writable();const available=data.items.filter(row=>row.delivery!=="apk"&&extensionUpdateActionable(row));
     const all=button(text("all",{count:available.length}),()=>updateExtensions(available));all.className="primary-button";all.disabled=!available.length||!writable();layer.footer.append(check,all,button(text("close"),close));layer.body.scrollTop=scroll;
     updateControls();if(active)for(const b of layer.body.querySelectorAll("[data-update-id]"))if(b.dataset.updateId===active)b.focus({preventScroll:true});
   }

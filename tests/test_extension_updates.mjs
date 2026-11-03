@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createExtensionUpdateState,isExtensionUpdate } from "../app/web/js/state/extension-updates.js";
-import { extensionUpdateNeedsReview,consistentUpdatePlans } from "../app/web/js/features/settings/extension-updates.js";
+import { extensionUpdateNeedsReview,consistentUpdatePlans,extensionUpdateActionable } from "../app/web/js/features/settings/extension-updates.js";
 import { createExtensionInstaller,extensionInstallState } from "../app/web/js/state/extension-installs.js";
-import { createDownloadRegistry } from "../app/web/js/state/downloads.js";
+import { createDownloadRegistry,downloadRegistry } from "../app/web/js/state/downloads.js";
 import { buildNotices } from "../app/web/js/features/notifications/model.js";
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 
@@ -39,6 +39,10 @@ test("all extension types share one persistent update indicator",()=>{
 });
 test("a publication changing a shared dependency during batch inspection requires a new check",()=>{
  const row={id:"tool:shared",manifest:{},version_id:"v1",sha256:"a"};assert(consistentUpdatePlans([{items:[row]},{items:[row]}]));assert(!consistentUpdatePlans([{items:[row]},{items:[{...row,version_id:"v2",sha256:"b"}]}]));
+});
+test("completed and uncertain native receipts cannot be submitted again while the catalogue refreshes",()=>{
+ const row={id:"tool:receipt",version_id:"receipt-version"},id="receipt-ui-test";downloadRegistry.install("local",id,{versionIds:[row.version_id],roots:[row.id],name:"Tool",state:"complete",results:[{id:row.id,state:"complete"}]});
+ try{assert.equal(extensionUpdateActionable(row),false);downloadRegistry.install("local",id,{state:"unknown",results:[]});assert.equal(extensionUpdateActionable(row),false);downloadRegistry.install("local",id,{state:"failed"});assert.equal(extensionUpdateActionable(row),true);}finally{for(const entry of downloadRegistry.list("local"))if(entry.operationId===id)downloadRegistry.remove(entry.key);}
 });
 test("one durable batch job deduplicates shared downloads and retains per-root failures",async()=>{
  const registry=createDownloadRegistry(),plans=[{id:"p1",revision:"r1",ready:true,root:"tool:a",items:[{id:"tool:shared",version_id:"shared",operation:"install",bytes:100},{id:"tool:a",version_id:"a",operation:"install",bytes:20}]},{id:"p2",revision:"r2",ready:true,root:"tool:b",items:[{id:"tool:shared",version_id:"shared",operation:"install",bytes:100},{id:"tool:b",version_id:"b",operation:"install",bytes:30}]}];let starts=0;
