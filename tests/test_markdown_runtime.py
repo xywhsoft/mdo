@@ -39,8 +39,8 @@ second &amp; third
         assert any(n.get('task')=='checked' for n in nodes)
         assert not any(n['t'] in ('html','script') for n in nodes)
         assert any('<script>' in n.get('s','') for n in nodes)
-        for text in ('x'*(512*1024+1),'x\0y','> '*110+'too deep','*x* '*17000):
-            status,body=call('markdown.parse',{'source':text});assert status==413,(status,str(body)[:400])
+        for text,expected in (('x'*(512*1024+1),413),('x\0y',400),('> '*110+'too deep',413),('*x* '*17000,413)):
+            status,body=call('markdown.parse',{'source':text});assert status==expected,(status,str(body)[:400])
         status,body=call('markdown.parse',{'source':''});assert status==200 and body['data']['nodes']==[]
         proof=ROOT/'.build/md4c-20261104';proof.mkdir(exist_ok=True)
         (proof/'native-ast.json').write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
