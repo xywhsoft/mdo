@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "bytes": 6862429,
+  "sha256": "6dd05de8c724a78bc47b94d5a7e6464769319baf6017f5478cfaa034242b57c5",
+  "source_commit": "964f59e655738607b869293eac0a6d7999ff3dde",
+  "source_dirty": false,
+  "packaged_app_sha256": "b5deeb1fd3c4e17a3d93811cc32f1fb3e5b19565e833411b1062f8f91c5ded28",
+  "inputs": {
+    "application": "01ec0e8d67c9d0c995278f604a11b954836e155eb5be0eefe0be4c663757e7b3",
+    "dependency lock": "fb7813e8523aa9ea6c5820917a7a986afdec226c9f3be162a092c88944e666cf",
+    "host profile": "d765984879c9d3dedc04c523b0713b4e2662c4b8eb1ab91ff6d16d4c22dd79e2"
+  },
+  "passed": [
+    "final-pack",
+    "strict-c",
+    "modules",
+    "frontend-tests",
+    "test_application_sdk_contract",
+    "test_frontend_contract",
+    "test_markdown_runtime",
+    "test_markdown_resources",
+    "test_markdown_browser"
+  ],
+  "artifact": ".build/md4c-20261104/mdo-md4c.exe",
+  "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+  "version_code": "05000808",
+  "node_tests": 113,
+  "python_contract_tests": 30,
+  "browser_modes": 6,
+  "checks_per_browser_mode": 25,
+  "full_app_workbench_checks": 3,
+  "module_count": 263
+}
