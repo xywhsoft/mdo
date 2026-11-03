@@ -1,0 +1,28 @@
+{
+  "root_cause": "Local manually packed 0.8.5 test executable omitted update/install.ps1; confirmation returned successfully but installer preparation failed.",
+  "installed_before_sha256": "f40b7205f7df68196962ce988bab96dc31ab0516ed3439fb510515e3a5272330",
+  "published_086_sha256": "cad0c56ddf960da536a423727338951cf731435531ca8087064a7eafb8c4b20c",
+  "installed_before_resource_present": false,
+  "published_086_resource_present": true,
+  "tests": {
+    "installer_real_cases": 6,
+    "release_resource_guard_unit_cases": 8,
+    "eight_release_artifacts_reverified": true
+  },
+  "repair": {
+    "version": "0.8.6",
+    "port": 53545,
+    "ready": true,
+    "update_blocked": false,
+    "available": false,
+    "account_state": "signed_in",
+    "session_directories_preserved": true,
+    "session_count": 40,
+    "program_hash_matches": true,
+    "installer_result": {
+      "message": "",
+      "status": "success"
+    }
+  },
+  "online_republished": false
+}

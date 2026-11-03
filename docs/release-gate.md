@@ -53,6 +53,11 @@ python3 tools/qa_release.py --xserver-root /path/to/xserver
 Windows GUI 对应 `xsw.exe`。暂存清单标为 `verified-not-published`，并明确记录
 `android_release_signed`；本地暂存不等于上线，也不代表 Android 真机验收完成。
 
+交付给用户的本地测试程序同样必须使用 `tools/build_mdo.py` 完整打包 `app/`，
+不能只复制 `src/include/generated/default-home/web` 等目录后手工打包。
+Windows 构建器及发布准备器都检查 `update/install.ps1` 存在且非空；缺失时直接拒绝产物。
+程序能启动、能通过功能冒烟，不代表其自更新资源完整。
+
 Windows 真实页面绘制的人工检查可另外运行 `pwsh -NoProfile -ExecutionPolicy Bypass -File tests/native-webview-snapshot.ps1 -PackedPath .\mdo.exe`。这里的执行策略仅作用于本次 PowerShell 进程。它将截图留在 `.build/native-webview-qa-*/window.png`；需要检查会话恢复时可加 `-SeedHome <已有 mdo-home 目录>`，脚本会复制该 Home，不会改动原件。必须人工查看截图中的实际内容；这个检查不证明点击、拖放或偶发启动故障已消失。
 
 ## 当前验证证据

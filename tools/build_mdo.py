@@ -43,6 +43,14 @@ class BuildError(RuntimeError):
     pass
 
 
+def verify_package_resources(package: Path, *, windows: bool) -> None:
+    """Desktop test deliveries need the same updater resources as releases."""
+    if windows:
+        installer = package / "update/install.ps1"
+        if not installer.is_file() or installer.stat().st_size == 0:
+            raise BuildError("Windows update installer resource is missing or empty: update/install.ps1; build the complete app directory")
+
+
 def load_object(path: Path) -> dict:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -688,6 +696,8 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
         unity.write_text(linux_defines + ("#define MDO_SERVER_BUILD 1\n" if edition == "server" else "") + '#define MDO_PRODUCT_EDITION "' + ("server" if edition == "server" else "desktop") + '"\n' + unity.read_text(encoding="utf-8"), encoding="utf-8")
     if not args.dry_run:
         output.parent.mkdir(parents=True, exist_ok=True)
+    if not args.dry_run:
+        verify_package_resources(package, windows=os.name == "nt")
     run([str(packer), "pack", str(package), "-o", str(output)], ROOT, args.dry_run)
     if not args.dry_run:
         digest = hashlib.sha256()

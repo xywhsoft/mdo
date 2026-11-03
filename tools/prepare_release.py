@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 from version_code import release_code
+from build_mdo import verify_package_resources
 ROOT=Path(__file__).resolve().parents[1];OUTPUT=ROOT/".build/releases"
 
 def require(condition, message):
@@ -77,6 +78,7 @@ def main():
             require(hashlib.sha256(data[:record["host_bytes"]]).hexdigest() == record["host_sha256"], "packed native host mismatch: " + name)
             with tempfile.TemporaryDirectory(prefix="verify-release-",dir=OUTPUT) as folder:
                 subprocess.run([str(ROOT/".build/host/xs.exe"),"pack","--extract",str(file),"-d",folder],check=True)
+                verify_package_resources(Path(folder), windows=platform.startswith("windows-"))
                 unity=(Path(folder)/"generated/mdo_unity.c").read_text(encoding="utf-8")
                 require(int(re.search(r"^#define MDO_BUILD_ID (\d+)u",unity,re.M)[1])==release[key], "embedded build ID mismatch: " + name)
                 require(f'#define MDO_VERSION_CODE 0x{code}u' in unity, "embedded release version code mismatch: " + name)

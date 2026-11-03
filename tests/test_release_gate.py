@@ -10,10 +10,25 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import qa_release
 import prepare_release
+import build_mdo
 from test_optional_tools_runtime import run as optional_tool_probe
 
 
 class ReleaseGateTests(unittest.TestCase):
+    def test_windows_deliveries_require_the_installer_resource(self):
+        with tempfile.TemporaryDirectory(prefix="release-resources-") as raw:
+            package = Path(raw)
+            build_mdo.verify_package_resources(package, windows=False)
+            with self.assertRaisesRegex(build_mdo.BuildError, "update/install.ps1"):
+                build_mdo.verify_package_resources(package, windows=True)
+            installer = package / "update/install.ps1"
+            installer.parent.mkdir()
+            installer.touch()
+            with self.assertRaisesRegex(build_mdo.BuildError, "missing or empty"):
+                build_mdo.verify_package_resources(package, windows=True)
+            installer.write_text("param($Parameters)\n", encoding="utf-8")
+            build_mdo.verify_package_resources(package, windows=True)
+
     def test_native_workbench_probes_use_the_packed_candidate(self):
         commands = qa_release.native_workbench_probe_commands(Path("candidate.exe"), Path("evidence"))
         self.assertEqual(len(commands), 5)
