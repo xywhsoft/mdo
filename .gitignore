@@ -49,6 +49,7 @@ tools/*
 !tools/check_web_modules.mjs
 !tools/export_icons.py
 !tools/qa_release.py
+!tools/benchmark_precompiled.py
 !tools/runtime/
 tools/runtime/**
 !tools/runtime/README.md
