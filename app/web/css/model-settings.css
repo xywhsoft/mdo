@@ -78,7 +78,7 @@
 .composer-manage-models { display: block; padding: 10px 12px; margin-top: 12px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); text-decoration: none; }
 .composer-manage-models:hover { color: var(--ink); background: var(--surface-hover); }
 .composer-model-onboarding p { margin: 4px 0 16px; font-size: 14px; line-height: 1.7; }
-.composer-model-onboarding .primary-button { display: block; text-align: center; text-decoration: none; }
+.composer-model-onboarding .primary-button { display: flex; align-items: center; justify-content: center; text-align: center; text-decoration: none; }
 .composer-config-panel.is-model-empty > :not(header):not(.composer-model-onboarding):not(.composer-manage-models) { display: none !important; }
 .composer-config-panel.is-model-empty #composer-profile-reset { display: none; }
 @container model-config (max-width: 680px) {

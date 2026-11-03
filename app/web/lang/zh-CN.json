@@ -3506,7 +3506,7 @@
   "file.dropUnavailable": "无法读取拖放的文件，请使用“添加文件”选择。",
   "composer.registerInvitation": "注册墨斗账号，每天免费畅享 1 亿 Token，解锁在线模型与扩展生态。",
   "composer.registerFree": "免费注册墨斗账号 ↗",
-  "composer.configureOwnModel": "配置自己的模型",
+  "composer.configureOwnModel": "不用登录，也能使用：配置自己的模型 ↗",
   "composer.startUsing": "开始使用墨斗",
   "composer.selectModel": "选择模型"
 }

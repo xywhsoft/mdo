@@ -3506,7 +3506,7 @@
   "file.dropUnavailable": "Не удалось прочитать файлы. Используйте «Добавить файлы».",
   "composer.registerInvitation": "Создайте аккаунт Mdo: 100 миллионов бесплатных токенов каждый день, онлайн-модели и экосистема расширений.",
   "composer.registerFree": "Создать бесплатный аккаунт Mdo ↗",
-  "composer.configureOwnModel": "Настроить свою модель",
+  "composer.configureOwnModel": "Без входа: настроить свою модель ↗",
   "composer.startUsing": "Начните работу с Mdo",
   "composer.selectModel": "Выбрать модель"
 }

@@ -17,3 +17,7 @@
 - 构建契约的依赖清单已同步另一项已提交工作的 `md4c` 固定依赖；未重复整个版本的发布门禁。
 
 Windows 测试程序：`.build/model-onboarding-20261104/mdo.exe`，SHA-256 `727a97a48a56edb85556942b2bfd4d6c78a838ec217e951535c8ddbd12c36efa`，6,862,284 字节。保留仓库根目录原程序，避免覆盖其他工作交付的 EXE。
+
+## 引导样式补丁
+
+注册链接使用 flex 双向居中，修正 anchor 在最小按钮高度中贴上沿的问题。下方链接更新为“不用登录，也能使用：配置自己的模型 ↗”，同步英文、俄文。实际打包页面验证浅色、深色主题，按钮高 35，`align-items` 与 `justify-content` 均为 `center`，控制台无错误。补丁程序与画面在 `.build/model-onboarding-alignment-20261104/`，版本不变、未上线。

@@ -3506,7 +3506,7 @@
   "file.dropUnavailable": "Unable to read the dropped files. Use Add files instead.",
   "composer.registerInvitation": "Create a Mdo account to enjoy 100 million free tokens every day and access online models and extensions.",
   "composer.registerFree": "Create a free Mdo account ↗",
-  "composer.configureOwnModel": "Configure your own model",
+  "composer.configureOwnModel": "No sign-in needed: configure your own model ↗",
   "composer.startUsing": "Get started with Mdo",
   "composer.selectModel": "Choose a model"
 }
