@@ -25,11 +25,15 @@ static char* MdoAgentsLegacyPrompt(cstr Previous)
 {
     char* Text=Previous?xrtStrDup(Previous):NULL;
     if(Text){
-        char* Start=strstr(Text,"<mdo_mcp_capabilities>\nThe following enabled MCP services");
-        size_t N=strlen(Text),Tail=strlen("</mdo_mcp_capabilities>");
-        if(Start&&N>=Tail&&!strcmp(Text+N-Tail,"</mdo_mcp_capabilities>")){
-            while(Start>Text&&(Start[-1]=='\n'||Start[-1]=='\r'))Start--;
-            *Start=0;
+        const char* Prefix="<mdo_mcp_capabilities>\nThe following enabled MCP services";
+        const char* Closing="</mdo_mcp_capabilities>";char* Start;
+        /* Other context sources can follow the live block. Remove complete
+         * owned blocks wherever they occur, including copies from old opens. */
+        while((Start=strstr(Text,Prefix))!=NULL){
+            char* End=strstr(Start+strlen(Prefix),Closing);if(!End)break;
+            End+=strlen(Closing);
+            if(!*End)while(Start>Text&&(Start[-1]=='\n'||Start[-1]=='\r'))Start--;
+            memmove(Start,End,strlen(End)+1);
         }
     }
     return Text;
