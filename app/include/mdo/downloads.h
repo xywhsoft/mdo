@@ -15,6 +15,10 @@ bool MdoDownloadsGate(MdoNativeDownload* Task,xcancel* Cancel);
 bool MdoDownloadsProgress(MdoNativeDownload* Task,uint64 Done,cstr Phase);
 bool MdoDownloadsEnd(MdoNativeDownload* Task,bool Ok,cstr Code,cstr Error,xcancel* Cancel);
 bool MdoDownloadsCancelled(MdoNativeDownload* Task);
+/* Nonblocking control snapshot for external engines. */
+bool MdoDownloadsControl(MdoNativeDownload* Task,bool* Paused,xcancel* Cancel);
+bool MdoDownloadsEngine(MdoNativeDownload* Task,cstr Engine,cstr Fallback);
+bool MdoDownloadsIdentity(MdoNativeDownload* Task,char Id[33]);
 xvalue* MdoDownloadsList(void);
 bool MdoDownloadsAction(cstr Id,cstr Action,char Error[512]);
 #endif

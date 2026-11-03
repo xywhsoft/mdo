@@ -61,6 +61,10 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
       const item = node("article", null, "download-row"), top = node("div", null, "download-row-heading");
       const kind = row.source === "cli" ? text(`cli.${row.action}`) : text(row.nativeSource === "transfer" ? "file" : row.source === "update" || row.nativeSource === "update" ? "app" : row.source === "legacy" ? "legacy" : "extension");
       top.append(node("strong", row.name || kind), node("span", text(`state.${row.state}`))); item.append(top, node("small", `${kind}${row.buildId ? ` · ${row.buildId}` : ""}`, "download-meta"));
+      if(row.source === "native") {
+        item.append(node("small",text("engine",{engine:row.engine === "aria2" ? "aria2" : text("nativeEngine")}),"download-meta"));
+        if(row.fallbackReason) item.append(node("p",text("fallback"),"download-meta"));
+      }
       if (downloadActive(row) || row.state === "paused") {
         const progress = node("progress"); writeUiAttribute(progress, "aria-label", `${row.name || kind} · ${text(`state.${row.state}`)}`);
         if (row.total > 0 && typeof row.done === "number") { progress.max = row.total; progress.value = Math.max(0, Math.min(row.done, row.total)); item.append(node("small", `${bytes(row.done)} / ${bytes(row.total)}`)); }

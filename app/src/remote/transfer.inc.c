@@ -2,6 +2,7 @@
 #include "../../include/mdo/distribution.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/downloads.h"
+#include "../../include/mdo/aria2.h"
 
 static char* MdoTransferResumePath(cstr Relative){return xrtFormat("%s.resume.json",Relative);}
 static xvalue* MdoTransferResumeRead(cstr Relative){
@@ -143,7 +144,16 @@ bool MdoTransferDownloadReport(xnetengine* Engine,cstr Path,cstr Relative,uint64
     xrtValueRelease(Context);MdoTransferReport Local={0};bool Ok=false;
     /* Legacy embedders without the task manager retain the synchronous API. */
     if(!Task&&Error[0]){if(Report){memset(Report,0,sizeof(*Report));snprintf(Report->Code,sizeof(Report->Code),"busy");snprintf(Report->Detail,sizeof(Report->Detail),"%.255s",Error);}return false;}
-    for(unsigned Attempt=0;Attempt<3;Attempt++){
+    char* Url=Path?xrtFormat("%s://%s:%u%s",MDO_DISTRIBUTION_SECURE?"https":"http",MDO_DISTRIBUTION_HOST,(unsigned)MDO_DISTRIBUTION_PORT,Path):NULL,*ArFile=NULL;
+    MdoAriaResult Ar=Url?MdoAriaDownload(Task,Url,Size,Hash,NULL,MdoDownloadsCancelToken(Task,Cancel),&ArFile,&Local):MDO_ARIA_UNAVAILABLE;xrtFree(Url);
+    if(Ar==MDO_ARIA_COMPLETE){
+        xfile Parent=MdoDownloadsGate(Task,Cancel)?MdoHomeOpenWrite(Relative,XFILE_CREATE|XFILE_WRITE):NULL;bool PreparedTarget=Parent!=NULL;xrtClose(Parent);
+        Ok=PreparedTarget&&MdoTransferResumeSave(Relative,Path,Hash,Size,"")&&MdoHomeRemove(Relative,false)&&MdoHomeRenameNoReplace(ArFile,Relative);
+        if(!Ok){snprintf(Local.Code,sizeof(Local.Code),"write");snprintf(Local.Detail,sizeof(Local.Detail),"Cannot publish the verified aria2 download");}
+        if(Ok&&Progress)Progress(Size,Size,ProgressData);
+    }
+    xrtFree(ArFile);
+    for(unsigned Attempt=0;Ar!=MDO_ARIA_COMPLETE&&Ar!=MDO_ARIA_FAILED&&Attempt<3;Attempt++){
         if(!MdoDownloadsGate(Task,Cancel))break;
         Ok=MdoTransferAttempt(Engine,Path,Relative,Size,Hash,MdoDownloadsCancelToken(Task,Cancel),Progress,ProgressData,&Local,Task);if(Ok)break;
         if(strcmp(Local.Code,"network")&&strcmp(Local.Code,"download")&&strcmp(Local.Code,"range"))break;

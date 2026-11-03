@@ -19,6 +19,7 @@ with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_STORED) as z:
 ARCHIVE=archive.getvalue();ARCHIVE_HASH=hashlib.sha256(ARCHIVE).hexdigest()
 class Publisher(BaseHTTPRequestHandler):
     requests=[]
+    clients=[]
     def log_message(self,*_):pass
     def do_GET(self):
         if '/extensions/detail?' in self.path:
@@ -26,33 +27,49 @@ class Publisher(BaseHTTPRequestHandler):
             self.send_response(200);self.send_header('Content-Length',str(len(body)));self.send_header('Content-Type','application/json');self.end_headers();self.wfile.write(body);return
         if '/extensions/archive?' in self.path:
             from urllib.parse import parse_qs,urlsplit
-            start=int(parse_qs(urlsplit(self.path).query)['offset'][0]);body=ARCHIVE[start:start+1048576];type(self).requests.append(('extension',start))
-            self.send_response(200);self.send_header('Content-Length',str(len(body)));self.send_header('Content-Type','application/zip');self.end_headers()
+            query=parse_qs(urlsplit(self.path).query);sliced='offset' in query;start=int(query.get('offset',['0'])[0]);end=min(start+1048576,len(ARCHIVE))-1 if sliced else len(ARCHIVE)-1
+            field=self.headers.get('Range','')
+            if field:
+                first,last=field.split('=')[1].split('-');start=int(first);end=int(last) if last else len(ARCHIVE)-1
+            body=ARCHIVE[start:end+1];type(self).requests.append(('extension',start));type(self).clients.append(('extension',self.headers.get('User-Agent','')))
+            self.send_response(206 if field else 200);self.send_header('Content-Length',str(len(body)));self.send_header('Content-Type','application/zip')
+            if field:self.send_header('Content-Range',f'bytes {start}-{end}/{len(ARCHIVE)}')
+            self.end_headers()
             try:
                 for at in range(0,len(body),16384):self.wfile.write(body[at:at+16384]);self.wfile.flush();time.sleep(.012)
             except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):pass
             return
-        mode=self.path.removeprefix('/qa/');start=0
+        mode=self.path.removeprefix('/qa/');start=0;end=len(PAYLOAD)-1
         if self.path.startswith('/mdo/blob/'):mode='update'
         field=self.headers.get('Range','')
-        if field:start=int(field.split('=')[1].split('-')[0])
+        if field:
+            first,last=field.split('=')[1].split('-');start=int(first);end=int(last) if last else end
         type(self).requests.append((mode,start))
-        if mode=='ignore':start=0
-        self.send_response(206 if start else 200)
-        if start:self.send_header('Content-Range',f'bytes {start}-{len(PAYLOAD)-1}/{len(PAYLOAD)}')
-        self.send_header('Content-Length',str(len(PAYLOAD)-start));self.send_header('ETag','"fixture-v1"');self.end_headers()
+        type(self).clients.append((mode,self.headers.get('User-Agent','')))
+        if mode=='auth':self.send_response(401);self.send_header('Content-Length','0');self.end_headers();return
+        if mode=='ignore':start=0;end=len(PAYLOAD)-1
+        partial=bool(field) and mode!='ignore'
+        self.send_response(206 if partial else 200)
+        if partial:self.send_header('Content-Range',f'bytes {start}-{end}/{len(PAYLOAD)}')
+        self.send_header('Content-Length',str(end-start+1));self.send_header('ETag','"fixture-v1"');self.end_headers()
         body=PAYLOAD if mode!='corrupt' else b'x'*len(PAYLOAD)
         try:
-            for at in range(start,len(body),16384):
-                self.wfile.write(body[at:at+16384]);self.wfile.flush();time.sleep(.008)
+            for at in range(start,end+1,16384):
+                self.wfile.write(body[at:min(at+16384,end+1)]);self.wfile.flush();time.sleep(.008 if mode!='crash' else .025)
                 if mode=='disconnect' and not start and at>=262144:return
         except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):pass
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--host',type=Path,required=True);parser.add_argument('--serve-ui',action='store_true');args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--host',type=Path,required=True);parser.add_argument('--serve-ui',action='store_true');parser.add_argument('--aria2',action='store_true');args=parser.parse_args()
     with ThreadingHTTPServer(('127.0.0.1',0),Publisher) as publisher,tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='native-download-') as raw:
         thread=threading.Thread(target=publisher.serve_forever,daemon=True);thread.start()
         base=Path(raw);home=base/'home';port=free_port();stem='.download-qa-'+uuid.uuid4().hex
+        if args.aria2:
+            tool=home/'data/qa-aria2.zip';tool.parent.mkdir(parents=True)
+            with zipfile.ZipFile(tool,'w',compression=zipfile.ZIP_DEFLATED) as z:
+                z.writestr('extension.json',json.dumps(dict(kind='external-tools',id='external-tool:mdo.aria2',alias='aria2',name='aria2',entry='tool.json',platforms=['windows-x86_64'])))
+                z.writestr('tool.json',json.dumps(dict(program='aria2c.exe',commands=[dict(name='aria2c',entry='aria2c.exe')],prompt='Fixture downloader')))
+                z.write(ROOT/'tools/runtime/windows-x86_64/aria2/aria2c.exe','aria2c.exe')
         (base/'old.bin').write_bytes(b'Synthetic old application')
         source=ROOT/'app'/(stem+'.c');config=ROOT/'app'/(stem+'.json')
         source.write_text(f'''#define MDO_DISTRIBUTION_HOST "127.0.0.1"
@@ -70,7 +87,9 @@ static xnetengine* QaEngine;
 static xthread* QaThread;
 static char QaPath[80];
 void ServiceInit(XS_HostInfo* H){{
- QaEngine=H->Server->Engine;QaBaseInit(H);MdoUpdateUnit();g_MdoUpdate.Engine=QaEngine;g_MdoUpdate.Lock=xrtMutexCreate();g_MdoUpdate.Source=xrtStrDup("{(base/'old.bin').as_posix()}");
+ QaEngine=H->Server->Engine;QaBaseInit(H);
+ if({str(args.aria2).lower()}){{char E[512]={{0}};xvalue* Existing=MdoExtensionsResolve("external-tool:mdo.aria2",E),*Installed=NULL;if(!Existing&&!MdoExtensionsInstall("external-tools","{'A'*32}","data/qa-aria2.zip",NULL,true,NULL,&Installed,E))fprintf(stderr,"QA install: %s\\n",E);xrtValueRelease(Existing);xrtValueRelease(Installed);MdoCliReload();}}
+ MdoUpdateUnit();g_MdoUpdate.Engine=QaEngine;g_MdoUpdate.Lock=xrtMutexCreate();g_MdoUpdate.Source=xrtStrDup("{(base/'old.bin').as_posix()}");
  MdoUpdateStatus* S=&g_MdoUpdate.Status;S->Enabled=true;S->Available=true;S->Bytes={len(PAYLOAD)};S->BuildId=90000001;S->HasVersionCode=true;S->VersionCode=0x05000806u;
  snprintf(S->Platform,sizeof(S->Platform),"windows-x86_64");snprintf(S->Edition,sizeof(S->Edition),"%s",MdoEdition());snprintf(S->State,sizeof(S->State),"available");
  snprintf(S->Hash,sizeof(S->Hash),"{HASH}");snprintf(S->DownloadPath,sizeof(S->DownloadPath),"/mdo/blob/{HASH}");
@@ -85,6 +104,7 @@ static int32 QaTransfer(void* Unused){{
 }}
 void ServiceUnit(XS_HostInfo* H){{MdoDownloadsStop();if(QaThread){{xrtThreadWait(QaThread);xrtThreadDestroy(QaThread);QaThread=NULL;}}QaBaseUnit(H);}}
 XS_RequestResult RequestProc(XS_HttpReq* R){{
+ if(xrtStrEqual(R->head->Target,XRT_STR_LITERAL("/qa/disable-aria"))){{char E[512]={{0}};bool Ok=MdoExtensionsSetEnabled("external-tools","{'A'*32}",false,E)&&MdoCliReload();MdoApiContext C={{0}};C.Request=R;MdoApiRequestId(C.RequestId);if(Ok)MdoApiReplySuccessTake(&C,200,xrtValueObject(),NULL);else MdoApiReplyError(&C,409,"qa",E,NULL);return XS_OK;}}
  if(R->head->Target.Size>4&&!memcmp(R->head->Target.Data,"/qa/",4)){{
   if(QaThread){{xrtThreadWait(QaThread);xrtThreadDestroy(QaThread);QaThread=NULL;}}
   MdoHomeRemove("data/downloads/qa-result.json",false);snprintf(QaPath,sizeof(QaPath),"%.*s",(int)R->head->Target.Size,R->head->Target.Data);QaThread=xrtThreadCreate(QaTransfer,NULL,0);
@@ -123,6 +143,43 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
             return row,t,result
         try:
             process=start()
+            if args.aria2:
+                row,t,result=begin('normal',wait=False);assert row['engine']=='aria2',row
+                api('POST',f"/download-tasks/{row['id']}/pause",{});time.sleep(.6)
+                paused=next(r for r in rows() if r['id']==row['id']);assert paused['state']=='paused',paused
+                time.sleep(.35);assert next(r for r in rows() if r['id']==row['id'])['received']==paused['received'],'aria2 pause must stop actual progress'
+                process.kill();process.wait();t.join(10);process=start()
+                restored=next(r for r in rows() if r['id']==row['id']);assert restored['state']=='paused' and restored['engine']=='aria2',restored
+                api('POST',f"/download-tasks/{row['id']}/resume",{})
+                until(lambda:next((r for r in rows() if r['id']==row['id'] and r['state']=='ready'),None))
+                assert hashlib.sha256((home/'data/downloads/fixture.bin').read_bytes()).hexdigest()==HASH
+                assert any(m=='normal' and n>0 for m,n in Publisher.requests),Publisher.requests
+                (home/'data/downloads/fixture.bin').unlink()
+                row,t,result=begin('crash')
+                command=f'Get-CimInstance Win32_Process -Filter "ParentProcessId={process.pid}" | Where-Object Name -eq "aria2c.exe" | Select-Object -ExpandProperty ProcessId'
+                children=subprocess.check_output(['powershell','-NoProfile','-Command',command],text=True).split()
+                assert len(children)==1,children
+                for child in children:os.kill(int(child),__import__('signal').SIGTERM)
+                t.join(20);assert result and result[0]['success'],result
+                fallback=next(r for r in rows() if r['id']==row['id']);assert fallback['engine']=='native' and fallback['fallback_reason']=='aria2_failed',fallback
+                assert hashlib.sha256((home/'data/downloads/fixture.bin').read_bytes()).hexdigest()==HASH
+                (home/'data/downloads/fixture.bin').unlink()
+                result=transfer('auth');assert not result['success'],result
+                assert all('aria2' in agent for mode,agent in Publisher.clients if mode=='auth'),'Auth failures must not fall back'
+                result=transfer('corrupt');assert not result['success'] and result['code']=='checksum',result
+                assert all('aria2' in agent for mode,agent in Publisher.clients if mode=='corrupt'),'Integrity failures must not fall back'
+                row,t,result=begin('cancel');api('POST',f"/download-tasks/{row['id']}/cancel",{});t.join(15)
+                assert result and not result[0]['success'],result
+                assert not (home/f"data/downloads/aria2/{row['id']}").exists()
+                assert transfer('extension')['success']
+                assert any('aria2' in agent for mode,agent in Publisher.clients if mode=='extension')
+                archives=api('GET','/extension-tasks');assert len(archives)==1 and archives[0]['state']=='ready',archives
+                assert not (home/'skills'/('W'*32)).exists()
+                st,_,data=request(port,'GET','/qa/disable-aria');assert st==200,(st,data)
+                result=transfer('disabled');assert result['success'],result
+                assert next(r for r in rows() if r['identity']=='/qa/disabled')['engine']=='native'
+                print('PASS real aria2 auto-detection, pause/restart resume, child crash fallback, auth/checksum no fallback, cancel cleanup, whole extension seal, disabled-tool native selection')
+                return
             row,t,result=begin('normal');id=row['id'];api('POST',f'/download-tasks/{id}/pause',{})
             time.sleep(.15);paused=next(r for r in rows() if r['id']==id);assert paused['state']=='paused',paused
             api('POST',f'/download-tasks/{id}/resume',{});t.join(15);assert result and result[0]['success'],result

@@ -1,5 +1,6 @@
 #include "../../include/mdo/extension_service.h"
 #include "../../include/mdo/downloads.h"
+#include "../../include/mdo/aria2.h"
 #include "../../include/mdo/extension_manifest.h"
 #include "../../include/mdo/extension_tasks.h"
 #include "../../include/mdo/extensions.h"
@@ -140,6 +141,18 @@ static bool MdoExtServiceDownloadAttempt(cstr Kind,cstr Version,xcancel* Cancel,
  if(Error&&Error[0])Ok=false;
  if(Ok)Ok=MdoExtServiceLease(MdoDownloadsCancelToken(Download,MdoExtensionTaskUseCancel(Use)),false,&Lease,Error);
  uint64 Received=0;if(Ok)MdoExtServiceNumber(Task,"received",&Received);if(Received>Bytes)Ok=false;
+ char* Whole=Ok?xrtFormat(MDO_ACCOUNT_SERVICE_ORIGIN MDO_EXT_SERVICE "/archive?dependency_protocol=1&version=%s",Version):NULL,*ArFile=NULL;char Authorization[4200]={0};MdoTransferReport ArReport={0};
+ if(Ok&&Lease.Managed){Ok=Lease.AccessToken&&strlen(Lease.AccessToken)<=4096;if(Ok)snprintf(Authorization,sizeof(Authorization),"Authorization: Bearer %s",Lease.AccessToken);}
+ MdoAriaResult Ar=Ok&&Whole?MdoAriaDownload(Download,Whole,Bytes,Hash,Authorization,Lease.Managed?Lease.Cancel:MdoDownloadsCancelToken(Download,Cancel),&ArFile,&ArReport):MDO_ARIA_UNAVAILABLE;
+ xrtFree(Whole);xrtSecureZero(Authorization,sizeof(Authorization));
+ if(Ar==MDO_ARIA_FAILED){Ok=false;if(Error&&!Error[0])snprintf(Error,512,"%s",ArReport.Detail[0]?ArReport.Detail:"Archive download cancelled");}
+ if(Ok&&Ar==MDO_ARIA_COMPLETE){
+  xfile File=MdoHomeOpenRead(ArFile);uint8 Buffer[65536];Ok=File&&xrtSeek(File,(int64)Received,XSEEK_START,NULL);
+  for(uint64 At=Received;Ok&&At<Bytes;){size_t N=(size_t)(Bytes-At<sizeof(Buffer)?Bytes-At:sizeof(Buffer));xvalue* Part=NULL;
+   Ok=MdoDownloadsGate(Download,Cancel)&&xrtReadFull(File,Buffer,N,NULL)&&MdoExtensionTaskUseWrite(Use,At,Buffer,N,&Part,Error);xrtValueRelease(Part);At+=N;
+  }xrtClose(File);if(Ok)Received=Bytes;
+ }
+ xrtFree(ArFile);
  for(uint64 Offset=Received;Ok&&Offset<Bytes;){
   if(!MdoDownloadsGate(Download,MdoExtensionTaskUseCancel(Use))){Ok=false;break;}
   char* Path=xrtFormat(MDO_EXT_SERVICE "/archive?dependency_protocol=1&version=%s&offset=%llu",Version,(unsigned long long)Offset);XS_FetchResponse Response={0};uint64 Remaining=Bytes-Offset;size_t Want=(size_t)(Remaining<MDO_EXTENSION_TASK_CHUNK?Remaining:MDO_EXTENSION_TASK_CHUNK);
@@ -150,7 +163,7 @@ static bool MdoExtServiceDownloadAttempt(cstr Kind,cstr Version,xcancel* Cancel,
  MdoAccountRelease(&Lease);MdoExtensionTaskUseEnd(Use);if(Ok)Ok=MdoDownloadsGate(Download,Cancel)&&MdoDownloadsProgress(Download,Bytes,"verifying")&&MdoExtensionTaskSeal(Id,MdoDownloadsCancelToken(Download,Cancel),Result,Error);
  /* Receiving archives remain resumable on read failures, cancellation and
   * shutdown. The explicit download-centre cancel action deletes owned bytes. */
- Ok=MdoDownloadsEnd(Download,Ok,"extension",Error&&Error[0]?Error:"Archive download interrupted",Cancel);
+ Ok=MdoDownloadsEnd(Download,Ok,ArReport.Code[0]?ArReport.Code:"extension",Error&&Error[0]?Error:"Archive download interrupted",Cancel);
  if(!Ok){xrtValueRelease(*Result);*Result=NULL;}
  xrtValueRelease(Entry);xrtValueRelease(Task);xrtValueRelease(Origin);if(!Ok&&Error&&!Error[0])MdoExtServiceError(Error,"The store archive changed or failed its byte/hash/ZIP validation");return Ok;
 }
