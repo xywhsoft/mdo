@@ -1,0 +1,63 @@
+--- a/host/xywhsoft_ai/plugin/mdo/modules/ecosystem/directory_routes.inc.c
++++ b/host/xywhsoft_ai/plugin/mdo/modules/ecosystem/directory_routes.inc.c
+@@ -2,6 +2,7 @@
+ #include <xs_plugin_work.h>
+ #include "directory_store.inc.c"
+ #include "directory_updates.inc.c"
++#include "download_range.h"
+ 
+ static MdDirectoryStore MdDirectory;
+ static XAdminPluginHandle MdDirectoryHandle;
+@@ -90,9 +91,21 @@
+ static void MdDirectorySend(XS_RequestObject Req,XS_ResponseObject Resp,MdDirectoryCall* C){
+  char OffsetText[24]={0};int N=xsReqQueryValue(Req,"offset",OffsetText,sizeof(OffsetText));int64 Offset=0;bool Slice=N>=0;bool Ok=!Slice||(N<23&&(!strcmp(OffsetText,"0")||XP_Positive(OffsetText,&Offset))&&Offset>=0&&(uint64)Offset<C->Size);
+  if(!Ok){xrtClose(C->File);C->File=NULL;XP_Reply(Resp,416,"Archive byte range is unavailable",NULL);return;}
+- char Name[100],Tag[68];snprintf(Name,sizeof(Name),"attachment; filename=%s-%s.%s",C->Proof?"review":"extension",C->Id,C->Proof?"bin":"zip");uint64 Bytes=Slice?(C->Size-(uint64)Offset>MDS_CHUNK?MDS_CHUNK:C->Size-(uint64)Offset):C->Size;snprintf(Tag,sizeof(Tag),"\"%s\"",C->Hash);
++ char Name[100],Tag[68],Range[256]={0},IfRange[128]={0},ContentRange[96];snprintf(Name,sizeof(Name),"attachment; filename=%s-%s.%s",C->Proof?"review":"extension",C->Id,C->Proof?"bin":"zip");uint64 Bytes=Slice?(C->Size-(uint64)Offset>MDS_CHUNK?MDS_CHUNK:C->Size-(uint64)Offset):C->Size;snprintf(Tag,sizeof(Tag),"\"%s\"",C->Hash);
++ unsigned Status=200;size_t Count=4;
++ if(!Slice){
++  int HasRange=XAdmin_ReqHeaderCopy(Req,"Range",Range,sizeof(Range)),HasIf=XAdmin_ReqHeaderCopy(Req,"If-Range",IfRange,sizeof(IfRange));
++  MdDownloadRange R=MdDownloadSelectRange(HasRange>=0?Range:NULL,HasIf>=0?IfRange:NULL,Tag,C->Size);
++  if(HasRange>=(int)sizeof(Range)||HasIf>=(int)sizeof(IfRange)){R.Status=416;R.Bytes=0;}
++  Status=R.Status;Offset=(int64)R.Offset;Bytes=R.Bytes;
++  if(Status==206)snprintf(ContentRange,sizeof(ContentRange),"bytes %llu-%llu/%llu",(unsigned long long)R.Offset,(unsigned long long)(R.Offset+R.Bytes-1),(unsigned long long)C->Size);
++  else snprintf(ContentRange,sizeof(ContentRange),"bytes */%llu",(unsigned long long)C->Size);
++ }
+  xhttpfield Fields[]={{XRT_STR_LITERAL("Content-Type"),xrtStrView(C->Proof?"application/octet-stream":"application/zip")},{XRT_STR_LITERAL("Content-Disposition"),xrtStrView(Name)},{XRT_STR_LITERAL("ETag"),xrtStrView(Tag)},{XRT_STR_LITERAL("Cache-Control"),XRT_STR_LITERAL("no-store")}};
+- Ok=XAdmin_StreamBegin(Req,200,Fields,4,300000)==0;
++ xhttpfield All[6];memcpy(All,Fields,sizeof(Fields));
++ if(!Slice)All[Count++]=(xhttpfield){XRT_STR_LITERAL("Accept-Ranges"),XRT_STR_LITERAL("bytes")};
++ if(Status==206||Status==416)All[Count++]=(xhttpfield){XRT_STR_LITERAL("Content-Range"),xrtStrView(ContentRange)};
++ Ok=XAdmin_StreamBegin(Req,(uint16)Status,All,Count,300000)==0;
+  if(!Ok){xrtClose(C->File);C->File=NULL;XP_Reply(Resp,503,"Archive streaming could not start",NULL);return;}
+  uint8 Buffer[65536];for(uint64 At=0;Ok&&At<Bytes;){size_t Want=(size_t)(Bytes-At<sizeof(Buffer)?Bytes-At:sizeof(Buffer));Ok=xrtReadAtFull(C->File,(uint64)Offset+At,Buffer,Want,NULL)&&XAdmin_StreamWrite(Req,Buffer,Want)==0;At+=Want;}
+  xrtClose(C->File);C->File=NULL;XAdmin_StreamFinish(Req,Ok);
+--- /dev/null
++++ b/host/xywhsoft_ai/plugin/mdo/modules/ecosystem/download_range.h
+@@ -0,0 +1,26 @@
++#ifndef MDO_DOWNLOAD_RANGE_H
++#define MDO_DOWNLOAD_RANGE_H
++#include <stdint.h>
++#include <string.h>
++typedef struct MdDownloadRange {uint64_t Offset,Bytes;unsigned Status;} MdDownloadRange;
++static int MdRangeNumber(const char** Cursor,uint64_t* Value){
++ const char* S=*Cursor;uint64_t N=0;if(*S<'0'||*S>'9')return 0;
++ for(;*S>='0'&&*S<='9';S++){if(N>(UINT64_MAX-(unsigned)(*S-'0'))/10)return 0;N=N*10+(unsigned)(*S-'0');}
++ *Cursor=S;*Value=N;return 1;
++}
++/* One ordinary byte range. No overflow, multipart allocation or date parsing.
++ * An unsupported/mismatched If-Range returns the complete representation. */
++static MdDownloadRange MdDownloadSelectRange(const char* Header,const char* IfRange,const char* Tag,uint64_t Size){
++ MdDownloadRange R={0,Size,200};if(!Header||!*Header||(IfRange&&*IfRange&&strcmp(IfRange,Tag)))return R;
++ R.Status=416;R.Bytes=0;if(strncmp(Header,"bytes=",6)||!Size)return R;const char* P=Header+6;uint64_t First=0,Last=0;
++ if(*P=='-'){
++  P++;if(!MdRangeNumber(&P,&Last)||!Last)return R;First=Last>=Size?0:Size-Last;Last=Size-1;
++ }else{
++  if(!MdRangeNumber(&P,&First)||*P++!='-'||First>=Size)return R;
++  if(*P>='0'&&*P<='9'){if(!MdRangeNumber(&P,&Last)||Last<First)return R;if(Last>=Size)Last=Size-1;}
++  else Last=Size-1;
++ }
++ while(*P==' '||*P=='\t')P++;if(*P)return R;
++ R.Offset=First;R.Bytes=Last-First+1;R.Status=206;return R;
++}
++#endif
