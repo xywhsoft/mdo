@@ -116,6 +116,8 @@ def start_host(host: Path, config: Path, home: Path, environment: dict,
             text = text.replace("{g_MdoModelsOnline=Authority?*Authority:(MdoModelOnlineAuthority){0};}",
                 "{(void)Authority;g_MdoModelsOnline=(MdoModelOnlineAuthority){0};}")
             source.write_text(text,encoding="utf-8")
+    from model_fixture import prepare_conversation_models
+    prepare_conversation_models(config.parent, home, environment)
     output = log.open("ab")
     try:
         process = subprocess.Popen(

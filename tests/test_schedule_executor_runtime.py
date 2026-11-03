@@ -25,35 +25,15 @@ PROBE_SOURCE = r'''
 #include <string.h>
 #include <xsbase.h>
 
-#include "src/storage/home.c"
-#include "src/projects/lifecycle.c"
-#include "src/config/config.c"
-#include "src/security/secrets.c"
-#include "src/models/catalog.c"
-#include "src/skills/manager.c"
-#include "src/knowledge/manager.c"
-#include "src/memory/manager.c"
-#include "src/modules/manager.c"
-#include "src/approvals/manager.c"
-#include "src/agents/runtime.c"
-#include "src/asks/manager.c"
-#include "src/schedules/manager.c"
 static void ShutdownLeaseCheckpoint(void);
-#include "src/schedules/executor.c"
-
-/* Tool environment prompt generation has its own distribution probe. */
-bool MdoToolPrompt(char **prompt) { return prompt != NULL && *prompt != NULL; }
-
-/* MCP scope installation is covered by test_extensions_runtime. This
- * isolated fixture has no MCP manager or configured MCP servers. */
-bool MdoMcpConfigureAgent(xwork_agent* agent, const char* workspace, xwork_error* error)
-{ (void)agent; (void)workspace; (void)error; return true; }
-
-xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
-static bool UpdatePending;
-bool MdoUpdateInstalling(void) { return UpdatePending; }
-static bool UpdateRequired;
+#define ServiceInit FixtureProductServiceInit
+#define ServiceUnit FixtureProductServiceUnit
+#include "generated/mdo_unity.c"
+#undef ServiceInit
+#undef ServiceUnit
+static bool UpdateRequired,UpdatePending;
 bool MdoUpdateBlocked(void) { return UpdateRequired; }
+bool MdoUpdateInstalling(void) { return UpdatePending; }
 
 typedef struct Owner {
     unsigned Refs;
@@ -318,7 +298,7 @@ static bool ExecutorOwnerLeaseProbe(xwork_runtime *runtime) {
     memset(&home, 0, sizeof(home)); home.Size = sizeof(home);
     if (exclusive == NULL || session != NULL || error.eCode != XWORK_ERROR_CONTEXT ||
         owner.Refs != 1u || !MdoHomeGetSnapshot(&home) ||
-        xrtPathStat(home.Path, false, &stat)) goto done;
+        !xrtPathStat(home.Path, false, &stat) || stat.Type != XFILE_TYPE_DIRECTORY) goto done;
     MdoProjectLeaseRelease(exclusive); exclusive = NULL;
     options.AgentId = "missing-agent";
     session = MdoAgentSessionCreateWithRuntime(runtime, &options, &error);
@@ -534,7 +514,7 @@ void ServiceInit(XS_HostInfo *host) {
     unsigned i;
     (void)host;
     memset(&owner, 0, sizeof(owner)); owner.Refs = 1u;
-    if (!MdoHomeInit() || !MdoProjectLifecycleInit() ||
+    if (!MdoHomeInit() || !MdoExtensionsInit() || !MdoExtensionsSeedBuiltins((char[512]){0}) || !MdoProjectLifecycleInit() ||
         !MdoConfigInit() || !MdoModelManagerInit()) {
         printf("init_error=product\n"); goto done;
     }
@@ -673,6 +653,7 @@ void ServiceUnit(XS_HostInfo *host) { (void)host; }
 
 
 def write_site(site: Path, memory_enabled: bool = True) -> None:
+    shutil.copytree(ROOT / "app", site, dirs_exist_ok=True)
     for relative in (
         "web", "default-home/config", "default-home/modules/tools",
         "default-home/modules/agents", "default-home/skills/project-explorer/templates",
@@ -684,7 +665,7 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
     (site / "web/index.html").write_text("probe", encoding="utf-8")
     for relative in (
         "default-home/config/defaults.json",
-        "default-home/modules/agents/builtin_default.c",
+        "default-home/agents/default/agent.c",
         "default-home/skills/project-explorer/SKILL.md",
         "default-home/skills/project-explorer/templates/report.md",
         "src/storage/home.c", "src/storage/home_fs.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c", "src/projects/lifecycle.c",
@@ -716,6 +697,10 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
     assert source.count(old) == 1
     source = source.replace(old, old + '\n        ShutdownLeaseCheckpoint();')
     executor.write_text(source, encoding="utf-8")
+    (site / "src/storage/home.c").write_bytes((ROOT / "app/src/storage/home.c").read_bytes())
+    update = site / 'src/update/manager.c'
+    text = update.read_text(encoding='utf-8').replace('bool MdoUpdateBlocked(void)', 'bool FixtureProductUpdateBlocked(void)').replace('bool MdoUpdateInstalling(void)', 'bool FixtureProductUpdateInstalling(void)')
+    update.write_text(text,encoding='utf-8')
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))

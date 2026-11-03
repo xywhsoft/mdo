@@ -25,38 +25,14 @@ PROBE_SOURCE = r'''
 #include <string.h>
 #include <xsbase.h>
 
-#include "src/storage/home.c"
-#include "src/projects/lifecycle.c"
-#include "src/config/config.c"
-#include "src/security/secrets.c"
-#include "src/models/catalog.c"
-#include "src/skills/manager.c"
-#include "src/knowledge/manager.c"
-#include "src/memory/manager.c"
-#include "src/modules/manager.c"
-#include "src/approvals/manager.c"
-#include "src/agents/runtime.c"
-#include "src/asks/manager.c"
-#include "src/sessions/data_gate.c"
-#include "src/sessions/events.c"
-#include "src/sessions/todo.c"
-#include "src/sessions/sidecars/binding.c"
-#include "src/sessions/attachments.c"
-#include "src/sessions/manager.c"
-#include "src/runs/manager.c"
-
-/* MCP scope installation is covered by test_extensions_runtime. This
- * isolated fixture has no MCP manager or configured MCP servers. */
-bool MdoMcpConfigureAgent(xwork_agent* agent, const char* workspace, xwork_error* error)
-{ (void)agent; (void)workspace; (void)error; return true; }
-
-xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
+#define ServiceInit FixtureProductServiceInit
+#define ServiceUnit FixtureProductServiceUnit
+#include "generated/mdo_unity.c"
+#undef ServiceInit
+#undef ServiceUnit
 static bool UpdateRequired;
 bool MdoUpdateBlocked(void) { return UpdateRequired; }
 bool MdoUpdateInstalling(void) { return false; }
-/* Tool distribution is outside this run-owner probe. The production pack
- * supplies this prompt hook from its distribution manager. */
-bool MdoToolPrompt(char** Prompt) { return Prompt != NULL && *Prompt != NULL; }
 
 typedef struct Owner {
     unsigned Refs;
@@ -158,7 +134,7 @@ void ServiceInit(XS_HostInfo *host) {
     char session_id[MDO_SESSION_ID_CAPACITY] = {0};
     (void)host;
     memset(&owner, 0, sizeof(owner)); owner.Refs = 1u;
-    if (!MdoHomeInit() || !MdoProjectLifecycleInit() ||
+    if (!MdoHomeInit() || !MdoExtensionsInit() || !MdoExtensionsSeedBuiltins((char[512]){0}) || !MdoProjectLifecycleInit() ||
         !MdoConfigInit() || !MdoModelManagerInit() ||
         !MdoSkillManagerInit() || !MdoApprovalManagerInit()) {
         printf("init_error=product\n"); goto done;
@@ -286,6 +262,7 @@ void ServiceUnit(XS_HostInfo *host) { (void)host; }
 
 
 def write_site(site: Path) -> None:
+    shutil.copytree(ROOT / "app", site, dirs_exist_ok=True)
     for relative in (
         "web", "default-home/config", "default-home/modules/tools",
         "default-home/modules/agents", "default-home/skills/project-explorer/templates",
@@ -297,7 +274,7 @@ def write_site(site: Path) -> None:
     (site / "web/index.html").write_text("probe", encoding="utf-8")
     for relative in (
         "default-home/config/defaults.json",
-        "default-home/modules/agents/builtin_default.c",
+        "default-home/agents/default/agent.c",
         "default-home/skills/project-explorer/SKILL.md",
         "default-home/skills/project-explorer/templates/report.md",
         "src/storage/home.c", "src/storage/home_fs.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c", "src/projects/lifecycle.c",
@@ -319,6 +296,10 @@ def write_site(site: Path) -> None:
     shutil.copy2(ROOT / "app/src/memory/internal.h", site / "src/memory/internal.h")
     shutil.copy2(ROOT / "include/mdo/module.h",
                  site / "generated/module-sdk/mdo/module.h")
+    (site / "src/storage/home.c").write_bytes((ROOT / "app/src/storage/home.c").read_bytes())
+    update = site / 'src/update/manager.c'
+    text = update.read_text(encoding='utf-8').replace('bool MdoUpdateBlocked(void)', 'bool FixtureProductUpdateBlocked(void)').replace('bool MdoUpdateInstalling(void)', 'bool FixtureProductUpdateInstalling(void)')
+    update.write_text(text,encoding='utf-8')
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))

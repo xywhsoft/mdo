@@ -134,9 +134,9 @@ static void ModProbe(xwork_runtime* Runtime){
     MdoAgentSession* Session=MdoAgentSessionCreateWithRuntime(Runtime,&Options,&Error);
     if(!Session){printf("mod_error=create:%s\n",Error.sMessage);return;}
     /* A reload must not replace the callback generation retained by Session. */
-    char* Old=MdoExtensionRead("modules/agents/mod.c",true,MDO_EXTENSION_TEXT_LIMIT,NULL);
+    char* Old=MdoExtensionRead("agents/mod-main/agent.c",true,MDO_EXTENSION_TEXT_LIMIT,NULL);
     char* At=Old?strstr(Old,"BINDING-V1"):NULL;if(At)At[9]='2';
-    if(!At || !MdoHomeAtomicWrite("modules/agents/mod.c",Old,strlen(Old),false) || !MdoModuleManagerReload())printf("mod_error=reload\n");
+    if(!At || !MdoHomeAtomicWrite("agents/mod-main/agent.c",Old,strlen(Old),false) || !MdoModuleManagerReload())printf("mod_error=reload\n");
     xrtFree(Old);
     MdoAgentRunOptions RunOptions;MdoAgentRunOptionsInit(&RunOptions);RunOptions.Prompt="Run the mod fixture";
     MdoAgentRun* Run=MdoAgentRunCreate(Session,&RunOptions,&Error);xwork_run_result Result={0};
@@ -154,6 +154,25 @@ done:
 '''
 
 
+def role_files(kind, alias, profile=None, code=None):
+    entry = 'agent.md' if profile is not None else 'agent.c'
+    manifest = dict(kind=kind,id=('agent:' if kind=='agents' else 'subagent:')+alias,name=alias,alias=alias,entry=entry,platforms=['any'])
+    if profile is not None and code is not None: manifest['native']='agent.c'
+    files = [(f'{kind}/{alias}/extension.json',json.dumps(manifest))]
+    if profile is not None: files.append((f'{kind}/{alias}/agent.md',profile))
+    if code is not None: files.append((f'{kind}/{alias}/agent.c',code))
+    return files
+
+
+def program_files(module, main_profile, child_profile):
+    main = module.replace('return Result==MDO_RESULT_OK?R->AddAgent(R->Context,&Child,Error,Capacity):Result;', 'return Result;')
+    child = module.replace('R->AddAgent(R->Context,&Main,Error,Capacity)', 'MDO_RESULT_OK')
+    child = child.replace('if(mdoRegisterLifecycle(R,&L,Error,Capacity)!=MDO_RESULT_OK)return MDO_RESULT_ERROR;', '')
+    child = child.replace('if(R->AddAgent(R->Context,&Extra,Error,Capacity)!=MDO_RESULT_OK)return MDO_RESULT_ERROR;', '')
+    child = child.replace('"mod.fixture"','"mod.fixture.child"')
+    return role_files('agents','mod-main',main_profile,main)+role_files('subagents','mod-child',child_profile,child)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", type=Path, default=fixture.ROOT / ".build/host/xs.exe")
@@ -165,13 +184,13 @@ def main() -> int:
             shutil.copy2(fixture.ROOT / "include/mdo" / name, site / "generated/module-sdk/mdo" / name)
         source = (site / "probe.c").read_text(encoding="utf-8")
         source = source.replace("void ServiceInit(", PROBE + "\nvoid ServiceInit(")
-        insert = "\n".join(f'    MdoHomeAtomicWrite({json.dumps(path)}, {json.dumps(text)}, {len(text.encode())}u, false);'
-                           for path, text in [("modules/agents/mod.c", MODULE), ("agents/mod-main.md", MAIN), ("subagents/mod-child.md", CHILD),
-                                              ("modules/agents/code-reviewer.c", (fixture.ROOT / "examples/agents/code-reviewer.c").read_text(encoding="utf-8"))])
+        files = program_files(MODULE, MAIN, CHILD)
+        files += role_files('agents','code-reviewer',None,(fixture.ROOT / 'examples/agents/code-reviewer.c').read_text(encoding='utf-8'))
+        insert = "\n".join(f'    MdoHomeAtomicWrite({json.dumps(path)}, {json.dumps(text)}, {len(text.encode())}u, false);' for path,text in files)
         source = source.replace("xworkRuntimeConfigInit(&runtime_config);", insert + "\n    xworkRuntimeConfigInit(&runtime_config);")
         source = source.replace("MdoMemoryWriteOptionsInit(&memory_write);", "ModProbe(runtime);\n    MdoMemoryWriteOptionsInit(&memory_write);")
         source = source.replace('PrintRuntimeError("init_error", &error);', 'MdoModuleDiagnostics* D=MdoModuleDiagnosticsSnapshot();for(size_t I=0;I<MdoModuleDiagnosticsCount(D);I++){MdoModuleDiagnosticInfo Info={0};Info.Size=sizeof(Info);MdoModuleDiagnosticsAt(D,I,&Info);printf("module_diagnostic=%s:%s\\n",Info.SourcePath,Info.Message);}MdoModuleDiagnosticsRelease(D);PrintRuntimeError("init_error", &error);')
-        source = source.replace('PrintRuntimeError("init_error", &error);', 'printf("module_global_error=%s\\n",xrtGetError()?xrtErrorMessage(xrtGetError()):"none");MdoModuleDiagnostics* Q=MdoModulesDiagnosticsCreate();MdoModuleCatalog* Candidate=MdoModulesBuildCandidate(99,Q);for(size_t I=0;I<MdoModuleDiagnosticsCount(Q);I++){MdoModuleDiagnosticInfo Info={0};Info.Size=sizeof(Info);MdoModuleDiagnosticsAt(Q,I,&Info);printf("candidate_diagnostic=%s:%s\\n",Info.SourcePath,Info.Message);}MdoModuleCatalogRelease(Candidate);MdoModuleDiagnosticsRelease(Q);PrintRuntimeError("init_error", &error);')
+        source = source.replace('PrintRuntimeError("init_error", &error);', 'printf("module_global_error=%s\\n",xrtGetError()?xrtErrorMessage(xrtGetError()):"none");MdoModuleDiagnostics* Q=MdoModulesDiagnosticsCreate();MdoModuleCatalog* Candidate=MdoModulesBuildCandidate(99,Q,NULL);for(size_t I=0;I<MdoModuleDiagnosticsCount(Q);I++){MdoModuleDiagnosticInfo Info={0};Info.Size=sizeof(Info);MdoModuleDiagnosticsAt(Q,I,&Info);printf("candidate_diagnostic=%s:%s\\n",Info.SourcePath,Info.Message);}MdoModuleCatalogRelease(Candidate);MdoModuleDiagnosticsRelease(Q);PrintRuntimeError("init_error", &error);')
         (site / "probe.c").write_text(source, encoding="utf-8")
         output = fixture.run_probe(args.host.resolve(), site, Path(raw) / "home")
         assert "mod_result=0:mod-complete" in output, output

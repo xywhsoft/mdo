@@ -98,14 +98,15 @@ def probe(host):
         shutil.copytree(ROOT / "app", site)
         # Declared read-only Agents must remain read-only even if the user
         # selects full-access. This also checks effective-profile precedence.
-        agent = site / "default-home/modules/agents/builtin_default.c"
+        agent = site / "default-home/agents/default/agent.c"
         source = agent.read_text(encoding="utf-8")
         readonly = source.replace('"mdo.default"', '"permission.readonly"')
         readonly = readonly.replace('"mdo.default-agent"', '"permission.readonly-module"')
         readonly = readonly.replace("MDO_AGENT_MAIN | MDO_AGENT_ALLOW_BACKGROUND",
                                     "MDO_AGENT_MAIN | MDO_AGENT_READ_ONLY | MDO_AGENT_ALLOW_BACKGROUND")
         assert readonly != source
-        agent.with_name("permission_readonly.c").write_text(readonly, encoding="utf-8")
+        from runtime_sources import authored_extension
+        authored_extension(base / "home", "agents", "readonly", "agent.c", readonly)
         port = free_port()
         config = site / "xs.json"
         config.write_text(json.dumps({"services": [{"enabled": True,

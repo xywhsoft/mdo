@@ -12,6 +12,9 @@ from test_agent_runtime import ROOT, PROBE_SOURCE, run_probe, write_site
 
 
 PROBE = PROBE_SOURCE.split("typedef struct ProbeOwner")[0] + r'''
+static bool MediaSave(xllm_session* S,cstr Path,xllm_error* E){char* Native=MdoHomeExternalPath(Path);bool Ok=Native&&xllmSessionSave(S,Native,E);xrtFree(Native);return Ok;}
+static xllm_session* MediaLoad(cstr Path,xllm_error* E){char* Native=MdoHomeExternalPath(Path);xllm_session* S=Native?xllmSessionLoad(Native,E):NULL;xrtFree(Native);return S;}
+static bool MediaExists(cstr Path){xfile F=MdoHomeOpenRead(Path);bool Exists=F!=NULL;xrtClose(F);xrtClearError();return Exists;}
 static unsigned Failures, Calls;
 static bool ExpectImage;
 #define CHECK(expr, name) do { bool ok=!!(expr); printf("%s=%u\n",name,ok); if(!ok)++Failures; } while(0)
@@ -158,7 +161,7 @@ static void Resume(xwork_runtime* runtime, const char* path, const char* label)
     if(Failures)printf("run_error=%s\n",error.sMessage);
     xworkRunResultUnit(&result);
     MdoAgentRunDestroy(run);MdoAgentSessionRelease(session);
-    loaded=xllmSessionLoad(path,&model_error);
+    loaded=MediaLoad(path,&model_error);
     CHECK(loaded!=NULL,"checkpoint_reload");
     if(loaded){
         xllm_request request;size_t i,images=0;
@@ -176,23 +179,24 @@ void ServiceInit(XS_HostInfo* host)
     xwork_runtime_config config;xwork_runtime* runtime=NULL;
     xwork_error error;xllm_error model_error;xllm_session* session=NULL;
     (void)host;
-    CHECK(MdoHomeInit() && MdoProjectLifecycleInit() && MdoConfigInit() &&
+    char Why[512]={0};
+    CHECK(MdoHomeInit() && MdoExtensionsInit() && MdoExtensionsSeedBuiltins(Why) && MdoProjectLifecycleInit() && MdoConfigInit() &&
         MdoModelManagerInit() && MdoSkillManagerInit(),"init");
     xworkRuntimeConfigInit(&config);runtime=xworkRuntimeCreate(&config,&error);
     CHECK(runtime && MdoMemoryManagerInit(runtime) && MdoModuleManagerInit(runtime),"runtime");
     session=Fixture();CHECK(session!=NULL,"fixture");
     if(session){
         Projection(session,"fixture");
-        CHECK(xllmSessionSave(session,"fixture.json",&model_error),"fixture_save");
+        CHECK(MediaSave(session,"fixture.json",&model_error),"fixture_save");
         xllmSessionDestroy(session);session=NULL;
         Resume(runtime,"fixture.json","fixture");
     }
-    if(xrtFileExists("snapshot-copy.json")) {
-        session=xllmSessionLoad("snapshot-copy.json",&model_error);
+    if(MediaExists("snapshot-copy.json")) {
+        session=MediaLoad("snapshot-copy.json",&model_error);
         CHECK(session!=NULL,"actual_load");
         if(session && ACTUAL_THROUGH != 0u) {
             xllm_session* failed=xllmSessionForkAt(session,ACTUAL_THROUGH,&model_error);
-            CHECK(failed && xllmSessionSave(failed,"snapshot-copy.json",&model_error),"failed_prefix_copy");
+            CHECK(failed && MediaSave(failed,"snapshot-copy.json",&model_error),"failed_prefix_copy");
             xllmSessionDestroy(session);session=failed;
         }
         if(session){Projection(session,"actual");xllmSessionDestroy(session);session=NULL;}
@@ -223,9 +227,11 @@ def main() -> int:
         vision = copy.deepcopy(defaults["models"]["items"][0])
         vision.update(id="media-vision", name="Media Vision", wire_model="media-vision",
                       builtin=False, editable=True, removable=True)
+        vision["capabilities"].append("media-input")
+        vision["attachments"] = ["image"]
         defaults["models"]["items"].append(vision)
         text = defaults["models"]["items"][0]
-        text["capabilities"].remove("media-input");text["attachments"] = []
+        text["capabilities"] = [c for c in text["capabilities"] if c != "media-input"];text["attachments"] = []
         # The real failed GLM history uses a million-token profile.
         for item in defaults["models"]["items"]:
             item["window"].update(context_tokens=1000000, max_input_tokens=1000000,
@@ -233,7 +239,8 @@ def main() -> int:
         path.write_text(json.dumps(defaults), encoding="utf-8")
         (site / "probe.c").write_text(PROBE.replace("ACTUAL_THROUGH", str(args.through_sequence) + "u"), encoding="utf-8")
         if original is not None:
-            (site / "snapshot-copy.json").write_bytes(original)
+            (base / "home").mkdir(exist_ok=True)
+            (base / "home/snapshot-copy.json").write_bytes(original)
         output = run_probe(args.host.resolve(), site, base / "home")
         assert "failures=0" in output and "probe_done=1" in output, output
         assert "resume_label=fixture" in output, output

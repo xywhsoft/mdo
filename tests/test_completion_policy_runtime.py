@@ -66,17 +66,16 @@ def probe(host: Path):
         base = Path(raw)
         site = base / "site"
         shutil.copytree(ROOT / "app", site)
-        agents = site / "default-home/agents"
-        agents.joinpath("coding.md").write_text(
-            "---\nname: Coding\ndescription: Explicit coding completion policy.\n"
-            "require_verification_after_write: true\n---\n", encoding="utf-8")
-        agents.joinpath("coding-c.md").write_text(
-            "---\nname: Coding C\ndescription: C completion policy.\ncode: true\n---\n", encoding="utf-8")
-        module = site / "default-home/modules/agents/builtin_default.c"
+        from test_agent_program_runtime import role_files
+        home = base / "home"
+        module = site / "default-home/agents/default/agent.c"
         source = module.read_text(encoding="utf-8").replace('"mdo.default"', '"agent.coding-c"')
         source = source.replace('"mdo.default-agent"', '"completion.coding-c"')
         source = source.replace("MDO_AGENT_MAIN |", "MDO_AGENT_REQUIRE_VERIFICATION_AFTER_WRITE | MDO_AGENT_MAIN |")
-        module.with_name("completion_policy.c").write_text(source, encoding="utf-8")
+        for path, text in role_files('agents','coding','---\nname: Coding\ndescription: Explicit coding completion policy.\nrequire_verification_after_write: true\n---\n') + role_files('agents','coding-c',None,source):
+            target = home / path
+            target.parent.mkdir(parents=True,exist_ok=True)
+            target.write_text(text,encoding='utf-8')
         port = free_port()
         config = site / "xs.json"
         config.write_text(json.dumps({"services": [{"enabled": True, "class": "http", "name": "policy",

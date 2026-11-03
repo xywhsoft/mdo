@@ -9,7 +9,10 @@ def worker(host,root,source,arguments,watch_parent=False):
     for name in ('command.h','module.h','sdk.h'):shutil.copy2(ROOT/'include/mdo'/name,root/'mdo'/name)
     shutil.copy2(ROOT/'app/command-worker.c',root/'worker.c')
     (root/'command.c').write_text('#include "mdo/command.h"\n'+source,encoding='utf-8')
-    (root/'input.json').write_text(json.dumps({'invocation_id':'fixture','command_id':'fixture','arguments':arguments,'watch_parent':watch_parent}),encoding='utf-8')
+    (root/'input.json').write_text(json.dumps({'invocation_id':'fixture','command_id':'fixture','arguments':arguments,'watch_parent':watch_parent,
+        'extension_root':str(root.resolve()),'extension_entry':'command.c','directory_id':'fixture','revision':'fixture-revision'}),encoding='utf-8')
+    # The parent validates the installed directory after worker relocation.
+    (root/'response-1.json').write_text(json.dumps({'ok':True,'result':{'code':0,'result':{'sha256':'fixture-revision'},'error':{}}}),encoding='utf-8')
     config={'services':[{'enabled':True,'class':'custom','name':'worker',
       'host_default':{'enabled':True,'path':'web','devlang':'c','devfile':'worker.c'}}]}
     (root/'xs.json').write_text(json.dumps(config),encoding='utf-8')
@@ -38,11 +41,11 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
 }''',[])
         try:
             until=time.monotonic()+12
-            request=root/'bridge/request-1.json'
+            request=root/'bridge/request-2.json'
             while not request.exists() and p.poll() is None and time.monotonic()<until:time.sleep(.02)
             assert request.exists(),p.communicate(timeout=2)[0].decode('utf-8',errors='replace')
             assert json.loads(request.read_text(encoding='utf-8'))=={'method':'sdk.invoke','params':{'method':'ui.invoke','params':{'action':'ui.help','params':[]}}}
-            (root/'bridge/response-1.json').write_text('{"ok":true,"result":{"code":0,"result":{"state":"queued_in_command"},"error":{}}}',encoding='utf-8')
+            (root/'bridge/response-2.json').write_text('{"ok":true,"result":{"code":0,"result":{"state":"queued_in_command"},"error":{}}}',encoding='utf-8')
             log=p.communicate(timeout=10)[0].decode('utf-8',errors='replace')
             result=json.loads((root/'bridge/final.json').read_text(encoding='utf-8'))
             assert result['ok'] and result['result']=={},(result,log)

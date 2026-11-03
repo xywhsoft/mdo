@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import shutil
 import subprocess
 import tempfile
 import time
@@ -106,11 +107,11 @@ def main():
     parser.add_argument('--host',type=Path,default=ROOT/'.build/host/xs.exe')
     args=parser.parse_args()
     evidence=ROOT/'.build/agent-turn-limit-20261102';evidence.mkdir(parents=True,exist_ok=True)
-    probe=ROOT/'app/generated/agent_turn_limit_test.c';config=ROOT/'app/xs.agent-turn-limit-test.json'
-    assert not probe.exists() and not config.exists()
     process=None
     with tempfile.TemporaryDirectory(prefix='agent-turn-limit-',dir=ROOT/'.build') as raw:
         base=Path(raw);home=base/'home';prepare_history_home(home)
+        site=base/'site';shutil.copytree(ROOT/'app',site)
+        probe=site/'generated/agent_turn_limit_test.c';config=site/'xs.agent-turn-limit-test.json'
         # Simulate an older Home whose saved settings predate max_turns.
         (home/'config/settings.json').write_text(json.dumps({'schema_version':1,'patch':{'agent':{'memory':False}}}),encoding='utf-8')
         role=home/'agents/limited';role.mkdir(parents=True)
@@ -124,7 +125,7 @@ def main():
         try:
             log=evidence/'runtime.log'
             with log.open('wb') as out:
-                process=subprocess.Popen([str(args.host.resolve()),str(config)],cwd=ROOT/'app',stdout=out,stderr=out,
+                process=subprocess.Popen([str(args.host.resolve()),str(config)],cwd=site,stdout=out,stderr=out,
                     env={**os.environ,'MDO_HOME':str(home),'USERPROFILE':str(base),'MDO_TURN_TEST_WORKSPACE':str(workspace)},creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
             deadline=time.monotonic()+120
             while process.poll() is None and time.monotonic()<deadline:

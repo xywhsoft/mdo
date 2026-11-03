@@ -166,32 +166,11 @@ PROBE_SOURCE = rf'''
 #include <string.h>
 #include <xsbase.h>
 
-#include "src/storage/home.c"
-#include "src/projects/lifecycle.c"
-#include "src/config/config.c"
-#include "src/security/secrets.c"
-#include "src/models/catalog.c"
-#include "src/skills/manager.c"
-#include "src/knowledge/manager.c"
-#include "src/memory/manager.c"
-#include "src/modules/manager.c"
-#include "src/approvals/manager.c"
-#include "src/agents/runtime.c"
-#include "src/asks/manager.c"
-
-/* MCP scope installation is covered by test_extensions_runtime. This
- * isolated fixture has no MCP manager or configured MCP servers. */
-bool MdoMcpConfigureAgent(xwork_agent* agent, const char* workspace, xwork_error* error)
-{{ (void)agent; (void)workspace; (void)error; return true; }}
-bool MdoMcpConfigureRole(xwork_agent* agent,const char* workspace,const char* const* ids,size_t count,xwork_error* error)
-{{ (void)ids;(void)count;return MdoMcpConfigureAgent(agent,workspace,error); }}
-str MdoMcpRolePrompt(const char* workspace,const char* const* ids,size_t count,bool restrict_scope,xwork_error* error)
-{{ (void)workspace;(void)ids;(void)count;(void)restrict_scope;(void)error;return xrtStrDup(""); }}
-
-xwork_runtime *MdoBootstrapRuntime(void) {{ return NULL; }}
-/* This isolated Agent fixture has no executable distribution manager. The
- * complete application/online tests cover its prompt augmentation. */
-bool MdoToolPrompt(char **prompt) {{ return prompt && *prompt; }}
+#define ServiceInit FixtureProductServiceInit
+#define ServiceUnit FixtureProductServiceUnit
+#include "generated/mdo_unity.c"
+#undef ServiceInit
+#undef ServiceUnit
 
 static const char sSkillV1[] = {c_literal(SKILL_V1)};
 static const char sSkillV2[] = {c_literal(SKILL_V2)};
@@ -344,10 +323,14 @@ void ServiceInit(XS_HostInfo *host) {{
     ProbeOwner owner;
     (void)host;
     memset(&owner, 0, sizeof(owner)); owner.Refs = 1u;
-    if (!MdoHomeInit() || !MdoProjectLifecycleInit() ||
+    char ExtError[512]={{0}};
+    if (!MdoHomeInit() || !MdoExtensionsInit() || !MdoExtensionsSeedBuiltins(ExtError) || !MdoProjectLifecycleInit() ||
+        !MdoHomeAtomicWrite("agents/probe/extension.json", "{{\"kind\":\"agents\",\"id\":\"agent:probe\",\"name\":\"Probe\",\"alias\":\"probe\",\"entry\":\"agent.c\",\"platforms\":[\"any\"]}}",
+            strlen("{{\"kind\":\"agents\",\"id\":\"agent:probe\",\"name\":\"Probe\",\"alias\":\"probe\",\"entry\":\"agent.c\",\"platforms\":[\"any\"]}}"),false) ||
+        !MdoHomeAtomicWrite("skills/probe-skill/extension.json", "{{\"kind\":\"skills\",\"id\":\"skill:qa.probe\",\"name\":\"Probe Skill\",\"alias\":\"probe-skill\",\"entry\":\"SKILL.md\",\"platforms\":[\"any\"]}}", 121, false) ||
         !MdoHomeAtomicWrite("skills/probe-skill/SKILL.md", sSkillV1,
             strlen(sSkillV1), false) ||
-        !MdoHomeAtomicWrite("modules/agents/probe.c", sModuleV1,
+        !MdoHomeAtomicWrite("agents/probe/agent.c", sModuleV1,
             strlen(sModuleV1), false) ||
         !MdoConfigInit() || !MdoModelManagerInit() || !MdoSkillManagerInit() || !MdoApprovalManagerInit()) {{
         printf("init_error=pre-runtime\n"); goto done;
@@ -402,7 +385,7 @@ void ServiceInit(XS_HostInfo *host) {{
 
     if (!MdoHomeAtomicWrite("skills/probe-skill/SKILL.md", sSkillV2,
             strlen(sSkillV2), false) || !MdoSkillManagerReload() ||
-        !MdoHomeAtomicWrite("modules/agents/probe.c", sModuleV2,
+        !MdoHomeAtomicWrite("agents/probe/agent.c", sModuleV2,
             strlen(sModuleV2), false) || !MdoModuleManagerReload()) {{
         printf("reload_error=1\n"); goto done;
     }}
@@ -595,6 +578,7 @@ void ServiceUnit(XS_HostInfo *host) {{ (void)host; }}
 
 
 def write_site(site: Path, memory_enabled: bool = True) -> None:
+    shutil.copytree(ROOT / "app", site, dirs_exist_ok=True)
     for relative in (
         "web",
         "default-home/config",
@@ -619,7 +603,7 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
     (site / "web/index.html").write_text("probe", encoding="utf-8")
     for relative in (
         "default-home/config/defaults.json",
-        "default-home/modules/agents/builtin_default.c",
+        "default-home/agents/default/agent.c",
         "default-home/skills/project-explorer/SKILL.md",
         "default-home/skills/project-explorer/templates/report.md",
         "src/storage/home.c", "src/storage/home_fs.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c",
@@ -645,6 +629,8 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
     )
     defaults_path = site / "default-home/config/defaults.json"
     defaults = json.loads(defaults_path.read_text(encoding="utf-8"))
+    from model_fixture import conversation_catalog
+    defaults["models"] = conversation_catalog()
     defaults["settings"]["agent"]["user_instructions"] = "probe-custom-v1"
     if not memory_enabled:
         defaults["settings"]["agent"]["memory"] = False
@@ -653,11 +639,15 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
         ROOT / "include/mdo/module.h",
         site / "generated/module-sdk/mdo/module.h",
     )
+    (site / "src/storage/home.c").write_bytes((ROOT / "app/src/storage/home.c").read_bytes())
     probe_source = PROBE_SOURCE
     if not memory_enabled:
         probe_source = probe_source.replace(
             c_literal(MODULE_V1), c_literal(MODULE_V1_NO_MEMORY)
         ).replace(c_literal(MODULE_V2), c_literal(MODULE_V2_NO_MEMORY))
+    skill = site / "default-home/skills/probe-skill"
+    skill.mkdir(parents=True, exist_ok=True)
+    (skill / "extension.json").write_text(json.dumps(dict(kind="skills",id="skill:qa.probe",name="Probe Skill",alias="probe-skill",entry="SKILL.md",platforms=["any"])),encoding="utf-8")
     (site / "probe.c").write_text(probe_source, encoding="utf-8")
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -750,7 +740,8 @@ def main() -> int:
         assert "session=agent:probe.main module:probe.agents model:ornith-1.5-35b" in output, output
         assert "wire:ornith-1.5-35b reasoning:medium permission:read-only" in output, output
         assert "output:4096" in output, output
-        assert "skills:1 subagents:1 generations:1/1/1/2" in output, output
+        # The default general subagent and this fixture's child are both loaded.
+        assert "skills:1 subagents:2 generations:1/1/1/2" in output, output
         assert "owner_after_create=refs:2 retains:1 releases:0" in output, output
         assert "memory_tools=search:0 write:0 delete:0" in output, output
         assert "reloaded=modules:2 skills:2 pinned:1/1" in output, output

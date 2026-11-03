@@ -245,6 +245,10 @@ def run_probe(host: Path, site: Path, home: Path,
     process_environment.pop("MDO_TEST_PROXY_PASSWORD", None)
     if environment is not None:
         process_environment.update(environment)
+    if environment and any(key.startswith("MDO_ORNITH_") for key in environment):
+        from model_fixture import conversation_catalog
+        write_models(home, conversation_catalog(environment))
+        process_environment.setdefault("MDO_TEST_MODEL_ID", "ornith-1.5-35b")
     process = subprocess.Popen(
         command, cwd=site, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, encoding="utf-8", errors="replace",

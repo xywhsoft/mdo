@@ -104,9 +104,14 @@ def main():
             probe=probe.replace('    printf("mod_result=',wait+'printf("mod_result=')
         source=(site/'probe.c').read_text(encoding='utf-8')
         source=source.replace('void ServiceInit(',probe+'\n'+EXTRA+'\nvoid ServiceInit(')
-        files=[('modules/agents/mod.c',module),('modules/tools/lifecycle.c',OBSERVER),('agents/mod-main.md',main_profile),('subagents/mod-child.md',roles.CHILD)]
+        files=roles.program_files(module,main_profile,roles.CHILD)
+        main_path,main_code=next((p,t) for p,t in files if p=='agents/mod-main/agent.c')
+        observer_callback=OBSERVER[OBSERVER.index('static mdo_result Observe('):OBSERVER.index('static mdo_result Register(')]
+        main_code=main_code.replace('static mdo_result Register(',observer_callback+'\nstatic mdo_result Register(')
+        main_code=main_code.replace('(void)Data;Host=H;', '(void)Data;Host=H;mdo_lifecycle_v1 Observer={sizeof(Observer),1,"observer",NULL,0,true,MDO_AGENT_PHASE_BIT(MDO_AGENT_BEFORE_REQUEST),NULL,Observe};if(mdoRegisterLifecycle(R,&Observer,Error,Capacity)!=MDO_RESULT_OK)return MDO_RESULT_ERROR;')
+        files=[(p,main_code if p==main_path else t) for p,t in files]
         for identity in ('life-config','life-denied'):
-            files.append(('agents/'+identity+'.md','---\nschema: mdo.agent.v1\nname: Config lifecycle\ntools: none\n---\nConfig lifecycle role'))
+            files += roles.role_files('agents',identity,'---\nschema: mdo.agent.v1\nname: Config lifecycle\ntools: none\n---\nConfig lifecycle role')
         insertion='\n'.join(f'    MdoHomeAtomicWrite({json.dumps(p)}, {json.dumps(t)}, {len(t.encode())}u, false);' for p,t in files)
         source=source.replace('xworkRuntimeConfigInit(&runtime_config);',insertion+'\n    xworkRuntimeConfigInit(&runtime_config);')
         source=source.replace('MdoMemoryWriteOptionsInit(&memory_write);','ModProbe(runtime);LifeExtra(runtime);\n    MdoMemoryWriteOptionsInit(&memory_write);')

@@ -333,7 +333,7 @@ static bool FailedStartBarrier(xwork_runtime* Runtime,
 
 
 def probe_source() -> str:
-    source = PROBE_SOURCE.replace('#include "src/runs/manager.c"', HOOK)
+    source = PROBE_SOURCE
     checks = CHECKS.replace("xevent", "ProbeGate").replace("xrtEvent", "ProbeGate")
     source = source.replace("void ServiceInit(XS_HostInfo *host) {", checks + "\nvoid ServiceInit(XS_HostInfo *host) {")
     source = source.replace("    (void)host;\n", "    (void)host;\n    if (!GatesInit()) return;\n", 1)
@@ -366,6 +366,12 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="run-completion-", dir=ROOT / ".build") as raw:
         base = Path(raw)
         write_site(base / "site")
+        unity = base / 'site/generated/mdo_unity.c'
+        text = unity.read_text(encoding='utf-8')
+        original = '#include "../src/runs/manager.c"'
+        assert text.count(original)==1
+        unity.write_text(text.replace(original,HOOK.replace('"src/runs/manager.c"','"../src/runs/manager.c"')),encoding='utf-8')
+
         (base / "site/probe.c").write_text(probe_source(), encoding="utf-8")
         output = run_probe(args.host.resolve(), base / "site", base / "home")
     expected = (

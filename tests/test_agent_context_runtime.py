@@ -40,7 +40,7 @@ static xllm_result ConfigComplete(void* Data,const xllm_request* Request,const x
         Request->bHasTemperature && Request->fTemperature==0.4 && Request->bHasTopP && !Request->bParallelToolCalls;
     if(ConfigCalls==1){
         ConfigRefresh &= Once1&&!Once2&&Live1&&!Live2;
-        MdoHomeAtomicWrite("agents/once.txt","ONCE-V2",7,false);MdoHomeAtomicWrite("agents/live.txt","LIVE-V2",7,false);
+        MdoHomeAtomicWrite("agents/context-fixture/once.txt","ONCE-V2",7,false);MdoHomeAtomicWrite("agents/context-fixture/live.txt","LIVE-V2",7,false);
         xllm_response* R=Response("");R->pToolCalls=calloc(1,sizeof(*R->pToolCalls));R->iToolCallCount=1;
         R->pToolCalls[0].sId=strdup("context-read");R->pToolCalls[0].sName=strdup("read");R->pToolCalls[0].sArgumentsJson=strdup("{\"path\":\"context-data.txt\"}");R->eFinish=XLLM_FINISH_TOOL_CALLS;*Out=R;
     }else{
@@ -120,7 +120,21 @@ def main() -> int:
                  ("agents/oversize-fixture.md", json.dumps(big)), ("agents/large.txt", large),
                  ("agents/permission-fixture.md", json.dumps({**ROLE,"permission_profile":"read-only","tools":["read","write"]})),
                  ("agents/global-permission-fixture.md", json.dumps({**ROLE,"permission_profile":"full-access","tools":["read","write"]})),
-                 ("agents/once.txt", "ONCE-V1"), ("agents/live.txt", "LIVE-V1")]
+                 ("agents/context-fixture/once.txt", "ONCE-V1"), ("agents/context-fixture/live.txt", "LIVE-V1")]
+        migrated = []
+        roles = []
+        for path, text in files:
+            if path.startswith('agents/') and path.endswith('.md'):
+                ident = Path(path).stem
+                roles.append(ident)
+                manifest = dict(kind='agents',id='agent:'+ident,name=ident,alias=ident,entry='agent.json',platforms=['any'])
+                migrated += [(f'agents/{ident}/extension.json',json.dumps(manifest)),(f'agents/{ident}/agent.json',text)]
+            elif path == 'agents/large.txt': migrated.append(('agents/oversize-fixture/large.txt',text))
+            else: migrated.append((path,text))
+        for ident in roles:
+            for resource, text in [('once.txt','ONCE-V1'),('live.txt','LIVE-V1')]:
+                migrated.append((f'agents/{ident}/{resource}',text))
+        files = migrated
         setup = "\n".join(f"    MdoHomeAtomicWrite({json.dumps(path)}, {json.dumps(text)}, {len(text.encode())}u, false);" for path, text in files)
         source = source.replace("xworkRuntimeConfigInit(&runtime_config);", setup + "\n    xworkRuntimeConfigInit(&runtime_config);")
         source = source.replace("MdoMemoryWriteOptionsInit(&memory_write);", "ConfigProbe(runtime);\n    MdoMemoryWriteOptionsInit(&memory_write);")

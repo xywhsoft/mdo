@@ -75,11 +75,12 @@ def probe(host):
         base = Path(raw)
         site, home, workspace = base / 'site', base / 'home', base / 'workspace'
         shutil.copytree(ROOT / 'app', site)
-        agent = site / 'default-home/modules/agents/builtin_default.c'
+        agent = site / 'default-home/agents/default/agent.c'
         child = agent.read_text(encoding='utf-8').replace('"mdo.default"', '"live.child"')
         child = child.replace('"mdo.default-agent"', '"live.child-module"')
         child = child.replace('MDO_AGENT_MAIN |', 'MDO_AGENT_SUBAGENT |')
-        agent.with_name('live_child.c').write_text(child, encoding='utf-8')
+        from runtime_sources import authored_extension
+        authored_extension(home, 'subagents', 'live-child', 'agent.c', child)
         workspace.mkdir()
         Model.calls, Model.failures = {}, []
         Model.arrivals = {n: threading.Event() for n in (3, 5)}
