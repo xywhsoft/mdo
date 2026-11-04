@@ -17,17 +17,17 @@ static xvalue* SdkGitTurnRead(const mdo_sdk_context_v1* C,const xvalue* P,mdo_er
     }
     bool Available=false;xrtValueGetBool(SdkGet(V,"available"),&Available);
     if(!Available){
-        cstr Reason=SdkField(V,"reason");bool NoRepository=Reason&&!strcmp(Reason,"git_not_repository");
+        cstr Reason=SdkField(V,"reason");bool NoRepository=Reason&&!strcmp(Reason,"git_not_repository"),NoGit=Reason&&!strcmp(Reason,"git_unavailable");
         /* Earlier completion retried an empty base/root and overwrote the
          * not-a-repository result. Confirm that case without backfilling or
          * changing its immutable historical comparison. Real Git failures
          * and captures with a repository keep their original failure. */
         cstr Root=SdkField(V,"repository"),Base=SdkField(V,"base");
-        if(!NoRepository&&Reason&&!strcmp(Reason,"git_revision_invalid")&&(!Root||!Root[0])&&(!Base||!Base[0])){
+        if(!NoRepository&&!NoGit&&Reason&&(!strcmp(Reason,"git_revision_invalid")||!strcmp(Reason,"sdk_native_failed"))&&(!Root||!Root[0])&&(!Base||!Base[0])){
             xvalue* P=xrtValueObject();SdkPut(P,"repository",C->Workspace);mdo_error_v1 Check={0};char* Current=SdkGitRoot(C,P,&Check);
-            NoRepository=!Current&&!strcmp(Check.Code,"git_not_repository");xrtFree(Current);xrtValueRelease(P);
+            NoRepository=!Current&&!strcmp(Check.Code,"git_not_repository");NoGit=!Current&&!strcmp(Check.Code,"git_unavailable");xrtFree(Current);xrtValueRelease(P);
         }
-        SdkGitFail(E,NoRepository?"git_not_repository":"git_turn_unavailable","File changes could not be captured for this reply",409);xrtValueRelease(V);return NULL;
+        SdkGitFail(E,NoRepository?"git_not_repository":NoGit?"git_unavailable":"git_turn_unavailable","File changes could not be captured for this reply",409);xrtValueRelease(V);return NULL;
     }
     if(!SdkGitOid(SdkField(V,"base"))||!SdkGitOid(SdkField(V,"current_tree"))){xrtValueRelease(V);return SdkGitFail(E,"git_turn_corrupt","Reply snapshot identities are invalid",503),NULL;}
     /* Import/truncate/recovery must not attach an old receipt to a new event

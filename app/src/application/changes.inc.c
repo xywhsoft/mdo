@@ -19,7 +19,14 @@ static bool SdkGitRunWithIndex(const mdo_sdk_context_v1* C,cstr Root,const cstr*
     Options.Timeout=C->Deadline?MdoDeadlineWaitMs(C->Deadline):15000;MdoApplicationInvocation* I=C->Opaque;Options.Cancel=I?I->Cancel:NULL;
     if(Options.Timeout<0||Options.Timeout>15000)Options.Timeout=15000;
     MdoCliUse* Use=NULL;char CommandError[512]={0};if(!MdoCliUseBegin(&Use,CommandError))return SdkGitFail(E,"sdk_commands_unavailable",CommandError,503);
-    bool Ran=xrtProcessRun(&Config,&Options,R);MdoCliUseEnd(Use);if(!Ran)return SdkNativeFailure(E,"git");
+    bool Ran=xrtProcessRun(&Config,&Options,R);xerror* Failure=Ran?NULL:xrtTakeError();MdoCliUseEnd(Use);
+    if(!Ran){
+        xfileinfo Directory={0};bool Missing=Failure&&xrtErrorKind(Failure)==XERR_NOT_FOUND&&
+            Root&&Root[0]&&xrtPathStat(Root,true,&Directory)&&Directory.Type==XFILE_TYPE_DIRECTORY;
+        if(Failure)xrtSetErrorTake(Failure);
+        if(Missing)return SdkGitFail(E,"git_unavailable","Git is not available on this device",409);
+        return SdkNativeFailure(E,"git");
+    }
     if(R->Wait!=XWAIT_OK){bool Timed=R->Wait==XWAIT_TIMEOUT||(C->Deadline&&MdoDeadlineExpired(C->Deadline));return SdkGitFail(E,Timed?"git_timeout":"sdk_cancelled",Timed?"Git inspection timed out; no repository state was changed":"Git inspection cancelled",Timed?504:499);}
     if(!Output&&R->StdoutTruncated)return SdkGitFail(E,"git_result_too_large","Git metadata exceeds 4 MiB; narrow the repository or comparison",413);
     return true;

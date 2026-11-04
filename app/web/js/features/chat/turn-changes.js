@@ -97,7 +97,7 @@ export function createTurnChanges({ read = (context, turn, signal) => readOperat
             continue;
           }
           if (missing) return; // Older replies have no invented comparison or backfill.
-          if (error.code === "git_not_repository") return;
+          if (["git_not_repository", "git_unavailable"].includes(error.code)) return;
           throw error;
         }
       }

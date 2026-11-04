@@ -89,5 +89,15 @@ void ServiceInit(XS_HostInfo* Host){
     CHECK(Legacy!=NULL);SdkPut(Legacy,"reason","git_revision_invalid");char* Json=SdkJson(Legacy);CHECK(Json&&MdoHomeAtomicWrite(ReceiptPath,Json,strlen(Json),false));xrtFree(Json);xrtValueRelease(Legacy);
     memset(&Err,0,sizeof(Err));CHECK(!SdkChangesCall(&C,"changes.list",Params,&Changes,&Err));CHECK(!strcmp(Err.Code,"git_not_repository"));
     xrtValueRelease(Params);xrtValueRelease(Changes);xrtFree(PlainWorkspace);
+    /* Git is optional: even existing review receipts become unavailable
+     * quietly when the executable is absent. Missing workspaces are errors. */
+    char* SearchPath=xrtEnvGet("PATH");CHECK(xrtEnvSet("PATH",""));
+    MdoApplicationContext(&C,&Invocation,"local-client","qa-no-git","qa","steering","",Workspace,0);
+    Params=xrtValueObject();SdkPut(Params,"scope","turn");SdkPutUInt(Params,"turn",Turns[0]);Changes=NULL;memset(&Err,0,sizeof(Err));
+    CHECK(!SdkChangesCall(&C,"changes.list",Params,&Changes,&Err));if(strcmp(Err.Code,"git_unavailable"))printf("MISSING GIT ERROR %s %s\n",Err.Code,Err.Message);CHECK(!strcmp(Err.Code,"git_unavailable"));
+    xrtValueRelease(Params);xrtValueRelease(Changes);
+    char* Absent=xrtPathJoin(Workspace,"does-not-exist");const cstr Version[]={"--version"};xprocessresult Process={0};memset(&Err,0,sizeof(Err));
+    CHECK(!SdkGitRun(&C,Absent,Version,1,(xbytesview){0},1024,NULL,NULL,&Process,&Err));CHECK(strcmp(Err.Code,"git_unavailable"));xrtProcessResultUnit(&Process);xrtFree(Absent);
+    CHECK(xrtEnvSet("PATH",SearchPath));xrtFree(SearchPath);
     printf("steering_failed=%u calls=%u probe_done=1\n",Failed,Calls);fflush(stdout);
 }
