@@ -27,7 +27,7 @@ def main():
     args.evidence.mkdir(parents=True, exist_ok=False)
     client = AndroidReleaseClient(args.adb, args.serial, args.package)
     identity = 'qa-directory-' + uuid.uuid4().hex[:12]
-    root = None
+    root = owned_root = None
     debug_port = None
     report = {'package': args.package, 'paid_model_calls': 0, 'checks': [], 'passed': False}
 
@@ -38,8 +38,11 @@ def main():
 
     try:
         client.launch()
-        root = client.home + '/workspace/' + identity + ' space + 中文'
-        client.shell('run-as', client.package, 'mkdir', '-p', root + '/many')
+        owned_root = client.home + '/workspace/' + identity + ' space + 中文'
+        client.shell('run-as', client.package, 'mkdir', '-p', owned_root + '/many')
+        # Android's shell and C runtime can normalize /data/user/0 and
+        # /data/data differently; creation is checked by inode below.
+        root = client.shell('run-as', client.package, 'realpath', owned_root)
         script = ('for i in $(/system/bin/toybox seq 1 300); do mkdir ' +
                   shlex.quote(root + '/many/node-') + '"$i" || exit; done')
         client.shell('run-as', client.package, 'sh', '-c', script)
@@ -66,7 +69,12 @@ def main():
             check(client.data('GET', url + '&' + fields)['directories'] == expected,
                   'Android server filtering ' + fields)
         created = client.data('POST', endpoint, {'path': root, 'name': 'API + 中文'})
-        check(created['path'] == root + '/API + 中文', 'Native creation preserves spaces plus and Unicode')
+        expected_child = root + '/API + 中文'
+        check(created['name'] == 'API + 中文' and
+              client.shell('run-as', client.package, 'stat', '-c', '%d:%i', created['path']) ==
+              client.shell('run-as', client.package, 'stat', '-c', '%d:%i', expected_child),
+              'Native creation preserves spaces plus and Unicode across Android path aliases')
+        root = created['path'].rsplit('/', 1)[0]
         check(client.request('POST', endpoint, {'path': root, 'name': 'API + 中文'})[0] == 409,
               'Native creation never overwrites an existing folder')
         check(client.request('POST', endpoint, {'path': root, 'name': '../escape'})[0] == 400,
@@ -103,11 +111,11 @@ def main():
         check(saved['workspace_root'] == root + '/new folder 中文', 'Mobile confirmation saves the actual selected project directory')
         report['passed'] = True
     finally:
-        if root:
+        if owned_root:
             # This exact random namespace was created above, never user paths.
-            assert root.startswith(client.home + '/workspace/' + identity + ' ')
+            assert owned_root.startswith(client.home + '/workspace/' + identity + ' ')
             client.request('DELETE', '/api/v1/projects/' + identity)
-            client.shell('run-as', client.package, 'rm', '-rf', '--', root, check=False)
+            client.shell('run-as', client.package, 'rm', '-rf', '--', owned_root, check=False)
         if debug_port is not None:
             client.adb('forward', '--remove', 'tcp:' + str(debug_port), check=False)
         client.close()
