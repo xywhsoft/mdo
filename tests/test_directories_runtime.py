@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
 import json
 import os
 from pathlib import Path
@@ -99,9 +100,16 @@ def probe(port: int, workspace: Path) -> None:
         assert status==200 and json.loads(raw)['data']['directories']==expected,raw
 
 
-def run_probe(host: Path) -> None:
-    with tempfile.TemporaryDirectory(prefix="directories-runtime-", dir=ROOT / ".build") as raw:
-        base = Path(raw).resolve()
+def run_probe(host: Path, home_parent: Path | None = None) -> None:
+    with ExitStack() as cleanup:
+        base = Path(cleanup.enter_context(tempfile.TemporaryDirectory(
+            prefix="directories-runtime-", dir=ROOT / ".build"))).resolve()
+        home = base / "home"
+        if home_parent is not None:
+            # A WSL-mounted workspace may lack RENAME_NOREPLACE. Keep source
+            # fixtures there, but put transactional Home on a native volume.
+            home = Path(cleanup.enter_context(tempfile.TemporaryDirectory(
+                prefix="mdo-directory-home-", dir=home_parent))).resolve()
         site = base / "site"
         shutil.copytree(ROOT / "app", site)
         port = free_port()
@@ -122,7 +130,7 @@ def run_probe(host: Path) -> None:
         process = None
         try:
             with (base / "runtime.log").open("wb") as log:
-                process = subprocess.Popen([str(host), str(site / "xs.json"), "--", "--home", str(base / "home")],
+                process = subprocess.Popen([str(host), str(site / "xs.json"), "--", "--home", str(home)],
                     cwd=base, env=environment, stdout=log, stderr=subprocess.STDOUT,
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
                 wait_ready(port, process)
@@ -136,8 +144,10 @@ def run_probe(host: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", type=Path, required=True)
+    parser.add_argument("--home-parent", type=Path,
+                        help="existing native filesystem for the temporary transactional Home")
     args = parser.parse_args()
-    run_probe(args.host.resolve())
+    run_probe(args.host.resolve(), args.home_parent)
     print("Directory picker runtime probe: PASS")
     return 0
 
