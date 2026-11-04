@@ -29,7 +29,7 @@ def main():
                 time.sleep(.1)
             text=(base/'runtime.log').read_text(encoding='utf-8',errors='replace');assert 'review_failed=0' in text and 'probe_done=1' in text,text[-10000:]
             receipts=home/'workbench-baselines/qa/sessions/turn-review/turns'
-            assert len(list(receipts.glob('*.json')))==3
+            assert len(list(receipts.glob('*.json')))==4
             first_turn=min(int(path.stem) for path in receipts.glob('*.json'))
             if a.browser:
                 evidence=ROOT/'.build/turn-review-qa';evidence.mkdir(exist_ok=True)
@@ -46,7 +46,7 @@ def main():
             diff=json.loads(body)['data'];assert any(row.get('text')=='+first reply' for row in diff['rows']),diff
             status,_,body=call({'path':'../outside'});assert status==400,body
             print('PASS host restart retains exact diff and rejects traversal')
-            print('PASS three managed replies: committed edits, existing dirty file excluded, add/delete/Unicode, immutable earlier diff and empty reply')
+            print('PASS four managed replies: committed edits, existing dirty file excluded, add/delete/Unicode, immutable earlier diff, empty reply and capture limit does not fail Agent')
         finally:
             if process and process.poll() is None:process.terminate();process.wait(timeout=10)
             probe.unlink(missing_ok=True);config.unlink(missing_ok=True)

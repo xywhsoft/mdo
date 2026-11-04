@@ -42,13 +42,18 @@ void ServiceInit(XS_HostInfo* Host){
     O.Agent.WorkspaceRoot=Workspace;O.Agent.AgentId="mdo.default";O.Agent.ModelId="history-fixture";O.Agent.Protocol=MDO_MODEL_PROTOCOL_OPENAI_RESPONSES;O.Agent.PermissionProfile="full-access";O.Agent.OnModelComplete=Model;
     MdoSession* Session=MdoSessionCreate(&O,&E);CHECK(Session!=NULL);MdoSessionRelease(Session);
     Run("turn-review");Run("turn-review");Run("turn-review");
-    MdoSessionEventSnapshot* Events=MdoSessionEventReplay("qa","turn-review",0,256,&E);uint64 Turns[3]={0};size_t Count=0;
-    for(size_t i=0;Events&&i<MdoSessionEventSnapshotCount(Events);i++){MdoSessionEventInfo Info={0};Info.Size=sizeof(Info);if(MdoSessionEventSnapshotAt(Events,i,&Info)&&Info.Kind==XWORK_EVENT_AGENT_START&&!Info.AgentDepth&&Count<3)Turns[Count++]=Info.EventId;}
-    MdoSessionEventSnapshotRelease(Events);CHECK(Count==3);
+    /* Oversized snapshots must not prevent a normal Agent reply. */
+    char* Large=xrtPathJoin(Workspace,"too-large.bin");xfile File=xrtOpen(Large,XFILE_WRITE|XFILE_CREATE|XFILE_TRUNCATE);
+    CHECK(File&&xrtWriteAtFull(File,17u*1024u*1024u,"x",1,NULL));xrtClose(File);Run("turn-review");CHECK(remove(Large)==0);xrtFree(Large);
+    MdoSessionEventSnapshot* Events=MdoSessionEventReplay("qa","turn-review",0,256,&E);uint64 Turns[4]={0};size_t Count=0;
+    for(size_t i=0;Events&&i<MdoSessionEventSnapshotCount(Events);i++){MdoSessionEventInfo Info={0};Info.Size=sizeof(Info);if(MdoSessionEventSnapshotAt(Events,i,&Info)&&Info.Kind==XWORK_EVENT_AGENT_START&&!Info.AgentDepth&&Count<4)Turns[Count++]=Info.EventId;}
+    MdoSessionEventSnapshotRelease(Events);CHECK(Count==4);
     MdoApplicationInvocation Invocation={0};mdo_sdk_context_v1 C;MdoApplicationContext(&C,&Invocation,"local-client","qa-review","qa","turn-review","",Workspace,0);
     xvalue* First=Read(&C,Turns[0],NULL);const xvalue* Files=SdkGet(First,"files");CHECK(xrtValueCount(Files)==5);CHECK(!SdkGitFind((xvalue*)Files,"preexisting.txt"));CHECK(SdkGitFind((xvalue*)Files,"removed.txt"));
     char* Original=SdkJson(First);xvalue* Second=Read(&C,Turns[1],NULL);CHECK(xrtValueCount(SdkGet(Second,"files"))==1);CHECK(SdkGitFind((xvalue*)SdkGet(Second,"files"),"tracked.txt"));
     xvalue* Empty=Read(&C,Turns[2],NULL);CHECK(xrtValueCount(SdkGet(Empty,"files"))==0);
+    xvalue* P=xrtValueObject(),*Unavailable=NULL;SdkPut(P,"scope","turn");SdkPutUInt(P,"turn",Turns[3]);mdo_error_v1 CaptureError={0};
+    CHECK(!SdkChangesCall(&C,"changes.list",P,&Unavailable,&CaptureError)&&!strcmp(CaptureError.Code,"git_turn_unavailable"));xrtValueRelease(P);xrtValueRelease(Unavailable);
     Write("tracked.txt","external edit after all replies\n");
     xvalue* Again=Read(&C,Turns[0],NULL);char* Replayed=SdkJson(Again);CHECK(Original&&Replayed&&!strcmp(Original,Replayed));
     xvalue* Diff=Read(&C,Turns[0],"tracked.txt");char* Text=SdkJson(Diff);CHECK(Text&&strstr(Text,"+first reply")&&!strstr(Text,"second reply")&&!strstr(Text,"external edit"));

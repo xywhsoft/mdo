@@ -1,0 +1,58 @@
+{
+  "date": "2026-11-04",
+  "feature": "completed reply changes summary and immutable right diff",
+  "implementation_commits": [
+    "8f48bfac",
+    "0cc9510d"
+  ],
+  "published": false,
+  "test_environment": "Windows x64 xs/TCC; Edge headless; existing SDK/host; no app or SDK copy in new acceptance test",
+  "frontend_tests": {
+    "passed": 120,
+    "failed": 0
+  },
+  "module_graph": {
+    "parsed_reachable": 264
+  },
+  "runtime": {
+    "managed_replies": 4,
+    "available_file_counts": [
+      5,
+      1,
+      0
+    ],
+    "over_limit_reply_succeeded": true,
+    "preexisting_changes_excluded": true,
+    "committed_edits_retained": true,
+    "unicode_add_delete": true,
+    "earlier_diff_immutable": true,
+    "host_restart_readback": true,
+    "path_traversal_rejected": true
+  },
+  "browser": {
+    "card_expansion": true,
+    "exact_file_diff": true,
+    "one_panel_per_reply": true,
+    "continuous_diff": true,
+    "reload_readback": true,
+    "empty_reply_hidden": true,
+    "capture_failure_inline": true,
+    "script_errors": 0,
+    "themes": [
+      "light",
+      "dark"
+    ]
+  },
+  "artifacts": {
+    "review.png": {
+      "local_path": "D:\\GIT\\mdo\\.build\\turn-review-qa\\review.png",
+      "bytes": 58500,
+      "sha256": "e08002f5201bdb374bab6166f252ead0fb05034838f60c78892d4ee4d59fd728"
+    },
+    "review-dark.png": {
+      "local_path": "D:\\GIT\\mdo\\.build\\turn-review-qa\\review-dark.png",
+      "bytes": 55752,
+      "sha256": "9f3470e6008527d6a6195c49c0c2424a03d1e1395aeb310a7ce0a5e2910fb35f"
+    }
+  }
+}

@@ -30,7 +30,7 @@ static xvalue* SdkGitTurnRead(const mdo_sdk_context_v1* C,const xvalue* P,mdo_er
 }
 xvalue* MdoApplicationTurnChangesBegin(const mdo_sdk_context_v1* Given,uint64 NativeRun){
     if(!SdkGitBaselineLock||!Given->SessionId[0])return NULL;
-    xerror* Saved=xrtTakeError();mdo_sdk_context_v1 C=*Given;C.Deadline=MdoDeadlineAfterUs(5000000);mdo_error_v1 E={0};
+    xerror* Saved=xrtTakeError();mdo_sdk_context_v1 C=*Given;uint64 End=MdoDeadlineAfterUs(5000000);if(!C.Deadline||C.Deadline>End)C.Deadline=End;mdo_error_v1 E={0};
     xvalue* V=xrtValueObject();if(!V)goto done;
     SdkPutUInt(V,"schema_version",1);SdkPut(V,"project",C.ProjectId);SdkPut(V,"session",C.SessionId);SdkPut(V,"workspace",C.Workspace);
     SdkPutUInt(V,"native_run",NativeRun);SdkPutUInt(V,"started_after_us",(uint64)MdoUtcUs());
