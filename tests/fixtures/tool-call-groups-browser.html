@@ -33,6 +33,37 @@ try {
   checks.compactLive=!process().open&&!process().querySelector(".conversation-process-items");
   checks.oneGroup=container.querySelectorAll(".conversation-process").length===1&&process().querySelector(".conversation-process-count").textContent.includes("3");
   checks.noFailureCount=!process().querySelector("summary .conversation-process-failed");
+  // A live projection replaces its reasoning snapshot on every frame. The
+  // disclosure itself must survive updates, including between press and click.
+  const originalProcess=process(),originalSummary=process().querySelector("summary");
+  originalSummary.focus();
+  originalSummary.dispatchEvent(new MouseEvent("mousedown",{bubbles:true}));
+  const thought=events.find(event=>event.kind==="model_reasoning_delta");
+  for(let i=0;i<8;i++){thought.text+="，继续思考";await publish();}
+  checks.stableClosed=process()===originalProcess&&process().querySelector("summary")===originalSummary;
+  checks.summaryFocusRetained=document.activeElement===originalSummary;
+  originalSummary.dispatchEvent(new MouseEvent("mouseup",{bubbles:true}));
+  originalSummary.click();await paint();
+  checks.openDuringStream=process().open;
+  const originalThought=process().querySelector("li[data-kind='reasoning'] details");
+  const originalRead=process().querySelector("details[data-timeline-key='tool-4']");
+  const originalReasoningText=originalThought?.querySelector("pre");
+  originalRead?.querySelector("summary").click();await paint();
+  const readText=originalRead?.querySelector(".timeline-tool-content pre");
+  if(readText){const range=document.createRange();range.selectNodeContents(readText);
+    getSelection().removeAllRanges();getSelection().addRange(range);}
+  for(let i=0;i<8;i++){thought.text+="，分析下一步";await publish();}
+  checks.stableOpen=process()===originalProcess&&process().open&&
+    process().querySelector("li[data-kind='reasoning'] details")===originalThought&&
+    originalThought?.querySelector("pre")===originalReasoningText&&
+    process().querySelector("details[data-timeline-key='tool-4']")===originalRead;
+  checks.reasoningUpdated=originalReasoningText?.textContent===thought.text;
+  checks.toolSelectionRetained=Boolean(readText)&&getSelection().toString()===readText.textContent;
+  getSelection().removeAllRanges();
+  originalRead?.querySelector("summary").click();await paint();
+  process().querySelector("summary").click();await paint();
+  for(let i=0;i<8;i++){thought.text+="，核对结果";await publish();}
+  checks.collapseDuringStream=process()===originalProcess&&!process().open;
   process().querySelector("summary").click();await paint();
   const failed=process().querySelector("li[data-kind='tool'][data-state='failed'] details");
   failed.querySelector("summary").click();await paint();
@@ -50,6 +81,7 @@ try {
     e(17,"model_text_delta",{agent_turn:2,text:"修改已完成，完整执行记录可展开查看。"}),e(18,"model_done",{agent_turn:2,success:true}),e(19,"agent_done",{success:true}));await publish();
   checks.finishedCompact=!process().open&&!process().querySelector("summary [data-model-retry]");
   checks.finishedNoFailureCount=!process().querySelector("summary .conversation-process-failed");
+  checks.stableFinished=process()===originalProcess&&process().querySelector("summary")===originalSummary;
   // File-change summaries have their own regression; keep this assertion about
   // dialogue/tool grouping independent of those additional completion cards.
   checks.dialogueOnly=[...container.children].filter(node=>!node.classList.contains("turn-changes"))

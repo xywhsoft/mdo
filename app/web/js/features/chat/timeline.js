@@ -23,6 +23,14 @@ import { modelRetryNode, modelRetryInlineNode, updateModelRetryCountdowns } from
 import { createStreamScroll } from "./stream-scroll.js";
 import { appendTurnChanges, createTurnChanges } from "./turn-changes.js";
 
+// Live disclosures keep their interactive shell while their contents change.
+// Replacing a summary between pointer press and release loses the activation.
+const liveRowUpdates = new WeakMap();
+function rowSignature(item, writable) {
+  const { turnState, ...renderedItem } = item;
+  return JSON.stringify([renderedItem, writable]);
+}
+
 export function searchResultTop(row, content, searchBottom, viewportBottom, lineHeight = 24) {
   const room = Math.max(0, viewportBottom - searchBottom);
   const firstLine = Math.min(content.height, lineHeight);
@@ -666,36 +674,44 @@ function foldSection(label, value, copy = false, actionRef = "", scrollKey = "")
 }
 
 function foldableNode(item, openState, previewOpen, previewScroll, projectId, sessionId, toolTextCache, restoreStream) {
-  const running = item.state === "running";
-  const status = running ? t("timeline.running", {}, "运行中")
-    : item.state === "failed" ? t("timeline.failed", {}, "失败")
-      : item.state === "cancelled" ? t("timeline.stopped", {}, "已停止")
-        : t("timeline.done", {}, "完成");
-  const lastLine = item.text?.trimEnd().split("\n").at(-1) || "";
-  const preview = item.kind === "reasoning"
-    ? (running ? shortLine(lastLine) : "")
-    : toolCallSummary(item.role, item.inputText || item.outputText || item.text,
-      Boolean(item.inputText && item.inputTruncated));
-  const duration = Number.isFinite(item.durationSeconds) && item.durationSeconds > 0
-    ? t("timeline.seconds", { seconds: new Intl.NumberFormat(currentLocale(),
-      { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(item.durationSeconds) },
-    `${item.durationSeconds.toFixed(1)} 秒`) : "";
-  const elapsed = duration && item.kind === "tool"
-    ? t("timeline.toolElapsed", { duration }, `总历时 ${duration}`) : "";
-  const foldStatus = elapsed && (item.state === "failed" || item.state === "cancelled")
-    ? `${status} · ${elapsed}` : elapsed || duration || status;
+  let reasoningText = null;
+  let summaryPreview, statusText;
+  function updateSummary() {
+    const running = item.state === "running";
+    const status = running ? t("timeline.running", {}, "运行中")
+      : item.state === "failed" ? t("timeline.failed", {}, "失败")
+        : item.state === "cancelled" ? t("timeline.stopped", {}, "已停止")
+          : t("timeline.done", {}, "完成");
+    const lastLine = item.text?.trimEnd().split("\n").at(-1) || "";
+    const preview = item.kind === "reasoning"
+      ? (running ? shortLine(lastLine) : "")
+      : toolCallSummary(item.role, item.inputText || item.outputText || item.text,
+        Boolean(item.inputText && item.inputTruncated));
+    const duration = Number.isFinite(item.durationSeconds) && item.durationSeconds > 0
+      ? t("timeline.seconds", { seconds: new Intl.NumberFormat(currentLocale(),
+        { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(item.durationSeconds) },
+      `${item.durationSeconds.toFixed(1)} 秒`) : "";
+    const elapsed = duration && item.kind === "tool"
+      ? t("timeline.toolElapsed", { duration }, `总历时 ${duration}`) : "";
+    const foldStatus = elapsed && (item.state === "failed" || item.state === "cancelled")
+      ? `${status} · ${elapsed}` : elapsed || duration || status;
+    writeUiText(summaryPreview, preview);
+    writeUiText(statusText, foldStatus);
+  }
   const details = element("details", { className: "timeline-fold",
     attrs: { "data-timeline-key": item.key } });
   if (item.sourceEventId) details.dataset.sourceEventId = String(item.sourceEventId);
-  details.open = openState ?? running;
-  const summaryPreview = element("span", { className: "timeline-fold-preview", text: preview });
+  details.open = openState ?? item.state === "running";
+  summaryPreview = element("span", { className: "timeline-fold-preview" });
+  statusText = element("span", { className: "timeline-fold-status" });
+  updateSummary();
   details.append(element("summary", { className: "timeline-fold-summary" }, [
     element("span", { className: "timeline-fold-marker", attrs: { "aria-hidden": "true" } }),
     element("span", { className: "timeline-role", text: item.role }),
     item.executionSource?.member ? element("span", { className: "timeline-role", text: item.executionSource.member,
       attrs: { title: `${item.executionSource.agent} · ${item.executionSource.namespace}` } }) : null,
     summaryPreview,
-    element("span", { className: "timeline-fold-status", text: foldStatus }),
+    statusText,
     timeNode(item.time),
   ]));
   function updateBody() {
@@ -708,8 +724,10 @@ function foldableNode(item, openState, previewOpen, previewScroll, projectId, se
     if (details.querySelector(".timeline-fold-body")) return;
     const body = element("div", { className: "timeline-fold-body" });
     if (item.kind === "reasoning") {
-      body.append(foldSection(t("timeline.reasoningProcess", {}, "思考过程"),
-        item.text || t("timeline.thinking", {}, "正在思考…"), false, "", `${item.key}/reasoning`));
+      const section = foldSection(t("timeline.reasoningProcess", {}, "思考过程"),
+        item.text || t("timeline.thinking", {}, "正在思考…"), false, "", `${item.key}/reasoning`);
+      reasoningText = section.querySelector("pre");
+      body.append(section);
     } else {
       const owner = { projectId, sessionId };
       if (item.inputText) body.append(toolSectionNode(t("timeline.call", {}, "调用"), item, "input", owner,
@@ -739,8 +757,16 @@ function foldableNode(item, openState, previewOpen, previewScroll, projectId, se
   }
   details.addEventListener("toggle", updateBody);
   updateBody();
-  return element("li", { className: "timeline-item",
+  const row = element("li", { className: "timeline-item",
     attrs: { "data-kind": item.kind, "data-state": item.state } }, [details]);
+  if (item.kind === "reasoning") liveRowUpdates.set(row, next => {
+    item = next;
+    row.dataset.state = item.state;
+    updateSummary();
+    if (reasoningText) writeUiText(reasoningText, item.text || t("timeline.thinking", {}, "正在思考…"));
+    updateBody();
+  });
+  return row;
 }
 
 function actionIcon(name) {
@@ -773,31 +799,78 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
     const details = element("details", { className: "conversation-process", attrs: {
       "data-timeline-key": item.key, "data-state": item.state } });
     details.open = openState ?? false;
-    const { count, names, retry } = conversationProcessSummary(item);
-    const label = count ? t("timeline.toolGroup.title", {}, "工具调用") : t("timeline.toolGroup.thinking", {}, "思考与执行");
+    const label = element("span");
+    const countText = element("span", { className: "conversation-process-count" });
+    const namesText = element("span", { className: "conversation-process-names" });
+    const status = element("span", { className: "conversation-process-status",
+      text: t("timeline.toolGroup.running", {}, "进行中") });
     const summary = element("summary", {}, [actionIcon("chevron-down"),
-      element("span", { text: label }), count ? element("span", {
-        className: "conversation-process-count", text: t("timeline.toolGroup.count", { count }, `${count} 次`) }) : null,
-      names.length ? element("span", { className: "conversation-process-names", text:
-        names.slice(0, 3).join(" · ") + (names.length > 3 ? t("timeline.toolGroup.more", { count: names.length - 3 }, ` 等 ${names.length - 3} 种`) : ""),
-        attrs: { title: names.join(" · ") } }) : null,
-      item.state === "running" ? element("span", { className: "conversation-process-status", text: t("timeline.toolGroup.running", {}, "进行中") }) : null,
-      retry ? modelRetryInlineNode(retry) : null]);
+      label, countText, namesText, status]);
     details.append(summary);
+    let children = null, retry = null, retryNode = null, retrySignature = "";
+    const rows = new Map();
     function expand() {
-      if (!details.open || details.querySelector(".conversation-process-items")) return;
-      const children = element("ol", { className: "conversation-process-items" });
-      for (const child of item.items.filter(child => child !== retry)) children.append(timelineNode(child, handlers,
-        projectId, sessionId, false, folds?.expanded.get(child.key),
-        folds?.previews.get(`${child.key}/preview`) ?? false,
-        folds?.scroll.get(`${child.key}/preview`) ?? 0, toolTextCache, folds));
-      details.append(children);
+      if (!details.open) return;
+      if (!children) {
+        children = element("ol", { className: "conversation-process-items" });
+        details.append(children);
+      }
+      const retained = new Set();
+      let cursor = children.firstChild;
+      for (const child of item.items.filter(child => child !== retry)) {
+        retained.add(child.key);
+        const signature = rowSignature(child, false);
+        let row = rows.get(child.key);
+        if (row?.signature !== signature) {
+          const update = row && liveRowUpdates.get(row.node);
+          if (update) update(child);
+          else {
+            row = { node: timelineNode(child, handlers, projectId, sessionId, false,
+              folds?.expanded.get(child.key), folds?.previews.get(`${child.key}/preview`) ?? false,
+              folds?.scroll.get(`${child.key}/preview`) ?? 0, toolTextCache, folds) };
+            mountIcons(row.node);
+            rows.set(child.key, row);
+          }
+          row.signature = signature;
+        }
+        if (row.node !== cursor) children.insertBefore(row.node, cursor);
+        cursor = row.node.nextSibling;
+      }
+      while (cursor) {
+        const next = cursor.nextSibling;
+        cursor.remove();
+        cursor = next;
+      }
+      for (const key of rows.keys()) if (!retained.has(key)) rows.delete(key);
       folds?.restoreScroll(children);
-      mountIcons(children);
+    }
+    function update(next) {
+      item = next;
+      const { count, names, retry: nextRetry } = conversationProcessSummary(item);
+      details.dataset.state = item.state;
+      writeUiText(label, count ? t("timeline.toolGroup.title", {}, "工具调用") : t("timeline.toolGroup.thinking", {}, "思考与执行"));
+      countText.hidden = !count;
+      writeUiText(countText, t("timeline.toolGroup.count", { count }, `${count} 次`));
+      namesText.hidden = !names.length;
+      writeUiText(namesText, names.slice(0, 3).join(" · ") + (names.length > 3
+        ? t("timeline.toolGroup.more", { count: names.length - 3 }, ` 等 ${names.length - 3} 种`) : ""));
+      namesText.title = names.join(" · ");
+      status.hidden = item.state !== "running";
+      retry = nextRetry;
+      const signature = JSON.stringify(retry ?? null);
+      if (signature !== retrySignature) {
+        retryNode?.remove();
+        retryNode = retry ? modelRetryInlineNode(retry) : null;
+        if (retryNode) summary.append(retryNode);
+        retrySignature = signature;
+      }
+      expand();
     }
     details.addEventListener("toggle", expand);
-    expand();
-    return element("li", { className: "timeline-item", attrs: { "data-kind": "process" } }, [details]);
+    update(item);
+    const row = element("li", { className: "timeline-item", attrs: { "data-kind": "process" } }, [details]);
+    liveRowUpdates.set(row, update);
+    return row;
   }
   if (item.kind === "history-more") {
     const button = element("button", { className: "conversation-gap", text:
@@ -1095,10 +1168,13 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       retainMarkdown(item);
       retained.add(item.key);
       // Run completion affects process defaults, not already settled body rows.
-      const { turnState, ...renderedItem } = item;
-      const signature = JSON.stringify([renderedItem, writable]);
+      const signature = rowSignature(item, writable);
       let row = renderedRows.get(item.key);
-      if (!row || (row.signature !== signature && !row.node.dataset.inlineEditing)) {
+      const update = row && liveRowUpdates.get(row.node);
+      if (row && row.signature !== signature && update) {
+        update(item);
+        row.signature = signature;
+      } else if (!row || (row.signature !== signature && !row.node.dataset.inlineEditing)) {
         const node = timelineNode(item, handlers, projectId,
           sessionId, writable, expanded.get(item.key),
           previewExpanded.get(`${item.key}/preview`) ?? false,

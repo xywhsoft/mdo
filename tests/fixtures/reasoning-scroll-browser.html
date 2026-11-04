@@ -24,7 +24,7 @@ try {
   checks.scrollable=pane().clientHeight>0&&pane().scrollHeight>pane().clientHeight;
   pane().scrollTop=250;await paint();let top=pane().scrollTop,old=pane(),kept=true;
   for(let n=0;n<5;n++){events.push(e("model_reasoning_delta",{text:lines(20)}));await publish();kept&&=near(pane().scrollTop,top);}
-  checks.readPosition=kept;checks.realReplacement=pane()!==old;
+  checks.readPosition=kept;checks.stablePane=pane()===old;
   pane().scrollTop=pane().scrollHeight;await paint();top=pane().scrollTop;
   events.push(e("model_reasoning_delta",{text:lines(40)}));await publish();
   checks.followBottom=atBottom()&&pane().scrollTop>top;
