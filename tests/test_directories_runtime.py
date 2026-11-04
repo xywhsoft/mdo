@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only host directory picker through real xs/TCC, with a tiny fixture."""
+"""Real xs/TCC directory browsing, keyset paging and exclusive creation."""
 from __future__ import annotations
 
 import argparse
@@ -31,8 +31,14 @@ def probe(port: int, workspace: Path) -> None:
     assert "file.txt" not in data["directories"], data
     if (workspace / "linked").is_symlink():
         assert "linked" in data["directories"], data
-    assert all(Path(item["path"]).is_absolute() for item in data["shortcuts"]), data
-    assert {item["kind"] for item in data["shortcuts"]} == {"cwd", "home"}, data
+    assert data['has_more'] is False and data['next_cursor'] == ''
+    status, _, body = request(port, 'GET', '/api/v1/workspace/locations')
+    locations = json.loads(body)['data']
+    assert status == 200 and locations['platform'] in ('windows', 'posix', 'android'), body
+    assert all(Path(item['path']).is_absolute() for item in locations['locations'])
+    assert {'cwd', 'home', 'root'} <= {item['kind'] for item in locations['locations']}, locations
+    if os.name == 'nt':
+        assert {'desktop', 'documents', 'downloads'} <= {item['kind'] for item in locations['locations']}, locations
 
     for path in (str(workspace / "中文 & # %"), str(workspace / "one"),
                  str(workspace / "one" / ".."), ""):
@@ -41,7 +47,8 @@ def probe(port: int, workspace: Path) -> None:
         assert Path(json.loads(body)["data"]["path"]).is_absolute()
     status, _, body = request(port, "GET", endpoint + "?path=" + quote(workspace.anchor, safe=""))
     assert status == 200 and json.loads(body)["data"]["parent"] == "", (status, body)
-    for query in ("path=%00", "path=%0A", "path=%FF", "path=%GG", "path=a&x=b", "other=a", "path=" + "x" * 2049):
+    for query in ("path=%00", "path=%0A", "path=%FF", "path=%GG", "path=a&x=b", "other=a", "path=" + "x" * 2049,
+                  'path=a&path=b', 'limit=0', 'limit=257', 'limit=-1', 'limit=1&limit=2', 'filter=%00', 'prefix=%ff', 'after=%0a', 'path=a&'):
         status, _, body = request(port, "GET", endpoint + "?" + query)
         assert status == 400, (query[:30], status, body)
         # Malformed wire escapes may be rejected by xs before the API route.
@@ -53,10 +60,42 @@ def probe(port: int, workspace: Path) -> None:
     status, _, body = request(port, "HEAD", target)
     assert status == 200 and body == b"", (status, body)
     status, headers, _ = request(port, "OPTIONS", target)
-    assert status in (200, 204) and headers["allow"] == "GET, HEAD, OPTIONS", (status, headers)
+    assert status in (200, 204) and headers["allow"] == "GET, HEAD, POST, OPTIONS", (status, headers)
     status, _, _ = request(port, "POST", target, body=b"{}", headers={"Content-Type":"application/json"})
-    assert status == 405, status
+    assert status == 400, status
+    def create(name, **extra):
+        return request(port, 'POST', endpoint, body=json.dumps({'path':str(workspace),'name':name,**extra}).encode(), headers={'Content-Type':'application/json'})
+    for name in ('', '.', '..', 'nested/not-one-name', 'bad\x00name'):
+        assert create(name)[0] == 400, repr(name)
+    if os.name == 'nt':
+        for name in ('CON','nul.txt','lpt1','bad:name','trailing.','trailing '): assert create(name)[0] == 400, name
+    assert create('one')[0] == 409
+    assert create('file.txt')[0] == 409
+    assert create('must-not-create', extra=True)[0] == 400
+    assert not (workspace/'must-not-create').exists()
+    status,_,body = create('new 中文 folder')
+    assert status == 201 and Path(json.loads(body)['data']['path']).is_dir(), (status,body)
+    assert create('new 中文 folder')[0] == 409
     assert (workspace / "file.txt").read_text(encoding="utf-8") == "must stay unchanged"
+
+    # The old enumerator could stop at 128 names or at 4096 file entries.
+    many=workspace/'many'; many.mkdir()
+    for index in range(4200): (many/f'a-file-{index:04}').touch()
+    names=[f'z-node-{index}' for index in range(300)]
+    for name in reversed(names): (many/name).mkdir()
+    url=endpoint+'?path='+quote(str(many),safe=''); after=''; seen=[]
+    for _ in range(8):
+        status,_,raw=request(port,'GET',url+'&limit=47&after='+quote(after,safe=''))
+        page=json.loads(raw)['data'];assert status==200 and not page['truncated'],raw
+        assert page['total']==len(names) and len(page['directories'])<=47
+        seen.extend(page['directories'])
+        if not page['has_more']: break
+        assert page['next_cursor']!=after
+        after=page['next_cursor']
+    assert seen==names and len(set(seen))==300,seen
+    for query,expected in [('prefix=z-node-29',[f'z-node-{i}' for i in [29,*range(290,300)]]),('filter=NODE-299',['z-node-299'])]:
+        status,_,raw=request(port,'GET',url+'&'+query)
+        assert status==200 and json.loads(raw)['data']['directories']==expected,raw
 
 
 def run_probe(host: Path) -> None:

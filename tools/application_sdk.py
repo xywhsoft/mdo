@@ -22,6 +22,9 @@ ALIASES = {
     'mcp.templates.list':('GET','/api/v1/mcp/templates'), 'mcp.connections.manage':('POST','/api/v1/mcp/connections'),
     'account.get':('GET','/api/v1/account'), 'account.logout':('POST','/api/v1/account/logout'),
     'devices.list':('GET','/api/v1/connector/devices'), 'extensions.list':('GET','/api/v1/extensions/{kind}'),
+    'workspace.directories.list':('GET','/api/v1/workspace/directories'),
+    'workspace.directories.create':('POST','/api/v1/workspace/directories'),
+    'workspace.locations':('GET','/api/v1/workspace/locations'),
 }
 
 def services(root: Path):

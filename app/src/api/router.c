@@ -153,8 +153,10 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "GET, HEAD, OPTIONS", MdoApiMcpRoute, false },
     { "/api/v1/projects", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD |
       XHTTP_METHOD_POST, "GET, HEAD, POST, OPTIONS", MdoApiProjectsRoute, false },
-    { "/api/v1/workspace/directories", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiDirectoriesRoute, false },
+    { "/api/v1/workspace/directories", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_POST,
+      "GET, HEAD, POST, OPTIONS", MdoApiDirectoriesRoute, false },
+    { "/api/v1/workspace/locations", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
+      "GET, HEAD, OPTIONS", MdoApiDirectoryLocationsRoute, false },
     { "/api/v1/projects/{project}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD |
       XHTTP_METHOD_PUT | XHTTP_METHOD_DELETE,
       "GET, HEAD, PUT, DELETE, OPTIONS", MdoApiProjectRoute, true },

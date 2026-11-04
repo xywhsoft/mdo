@@ -50,7 +50,8 @@ DEFS={
  'ModelParameterCatalog':obj({'items':array(ref('Document'))},('items',)),
  'ModelAdd':document('added:b verified:b agent_ready:b verification_saved:b model_id:s revision:u verification:o',('added','verified','model_id','revision')),
  'Ecosystem':document('items:a types:a installed:a catalogs:a operation:j draft:j state:s id:s'),
- 'Directory':document('path:s parent:s separator:s directories:ss shortcuts:a truncated:b'),
+ 'Directory':document('path:s name:s parent:s separator:s directories:ss filter:s total:u skipped:u has_more:b next_cursor:s truncated:b'),
+ 'DirectoryLocations':document('platform:s locations:a'),
  'Attachment':document('id:s mime_type:s file_name:s size:u url:s created_at:i path:s'),
  'SkillInvocation':document('id:s text:s',('id','text')),
  'PaneLayout':document('schema_version:u sidebar_width:u sidebar_open:b'),
@@ -69,6 +70,7 @@ DEFS['QueueItemPage']['properties'].update(fields('managed:b paused:b error:s ca
 
 INPUTS={
  'ProjectCreate':document('id:s name:s workspace_root:s default_model_id:s',('id','name'),True),
+ 'DirectoryCreate':document('path:s name:s',('path','name'),True),
  'ProjectUpdate':document('name:s workspace_root:s default_model_id:s',('name','workspace_root','default_model_id'),True),
  'SessionCreate':document('project_id:s title:s auto_title:b agent_id:s model_id:s protocol:s reasoning_effort:s permission_profile:s workspace_root:s client_session_id:s max_output_tokens:u',('project_id',),True),
  'SessionUpdate':document('title:s archived:b deleted:b pinned:b',closed=True),
@@ -159,9 +161,10 @@ BODY['ExtensionTasksRoute']='ExtensionTask'
 BODY['CommandProjectRoute']='Enabled'
 BODY['SkillProjectRoute']='Enabled'
 BODY['ExtensionsRoute']='ExtensionDirectory'
+BODY['DirectoriesRoute']='DirectoryCreate'
 NO_BODY=set('''NativeDownloadsRoute CommandsRoute DistributionRoute CliToolsRoute LiveRoute DirectRoute UpdateExitRoute BootstrapRoute SettingsRoute
 ModelsRoute ModelConfigRoute ModelProvidersRoute AgentsRoute BackupUploadRoute BackupUploadSealRoute BackupPreviewsRoute BackupPreviewRoute UpdateDownloadRoute UpdateInstallRoute
-BackupRestoreApplyRoute BackupRestoresRoute BackupRestoreRoute BackupPreviewStartRoute ModulesRoute ToolsRoute SkillsRoute McpRoute DirectoriesRoute
+BackupRestoreApplyRoute BackupRestoresRoute BackupRestoreRoute BackupPreviewStartRoute ModulesRoute ToolsRoute SkillsRoute McpRoute DirectoriesRoute DirectoryLocationsRoute
 ProjectPurgePreviewRoute ProjectPurgeResultRoute ProjectWorkspaceFilesRoute MemoryOpenDirectoryRoute MemoryEntryRoute
 RunsRoute TasksRoute ApprovalsRoute AsksRoute WorkspaceFilesRoute ArtifactsRoute PermissionsRoute DiagnosticsRoute StorageRoute
 OperationsRoute ModelsReloadRoute SkillsReloadRoute SkillSourcesRoute ModulesReloadRoute McpReloadRoute McpSourcesRoute
@@ -184,6 +187,7 @@ RESULT_GROUPS={
  'ModelProviderCatalog':'ModelProvidersRoute','ModelParameterCatalog':'ModelParametersRoute',
  'ModelAdd':'ModelAddRoute',
  'Directory':'DirectoriesRoute',
+ 'DirectoryLocations':'DirectoryLocationsRoute',
  'Document':'AgentPlanRoute',
  'Attachment':'AttachmentsRoute AttachmentInfoRoute UploadsRoute',
  'SkillInvocation':'SkillInvokeRoute',
@@ -195,7 +199,7 @@ RESULT={handler:name for name,handlers in RESULT_GROUPS.items() for handler in h
 QUERY_GROUPS={
  'project:s':'CommandsRoute CommandProjectRoute CommandInvocationRoute SkillsRoute SkillSourcesRoute SkillProjectRoute SkillInvokeRoute McpRoute McpSourcesRoute McpProjectRoute AgentPlanRoute',
  'q:s limit:u include_directories:u':'WorkspaceFilesRoute ProjectWorkspaceFilesRoute',
- 'path:s':'DirectoriesRoute',
+ 'path:s filter:s prefix:s after:s limit:u':'DirectoriesRoute',
  'after:u limit:u':'SessionEventsRoute SessionConversationRoute SessionTurnsRoute SessionHistoryRoute ScheduleHistoryRoute TaskOutputRoute',
  'project:s session:s status:s limit:u':'SessionsRoute RunsRoute TasksRoute ApprovalsRoute ArtifactsRoute',
  'after:u topics:s project:s session:s':'LiveRoute',
@@ -242,6 +246,7 @@ def contract(row):
     if handler=='RemoteRoute' and path.endswith('/ticket'):body_name=None;properties['body']=document('job_id:s',('job_id',),True)
     if handler=='CliToolsRoute' and method=='POST':properties['body']=document('action:s id:s tool:o enabled:b revision:u store_id:u query:s before:u name:s')
     if handler=='DistributionRoute' and method=='POST':properties['body']=document('action:s channel:s product:s')
+    if handler=='DirectoriesRoute' and method=='POST':properties['query']=obj({},closed=True)
     raw=handler in ('BackupUploadChunkRoute','AttachmentRoute','UploadsRoute') and method=='PUT'
     raw=raw or handler=='AttachmentsRoute' and method=='POST'
     raw=raw or handler=='DeviceTransfersRoute' and method=='PUT'
