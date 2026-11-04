@@ -466,6 +466,6 @@
   "limitations": [
     "Release-time requests verify publication and download paths; they do not validate all live model providers.",
     "Android manual acceptance was reported by the user; this publication turn did not repeat device tests.",
-    "Ignored local website binary assets were not overwritten; website text source and official remote binaries were updated separately."
+    "Existing local website binary assets were not overwritten; the website text source was committed and official remote binaries were published from the verified release staging. Root mdo binaries and mdo-builds.json identify the published products."
   ]
 }
