@@ -1,0 +1,51 @@
+{
+  "version_name": "0.9.2",
+  "version_code": "05000902",
+  "source_head": "932be388765b601a18cce7031f4e039a375c8c25",
+  "application_source_sha256": "7aba6e945587ccfc2dc99652abb0cf23650c9acd516c296c7ff1f8c90f0d3a43",
+  "release_status": "local-test-build-not-published",
+  "products": [
+    {
+      "filename": "mdo.exe",
+      "path": "D:\\GIT\\mdo\\.build\\local-0.9.2-20261104-session-warning\\windows\\mdo.exe",
+      "platform": "windows-x86_64",
+      "edition": "desktop",
+      "build_id": 70000212,
+      "bytes": 6882243,
+      "sha256": "f8679d710a1e6c0b6e0483b6fe87a2e0fb8ccd3e3abc0788b16e149bc26deb23",
+      "delivery_path": "D:\\GIT\\mdo\\dist\\0.9.2-r2\\mdo.exe"
+    },
+    {
+      "filename": "mdo-arm64-v8a.apk",
+      "path": "D:\\GIT\\mdo\\.build\\local-0.9.2-20261104-session-warning\\android\\mdo-arm64-v8a.apk",
+      "platform": "android-arm64-v8a",
+      "edition": "lite",
+      "build_id": 70000218,
+      "bytes": 6722964,
+      "sha256": "74e636d2af51b8b562cf155dafe4e1dc2e00203aee34075dffd5bd8ede84bee4",
+      "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "delivery_path": "D:\\GIT\\mdo\\dist\\0.9.2-r2\\mdo-arm64-v8a.apk"
+    }
+  ],
+  "validation": {
+    "passed": true,
+    "windows_gui_subsystem": true,
+    "windows_bootstrap": {
+      "stage": "ready",
+      "ready": true,
+      "version": "0.9.2"
+    },
+    "android": {
+      "edition": "lite",
+      "bytes": 6722964,
+      "native_elf_files": 3,
+      "runtime_paths": 0
+    },
+    "release_certificate_unchanged": true,
+    "android_device_tested": false,
+    "source_unchanged": true,
+    "root_release_snapshots_unchanged": true,
+    "published": false
+  },
+  "fix_commit": "74283609"
+}
