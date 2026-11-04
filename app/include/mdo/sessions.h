@@ -192,6 +192,9 @@ typedef struct MdoSessionEventInfo {
     uint32 ModelRetryAfterMs; /* zero: the scheduled attempt has started */
     MdoSessionEventSource Source; /* Actual persistent member, empty for ordinary runs. */
     uint64 ModelFirstByteMs, ModelFirstTokenMs, ModelRequestDurationMs;
+    /* Completed stream records replace only transient previews in this range. */
+    uint64 StreamFirstId, StreamThroughId;
+    bool StreamVolatile;
 } MdoSessionEventInfo;
 
 /* Product bootstrap (or an embedder) initializes MdoProjectLifecycle before

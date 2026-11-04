@@ -196,6 +196,10 @@ static bool MdoApiSessionEventValueLimit(const MdoSessionEventInfo* Event,
             Event->ContextWindowTokens) &&
         MdoApiValueSetUInt(Item, "task_state", Event->TaskState) &&
         MdoApiValueSetUInt(Item, "task_revision", Event->TaskRevision);
+    if (Ok && Event->StreamFirstId)
+        Ok = MdoApiValueSetUInt(Item,"stream_first_id",Event->StreamFirstId) &&
+            MdoApiValueSetUInt(Item,"stream_through_id",Event->StreamThroughId) &&
+            MdoApiValueSetBool(Item,"stream_volatile",Event->StreamVolatile);
     if (Ok && Event->QueueItemId[0])
         Ok = MdoApiValueSetString(Item, "queue_item_id", Event->QueueItemId);
     if (Ok) Ok = MdoApiValueSetUInt(Item, "input_tokens", Event->InputTokens) &&
@@ -383,7 +387,7 @@ bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
     const char* ProjectId, const char* SessionId, bool FullText, xvalue** pValue)
 {
     return MdoApiSessionEventValueLimit(Event, ProjectId, SessionId,
-        FullText ? MDO_API_EVENT_SINGLE_TEXT_BYTES : MDO_API_EVENT_TEXT_BYTES, pValue);
+        (FullText || Event->StreamFirstId) ? MDO_API_EVENT_SINGLE_TEXT_BYTES : MDO_API_EVENT_TEXT_BYTES, pValue);
 }
 
 static xvalue* MdoApiConversationNotices(const MdoConversationPageInfo* Page)

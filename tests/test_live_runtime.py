@@ -201,7 +201,9 @@ def probe(host: Path | None, packed: Path | None):
                 # covered, and unexpected deltas name the exact changed file.
                 return {p.relative_to(home).as_posix(): p.read_bytes() if p.is_file() else None
                         for p in home.rglob("*") if p.name not in (".mdo.lock", ".writer.lock")
-                        and not p.is_relative_to(home / "data/cache")}
+                        and not p.is_relative_to(home / "data/cache")
+                        and p.relative_to(home).as_posix() not in {"data/notifications",
+                            "data/notifications/catalog.json", "data/update", "data/update/policy.json"}}
             before_connections = home_inventory()
             assert connect(origin="https://example.invalid").status == 403
             assert connect(token="incorrect").status == 403
@@ -276,11 +278,25 @@ def probe(host: Path | None, packed: Path | None):
             assert changed, "run/resource notification missing"
             ids = [item["event_id"] for item in delivered]
             assert ids == sorted(set(ids)), ids
-            text = "".join(item["text"] for item in delivered if item["kind"] == "model_text_delta")
+            # Run the actual client merge: volatile replacement snapshots are
+            # intentionally absent from the durable HTTP journal.
+            merge_source = """
+import fs from 'node:fs';
+globalThis.document=Object.assign(new EventTarget(),{hidden:false});
+globalThis.window=Object.assign(new EventTarget(),{setTimeout,clearTimeout});
+const {mergeTimelineEvents}=await import('./app/web/js/features/chat/timeline-store.js');
+console.log(JSON.stringify(mergeTimelineEvents([],JSON.parse(fs.readFileSync(0,'utf8'))).events));
+"""
+            reconciled = subprocess.run(['node','--input-type=module','-e',merge_source],
+                cwd=ROOT,input=json.dumps(delivered),text=True,capture_output=True,check=True)
+            completed = json.loads(reconciled.stdout)
+            assert any(item.get('stream_volatile') for item in delivered), 'no memory-only previews'
+            assert not any(item.get('stream_volatile') for item in completed), 'unfinished preview after completion'
+            text = "".join(item["text"] for item in completed if item["kind"] == "model_text_delta")
             assert text == "".join(f"part-{index} " for index in range(12)), text
             assert any(item["kind"] == "model_reasoning_delta" for item in delivered)
             _, document = request(port, "GET", path + "/events?after=0&limit=32")
-            assert document["data"]["items"] == delivered, "WebSocket and HTTP schemas diverged"
+            assert document["data"]["items"] == completed, "WebSocket and HTTP schemas diverged"
             # Completion is announced independently of the final token callback.
             deadline = time.monotonic() + 3
             while time.monotonic() < deadline:

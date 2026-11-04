@@ -61,10 +61,11 @@ class InspectSessionTests(unittest.TestCase):
                       {'kind': 4, 'schema_version': 8, 'input_tokens': 10, 'output_tokens': 4},
                       {'kind': 4, 'schema_version': 9, 'input_tokens': 12, 'output_tokens': 5},
                       {'kind': 4, 'schema_version': 10, 'input_tokens': 14, 'output_tokens': 6},
-                      {'kind': 4, 'schema_version': 11, 'input_tokens': 100, 'output_tokens': 100}])
+                      {'kind': 4, 'schema_version': 11, 'input_tokens': 16, 'output_tokens': 7},
+                      {'kind': 4, 'schema_version': 12, 'input_tokens': 100, 'output_tokens': 100}])
         report = inspect_session(self.path)
-        self.assertEqual(report['event_counts'], {'model_done': 4, 'unknown:4': 1})
-        self.assertEqual(report['model_usage'], {'input_tokens': 44, 'output_tokens': 18})
+        self.assertEqual(report['event_counts'], {'model_done': 5, 'unknown:4': 1})
+        self.assertEqual(report['model_usage'], {'input_tokens': 60, 'output_tokens': 25})
 
     def test_restarted_run_does_not_pair_an_old_call(self):
         self.journal([{'kind': 5, 'run_id': 1, 'tool_call_id': 'x', 'occurred_at_us': 100},

@@ -121,3 +121,29 @@ test("a post-boundary todo response inside the discarded range is retried rather
   assert.equal(todoStore.get().data.eventId, 0);
   assert.equal(todoStore.get().status, "ready");
 });
+
+
+test("completed stream replaces its volatile preview exactly once", () => {
+  const base = { kind: "model_text_delta", agent_id: 1, run_id: 7, agent_turn: 2, agent_depth: 0 };
+  const first = { ...base, event_id: 3, text: "hel", stream_first_id: 3, stream_through_id: 0, stream_volatile: true };
+  const next = { ...base, event_id: 5, text: "hello", stream_first_id: 3, stream_through_id: 3, stream_volatile: true };
+  const child = { ...first, agent_id: 2, event_id: 4, text: "child" };
+  const preview = mergeTimelineEvents([first, child], [next]).events;
+  assert.deepEqual(preview.map(e => e.event_id), [4, 5]);
+  const completed = { ...next, event_id: 6, stream_through_id: 5, stream_volatile: false };
+  const result = mergeTimelineEvents(preview, [completed]).events;
+  assert.deepEqual(result.map(e => e.event_id), [4, 6]);
+  assert.equal(result.find(e => e.event_id === 6).text, "hello");
+  assert.deepEqual(mergeTimelineEvents(result, [completed]).events, result);
+});
+
+test("completion replacement preserves other members, reasoning and completed chunks", () => {
+  const base = { kind: "model_text_delta", agent_id: 1, run_id: 7, agent_turn: 2, agent_depth: 0,
+    stream_first_id: 2, stream_through_id: 8, stream_volatile: true };
+  const completed = { ...base, event_id: 9, stream_volatile: false };
+  const rows = [ { ...base, event_id: 3 }, { ...base, event_id: 4, kind: "model_reasoning_delta" },
+    { ...base, event_id: 5, source: { namespace: "p", member: "other" } }, completed ];
+  const part = { ...completed, event_id: 10, text: "second completed chunk" };
+  const result = mergeTimelineEvents(rows, [part]).events;
+  assert.deepEqual(result.map(e => e.event_id), [4, 5, 9, 10]);
+});

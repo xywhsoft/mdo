@@ -8,6 +8,9 @@ typedef struct MdoEventReader {
     uint64 Position;
     xfileinfo Info;
     bool Failed;
+    uint64 CacheAt;
+    size_t CacheSize;
+    char Cache[65536];
     char Block[8192];
     char Record[MDO_SESSION_EVENT_RECORD_LIMIT + 1u];
 } MdoEventReader;
@@ -44,11 +47,25 @@ static bool MdoEventReaderRead(MdoEventReader* Reader, uint64 At,
     void* Buffer, size_t Size)
 {
     if ( Size == 0u ) return true;
-    if ( At > Reader->Size || Size > Reader->Size - At ||
-         !xrtSeek(Reader->File, (int64)At, XSEEK_START, NULL) ||
-         !xrtReadFull(Reader->File, Buffer, Size, NULL) ) {
+    if ( At > Reader->Size || Size > Reader->Size - At ) {
         Reader->Failed = true;
         return false;
+    }
+    char* Output = Buffer;
+    while (Size) {
+        if (!Reader->CacheSize || At < Reader->CacheAt || At-Reader->CacheAt >= Reader->CacheSize) {
+            Reader->CacheAt = At - At % sizeof(Reader->Cache);
+            uint64 Left = Reader->Size-Reader->CacheAt;
+            Reader->CacheSize = Left < sizeof(Reader->Cache) ? (size_t)Left : sizeof(Reader->Cache);
+            if (!xrtSeek(Reader->File, (int64)Reader->CacheAt, XSEEK_START, NULL) ||
+                !xrtReadFull(Reader->File, Reader->Cache, Reader->CacheSize, NULL)) {
+                Reader->Failed = true; return false;
+            }
+        }
+        size_t Offset = (size_t)(At-Reader->CacheAt), Copy = Reader->CacheSize-Offset;
+        if (Copy > Size) Copy = Size;
+        memcpy(Output, Reader->Cache+Offset, Copy);
+        Output += Copy; At += Copy; Size -= Copy;
     }
     return true;
 }

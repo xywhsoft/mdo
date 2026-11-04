@@ -9,7 +9,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/models.h"
 
-#define MDO_SESSION_EVENT_SCHEMA 10u
+#define MDO_SESSION_EVENT_SCHEMA 11u
 #define MDO_SESSION_EVENT_RECORD_LIMIT (96u * 1024u)
 #define MDO_SESSION_EVENT_TEXT_LIMIT (64u * 1024u)
 #define MDO_SESSION_EVENT_METADATA_LIMIT 4096u
@@ -65,6 +65,9 @@ struct MdoSessionEventBridge {
      * the main summary phase; final classification survives journal replay. */
     bool MainCompacting;
     uint64 MainCompactionRunId;
+    struct MdoEventStream* Streams;
+    size_t StreamBytes;
+
 };
 
 struct MdoSessionEventTrimPlan {
@@ -440,6 +443,8 @@ static bool MdoEventsAppend(MdoSessionEventBridge* Bridge,
     return Ok;
 }
 
+#include "event_stream.inc.c"
+
 static bool MdoEventsValueUInt(const xvalue* Object, const char* Key,
     uint64* Result)
 {
@@ -541,6 +546,7 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
     if (Root && xrtValueObjectGet(Root, xrtStrView("context"))) --FieldCount;
     if (Root && xrtValueObjectGet(Root, xrtStrView("source"))) --FieldCount;
     if (Root && xrtValueObjectGet(Root, xrtStrView("model_timing"))) --FieldCount;
+    if (Root && xrtValueObjectGet(Root, xrtStrView("stream"))) --FieldCount;
     if ( Root == NULL || xrtValueType(Root) != XVALUE_OBJECT ||
          (FieldCount != 25u && FieldCount != 28u &&
           FieldCount != 29u && FieldCount != 31u &&
@@ -610,6 +616,17 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
           (!MdoEventsValueString(Root, "model_id", &ModelId) ||
            !MdoEventsValueUInt(Root, "context_window_tokens",
               &Result->Info.ContextWindowTokens))) ) goto done;
+    {
+        const xvalue* Stream = xrtValueObjectGet(Root, XRT_STR_LITERAL("stream"));
+        if (Stream && (Schema < 11u ||
+            (Kind != XWORK_EVENT_MODEL_TEXT_DELTA && Kind != XWORK_EVENT_MODEL_REASONING_DELTA) ||
+            xrtValueType(Stream) != XVALUE_OBJECT || xrtValueCount(Stream) != 3u ||
+            !MdoEventsValueUInt(Stream,"first",&Result->Info.StreamFirstId) ||
+            !MdoEventsValueUInt(Stream,"through",&Result->Info.StreamThroughId) ||
+            !MdoEventsValueBool(Stream,"volatile",&Result->Info.StreamVolatile) ||
+            !Result->Info.StreamFirstId || Result->Info.StreamFirstId > Result->Info.EventId ||
+            Result->Info.StreamThroughId >= Result->Info.EventId)) goto done;
+    }
     {
         const xvalue* Source=xrtValueObjectGet(Root,XRT_STR_LITERAL("source"));
         if(Source){
@@ -1418,6 +1435,9 @@ void MdoSessionEventBridgeRelease(void* Value)
     Previous = xrtAtomic32FetchSub(&Bridge->Refs, 1u, XMEMORY_ACQ_REL);
     if ( Previous > 1u ) return;
     if ( Previous == 0u ) abort();
+    /* Normal terminal events already drain this buffer. A dropped owner must
+     * still attempt the tail before releasing its anchored Home and lease. */
+    MdoEventsStreamDiscard(Bridge);
     if ( Bridge->Registered )
         MdoSessionsInternalActiveRelease(Bridge->ProjectId, Bridge->SessionId);
     if ( Bridge->RuntimeLock != NULL ) {
@@ -1521,8 +1541,8 @@ bool MdoSessionEventBridgeOnEvent(void* Value, const xwork_event* Event)
     if ( DataLease == NULL ) return false;
     UserEvent = *Event;
     xrtMutexLock(Bridge->Lock);
-    Ok = true;
-    if ( Event->eKind == XWORK_EVENT_AGENT_START &&
+    Ok = MdoEventsStreamDelta(Event) || MdoEventsStreamFinish(Bridge, Event);
+    if ( Ok && Event->eKind == XWORK_EVENT_AGENT_START &&
          Event->uAgentDepth == 0u ) {
         const size_t Count = Bridge->PendingRunId == Event->uRunId ?
             Bridge->PendingCount : 0u;
@@ -1539,7 +1559,7 @@ bool MdoSessionEventBridgeOnEvent(void* Value, const xwork_event* Event)
             Bridge->SessionId, Bridge->NextEventId, Event->uRunId,
             Bridge->PendingIds, Count);
     }
-    if ( Ok ) Ok = MdoEventsAppend(Bridge, &UserEvent);
+    if ( Ok ) Ok = MdoEventsStreamAppend(Bridge, &UserEvent);
     if ( Ok && Event->eKind == XWORK_EVENT_AGENT_START &&
          Event->uAgentDepth == 0u &&
          Bridge->PendingRunId == Event->uRunId ) {

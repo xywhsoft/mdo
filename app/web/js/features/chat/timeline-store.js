@@ -43,7 +43,17 @@ function cacheKey(data) {
 }
 function rememberTimeline() {
   const data = timelineStore.get().data;
-  if (data?.sessionId) sessionCache.put(cacheKey(data), data);
+  if (data?.sessionId) sessionCache.put(cacheKey(data), committedTimeline(data));
+}
+// Runtime previews are deliberately absent after a process crash. Never save
+// their cursors in the session cache or resume a socket past durable history.
+function committedTimeline(data) {
+  const volatile = data.events?.filter(event => event.stream_volatile);
+  if (!volatile?.length) return data;
+  const events = data.events.filter(event => !event.stream_volatile);
+  const first = Math.min(...volatile.map(event => event.stream_first_id || event.event_id));
+  const cursor = Math.min(data.cursor, first - 1);
+  return { ...data, events, cursor, latestEventId: cursor, turns: summarizeConversationEvents(events) };
 }
 export function clearTimelineCache() { sessionCache.clear(); }
 subscribeTarget(state => {
@@ -107,7 +117,19 @@ export function historyRemovalRange(event) {
 
 export function mergeTimelineEvents(retained, additions) {
   const unique = new Map(retained.map(event => [event.event_id, event]));
-  for (const event of additions) unique.set(event.event_id, event);
+  for (const event of additions) {
+    const first = event.stream_first_id, through = event.stream_through_id;
+    if (Number.isSafeInteger(first) && first > 0 && Number.isSafeInteger(through) && through < event.event_id) {
+      for (const [id, prior] of unique) {
+        if (prior.stream_volatile && id >= first && id <= through && prior.kind === event.kind &&
+            prior.agent_id === event.agent_id && prior.run_id === event.run_id &&
+            prior.agent_turn === event.agent_turn && prior.agent_depth === event.agent_depth &&
+            prior.source?.member === event.source?.member && prior.source?.namespace === event.source?.namespace)
+          unique.delete(id);
+      }
+    }
+    unique.set(event.event_id, event);
+  }
   const events = [...unique.values()].sort((a, b) => a.event_id - b.event_id);
   const ranges = events.map(historyRemovalRange).filter(Boolean);
   // Durable markers identify discarded UI IDs, not reusable model sequences.
@@ -559,7 +581,12 @@ liveConnection.subscribe((event) => {
       stopTimer();
       if (timelineStore.get().data?.initializing) void loadInitialTimeline(generation);
     }
-    else { pollDelay = FALLBACK_POLL_MS; schedulePoll(generation); }
+    else {
+      const current = timelineStore.get().data;
+      if (current?.events?.some(event => event.stream_volatile))
+        timelineStore.setData(committedTimeline(current));
+      pollDelay = FALLBACK_POLL_MS; schedulePoll(generation);
+    }
   }
 });
 
