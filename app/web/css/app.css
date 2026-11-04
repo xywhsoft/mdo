@@ -2168,3 +2168,19 @@ select:focus-visible,
 
 /* Read-only history faults stay separate from model failure cards. */
 .timeline-history-notice { margin: 8px 0 16px; padding: 7px 10px; border-inline-start: 2px solid var(--warning, #bd8a35); color: var(--muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+/* Completed-turn review summary; file paths are always rendered as text. */
+.turn-changes { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; padding: 0; background: var(--surface, transparent); }
+.turn-changes[hidden] { display: none; }
+.turn-changes-heading { display: flex; align-items: center; gap: 10px; padding: 12px; flex-wrap: wrap; }
+.turn-changes-button, .turn-changes-file { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: start; }
+.turn-changes-button { padding: 6px 12px; border-radius: 6px; }
+.turn-changes-heading > .turn-changes-button:first-child { padding-inline: 0; font-weight: 600; }
+.turn-changes-heading > .turn-changes-button:last-child { margin-inline-start: auto; border: 1px solid var(--border); }
+.turn-changes-file { display: flex; gap: 12px; align-items: center; width: 100%; padding: 9px 12px; }
+.turn-changes-files { border-top: 1px solid var(--border); max-height: 260px; overflow-y: auto; }
+.turn-changes-path { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.turn-changes-stats, .turn-changes-file-stats { display: inline-flex; gap: 6px; flex-shrink: 0; font-size: .85em; }
+.turn-changes-added { color: var(--success, #39b875); }
+.turn-changes-removed { color: var(--danger, #ef7067); }
+.turn-changes-button:hover, .turn-changes-file:hover { background: var(--surface-hover); }
+.turn-changes-button:focus-visible, .turn-changes-file:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }

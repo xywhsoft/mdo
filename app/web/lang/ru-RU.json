@@ -3508,5 +3508,16 @@
   "composer.registerFree": "Создать бесплатный аккаунт Mdo ↗",
   "composer.configureOwnModel": "Без входа: настроить свою модель ↗",
   "composer.startUsing": "Начните работу с Mdo",
-  "composer.selectModel": "Выбрать модель"
+  "composer.selectModel": "Выбрать модель",
+  "turnChanges.files": "Изменено файлов: {count}",
+  "turnChanges.view": "Посмотреть изменения",
+  "turnChanges.binary": "Двоичный файл",
+  "turnChanges.less": "Свернуть список",
+  "turnChanges.more": "Показать ещё {count} файлов",
+  "turnChanges.label": "Изменения в этом ответе",
+  "turnChanges.scope": "Изменения рабочей папки за время выполнения; могут включать параллельные внешние правки.",
+  "turnChanges.unavailable": "Изменения недоступны. Нажмите для повтора.",
+  "turnChanges.openFailed": "Не удалось открыть. Нажмите для повтора.",
+  "turnChanges.before": "До выполнения",
+  "turnChanges.after": "После выполнения"
 }

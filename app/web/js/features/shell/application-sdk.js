@@ -145,6 +145,12 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
       const opened = window.open(url, name, "noopener");
       if (!opened) throw new Error(uiErrorText("error.detail.theOsOrBrowserBlockedTheNewWindowOpenIt", {}, "The OS or browser blocked the new window; open it from a user action"));
     },
+    openChanges: async ({ projectId, sessionId, turn, path, repository }) => {
+      check();
+      if (!workbench) throw new Error(uiText("ui.panelManager.workspaceExited", {}, "工作区已退出"));
+      return workbench.open("mdo.changes", { key: `turn-${turn}`, title: uiText("turnChanges.label", {}, "本轮文件变更"),
+        params: { scope: "turn", turn, path, repository, continuous: !path } }, clientApi.bind({ project: projectId, session: sessionId }));
+    },
     openFile: async ({ path, line = 1 }, callerApi = clientApi) => {
       check();
       if (!workbench) throw new Error(uiErrorText("error.detail.workbenchIsUnavailable", {}, "Workbench is unavailable"));

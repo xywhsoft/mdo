@@ -3508,5 +3508,16 @@
   "composer.registerFree": "Create a free Mdo account ↗",
   "composer.configureOwnModel": "No sign-in needed: configure your own model ↗",
   "composer.startUsing": "Get started with Mdo",
-  "composer.selectModel": "Choose a model"
+  "composer.selectModel": "Choose a model",
+  "turnChanges.files": "Edited {count} files",
+  "turnChanges.view": "View changes",
+  "turnChanges.binary": "Binary",
+  "turnChanges.less": "Show fewer files",
+  "turnChanges.more": "Show {count} more files",
+  "turnChanges.label": "Changes in this reply",
+  "turnChanges.scope": "Net workspace changes during this run; may include concurrent external edits.",
+  "turnChanges.unavailable": "Changes unavailable. Click to retry.",
+  "turnChanges.openFailed": "Could not open. Click to retry.",
+  "turnChanges.before": "Before this run",
+  "turnChanges.after": "After this run"
 }

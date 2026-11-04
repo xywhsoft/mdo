@@ -11,14 +11,15 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
   root.classList.add("wb-changes-view");
   const saved = viewState.changes || {}, collapsed = new Set(saved.collapsed || []);
   const treeId = `changes-${crypto.randomUUID()}`;
-  let repository = saved.repository || params.repository || ".", state, selected = saved.selected || "", page, split = Boolean(saved.split), treeWidth = Math.max(150, Math.min(360, saved.treeWidth || 200));
-  let operation, generation = 0, saveTimer, treeRows = [], focused = 0, selectedRows = null, previousPages = [], targetOffset = 0, continuous = Boolean(saved.continuous), multi;
+  let repository = saved.repository || params.repository || ".", state, selected = params.path || saved.selected || "", page, split = Boolean(saved.split), treeWidth = Math.max(150, Math.min(360, saved.treeWidth || 200));
+  let operation, generation = 0, saveTimer, treeRows = [], focused = 0, selectedRows = null, previousPages = [], targetOffset = 0, continuous = Boolean(params.continuous ?? saved.continuous), multi;
   const bar = make("div", "wb-changes-toolbar"), scope = make("select", "wb-compare-scope"), base = make("select", "wb-compare-base"), summary = make("span", "wb-changes-summary");
   writeUiAttribute(scope, "aria-label", uiMessage("ui.changesView.changeComparisonScope", {}, "变更比较范围")); writeUiAttribute(base, "aria-label", uiMessage("ui.changesView.baseBranchForComparison", {}, "比较基准分支")); base.hidden = true;
   for (const [value, label] of [["workspace", uiText("ui.changesView.workspace", {}, "工作区")], ["staged", uiText("ui.changesView.staged", {}, "已暂存")], ["unstaged", uiText("ui.changesView.unstaged", {}, "未暂存")], ["branch", uiText("ui.changesView.branchHead", {}, "分支 → HEAD")], ["session", uiText("ui.changesView.thisConversation", {}, "本会话")]]) {
     const option = make("option", "", label); option.value = value; scope.append(option);
   }
-  scope.value = ["workspace", "staged", "unstaged", "branch", "session"].includes(saved.scope) ? saved.scope : "workspace";
+  if (params.turn) { const option = make("option", "", uiMessage("turnChanges.label", {}, "本轮文件变更")); option.value = "turn"; scope.append(option); }
+  scope.value = params.scope === "turn" && params.turn ? "turn" : ["workspace", "staged", "unstaged", "branch", "session"].includes(saved.scope) ? saved.scope : "workspace";
   const errorToast = error => { if (error.name !== "AbortError" && !signal.aborted) toast(error.message, "error"); };
   const action = (glyph, label, run) => iconButton(glyph, label, run, errorToast);
   const refresh = action("refresh", uiMessage("ui.changesView.refreshChanges", {}, "刷新变更"), () => refreshChanges()), toggleTree = action("folder", uiMessage("ui.changesView.toggleChangedFileTree", {}, "切换变更文件树"), () => { tree.hidden = !tree.hidden; remember(); });
@@ -45,7 +46,7 @@ export async function mountChangesView(root, { sdk, context, params = {}, viewSt
       if (!signal.aborted) void update({ view_state: { ...viewState, changes: { repository, scope: scope.value, base: base.value, selected, split, continuous, treeHidden: tree.hidden, treeWidth, collapsed: [...collapsed].slice(0, 256) } } }).catch(errorToast);
     }, 350);
   };
-  const comparison = () => ({ repository, scope: scope.value, ...(scope.value === "branch" ? { base: base.value } : {}) });
+  const comparison = () => ({ repository, scope: scope.value, ...(scope.value === "turn" ? { turn: params.turn } : scope.value === "branch" ? { base: base.value } : {}) });
   const cancel = () => { operation?.abort(); operation = null; multi?.dispose(); multi = null; };
   const task = () => {
     cancel(); const controller = new AbortController(); operation = controller;

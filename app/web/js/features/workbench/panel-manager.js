@@ -313,6 +313,16 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
         return handle(existing.id);
       }
     }
+    if (type === "mdo.changes" && params.params?.scope === "turn") {
+      const scope = await client.call("sdk.context");
+      const existing = [...entries.values()].find(row => row.type === type && row.key === params.key && row.owner === scope.extension &&
+        ["project", "session", "run"].every(key => (row.context[key] || "") === (scope[key] || "")));
+      if (existing) {
+        disposeMount(existing.id);
+        await update(existing.id, { params: params.params });
+        reveal(existing.id); return handle(existing.id);
+      }
+    }
     const row = await client.call("panel.open", { ...params, type, client: clientId });
     entries.set(row.id, row); if (!layout.order.includes(row.id)) layout.order.push(row.id);
     if (params.reveal !== "background" || !layout.active) reveal(row.id); else { remember(); render(); }

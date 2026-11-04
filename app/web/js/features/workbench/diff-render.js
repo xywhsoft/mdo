@@ -27,10 +27,12 @@ export function renderDiffRows(target, page, { split, path, select }) {
 }
 
 export function diffLabels(scope) {
+  if (scope === "turn") return [uiText("turnChanges.before", {}, "原版本：本轮开始前"), uiText("turnChanges.after", {}, "新版本：本轮结束后")];
   return [scope === "unstaged" ? uiText("ui.diffRender.oldVersionIndex", {}, "原版本：暂存区") : scope === "branch" ? uiText("ui.diffRender.oldVersionSelectedCommit", {}, "原版本：选定提交") : scope === "session" ? uiText("ui.diffRender.oldVersionConversationBaseline", {}, "原版本：会话基线") : uiText("ui.diffRender.oldVersionHead", {}, "原版本：HEAD"),
     scope === "staged" ? uiText("ui.diffRender.newVersionIndex", {}, "新版本：暂存区") : scope === "branch" ? uiText("ui.diffRender.newVersionHead", {}, "新版本：HEAD") : uiText("ui.diffRender.newVersionWorkspace", {}, "新版本：工作区")];
 }
 
 export function diffProvenance(state, path, page, rows, range) {
+  if (state.scope === "turn") return `${state.repository}\n${path}\n${uiText("turnChanges.label", {}, "本轮文件变更")}\n${state.base} → ${state.current_tree}\n${uiText("turnChanges.scope", {}, "本轮运行前后的工作区净变化，可能包含同期外部修改。")}`;
   return uiText("ui.diffRender.repositoryValue1FileValue2ScopeValue3Value4Value5Value6", { value1: state.repository, value2: path, value3: range, value4: state.scope === "session" ? uiText("ui.diffRender.conversationBaselineTree", {}, "会话基线树") : uiText("ui.diffRender.baselineCommit", {}, "基线提交"), value5: state.base || uiText("ui.diffRender.emptyRepository", {}, "空仓库"), value6: state.scope === "session" ? uiText("ui.diffRender.representsOriginalWorkspaceBytesAndNetChangesSinceStartup", {}, "表示：原始工作区字节，显示启动后净变化，含其他程序的修改。\n") : "", value7: state.head || uiText("ui.diffRender.emptyRepository", {}, "空仓库"), value8: page.revision, value9: rows[0]?.offset + 1, value10: rows.at(-1)?.offset + 1 }, "仓库：{value1}\n文件：{value2}\n比较范围：{value3}\n{value4}：{value5}\n{value6}HEAD：{value7}\n比较修订：{value8}\n差异行：{value9}–{value10}");
 }

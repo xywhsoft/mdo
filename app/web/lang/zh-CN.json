@@ -3508,5 +3508,16 @@
   "composer.registerFree": "免费注册墨斗账号 ↗",
   "composer.configureOwnModel": "不用登录，也能使用：配置自己的模型 ↗",
   "composer.startUsing": "开始使用墨斗",
-  "composer.selectModel": "选择模型"
+  "composer.selectModel": "选择模型",
+  "turnChanges.files": "已修改 {count} 个文件",
+  "turnChanges.view": "查看变更",
+  "turnChanges.binary": "二进制",
+  "turnChanges.less": "收起文件",
+  "turnChanges.more": "再显示 {count} 个文件",
+  "turnChanges.label": "本轮文件变更",
+  "turnChanges.scope": "本轮运行前后的工作区净变化，可能包含同期外部修改。",
+  "turnChanges.unavailable": "本轮文件变更暂不可用，点击重试",
+  "turnChanges.openFailed": "打开失败，点击重试",
+  "turnChanges.before": "原版本：本轮开始前",
+  "turnChanges.after": "新版本：本轮结束后"
 }

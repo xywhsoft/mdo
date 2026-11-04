@@ -21,6 +21,7 @@ import { createConversationNavigation } from "./conversation-navigation.js";
 import { modelErrorMessage, modelErrorTitle } from "../../utils/model-errors.js";
 import { modelRetryNode, modelRetryInlineNode, updateModelRetryCountdowns } from "./model-retry.js";
 import { createStreamScroll } from "./stream-scroll.js";
+import { appendTurnChanges, createTurnChanges } from "./turn-changes.js";
 
 export function searchResultTop(row, content, searchBottom, viewportBottom, lineHeight = 24) {
   const room = Math.max(0, viewportBottom - searchBottom);
@@ -762,6 +763,7 @@ function commandButton(label, description, iconName, actionRef, handlers, sessio
 
 function timelineNode(item, handlers, projectId, sessionId, writable,
   openState, previewOpen, previewScroll, toolTextCache, folds = null) {
+  if (item.kind === "changes") return handlers.changes.node(item, { projectId, sessionId });
   if (item.kind === "history-notice") return element("p", {
     className: "timeline-item timeline-history-notice", text: item.text,
     attrs: { role: "note", "data-kind": "history-notice" },
@@ -991,18 +993,22 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
 }
 
 export function createTimelineView({ container, welcome, toBottom, store, sessionStore = null,
-  onFork, onEdit, onRetry, onSearchCount, onLoadOlder, onLoadIndex, onRevealTurn, onReload,
+  onFork, onEdit, onRetry, onSearchCount, onLoadOlder, onLoadIndex, onRevealTurn, onReload, onOpenChanges,
   showReadError = true }) {
   const busySessions = new Set();
   const renderedRows = new Map();
   let retryTimer = 0;
+  const changes = createTurnChanges({ open: onOpenChanges, change: update => {
+    const follow = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 48;
+    update(); if (follow) scroller.scrollTop = scroller.scrollHeight;
+  } });
   function syncRetryCountdowns() {
     if (updateModelRetryCountdowns(container)) {
       if (!retryTimer) retryTimer = setInterval(syncRetryCountdowns, 1000);
     } else if (retryTimer) { clearInterval(retryTimer); retryTimer = 0; }
   }
   const handlers = {
-    onFork, onEdit, onRetry,
+    onFork, onEdit, onRetry, changes,
     isBusy: (key) => busySessions.has(key),
     async runAction(key, action) {
       if (busySessions.has(key)) return;
@@ -1120,6 +1126,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     for (const key of renderedRows.keys())
       if (!retained.has(key)) renderedRows.delete(key);
     syncRetryCountdowns();
+    changes.retain(entries.map(entry => entry.item), { projectId, sessionId });
   }
 
   function syncBusy() {
@@ -1205,8 +1212,8 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     const noticeText = code => t(code === "scan_limit" ? "timeline.historyScanLimited" :
       code === "text_limit" ? "timeline.historyTextLimited" : code === "event_limit"
         ? "timeline.historySectionLimited" : "timeline.historySectionUnreadable");
-    const items = insertConversationNotices(eventsToTimeline(data?.events ?? [], data?.historyLost,
-      { showHistoryTruncations: false, historyNotices: data?.historyNotices }), data?.historyNotices, noticeText);
+    const items = appendTurnChanges(insertConversationNotices(eventsToTimeline(data?.events ?? [], data?.historyLost,
+      { showHistoryTruncations: false, historyNotices: data?.historyNotices }), data?.historyNotices, noticeText));
     const groups = conversationGroups(items);
     const projected = [];
     let previousTurn = 0;
@@ -1374,6 +1381,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       queueRender(store.get());
     },
     destroy() {
+      changes.destroy();
       destroyed = true;
       markdown.destroy();
       if (retryTimer) clearInterval(retryTimer);

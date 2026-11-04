@@ -621,6 +621,7 @@ export async function boot() {
     container: $("#timeline"), welcome: $("#welcome"),
     toBottom: $("#to-bottom"), store: timelineStore,
     sessionStore: sessionDetailStore,
+    onOpenChanges: options => applicationUi.sdk.ui.openChanges(options),
     // The session-load notice owns history failures and their retry action.
     showReadError: false,
     onLoadOlder: loadOlderTimeline, onLoadIndex: loadOlderConversationIndex,
