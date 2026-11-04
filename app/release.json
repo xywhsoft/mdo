@@ -1,13 +1,13 @@
 {
   "version_name": "0.9.2",
   "version_code": "05000902",
-  "windows_build_id": 70000212,
-  "windows_server_build_id": 70000213,
-  "android_lite_build_id": 70000218,
-  "android_full_build_id": 70000219,
+  "windows_build_id": 70000220,
+  "windows_server_build_id": 70000221,
+  "android_lite_build_id": 70000226,
+  "android_full_build_id": 70000227,
   "toolpack_revision": 4,
-  "linux_glibc_gui_build_id": 70000214,
-  "linux_glibc_server_build_id": 70000215,
-  "linux_musl_gui_build_id": 70000216,
-  "linux_musl_server_build_id": 70000217
+  "linux_glibc_gui_build_id": 70000222,
+  "linux_glibc_server_build_id": 70000223,
+  "linux_musl_gui_build_id": 70000224,
+  "linux_musl_server_build_id": 70000225
 }
