@@ -25,6 +25,14 @@ typedef struct MdoSessionActive {
     MdoApprovalScope* PermissionScope;
 } MdoSessionActive;
 
+/* Borrowed from a create/fork call's stack until publication or rollback ends.
+ * Unlike an active runtime, this explicitly identifies an unpublished directory. */
+typedef struct MdoSessionPublication {
+    struct MdoSessionPublication* Next;
+    const char* ProjectId;
+    const char* SessionId;
+} MdoSessionPublication;
+
 typedef struct MdoEventWatermark {
     struct MdoEventWatermark* Next;
     char Project[MDO_PROJECT_ID_CAPACITY], Session[MDO_SESSION_ID_CAPACITY];
@@ -49,6 +57,7 @@ typedef struct MdoSessionManagerState {
     MdoSessionActive* Active;
     size_t ActiveCount;
     size_t ActiveCapacity;
+    MdoSessionPublication* Publications;
     struct MdoSessionBorrowedScope* BorrowedScopes;
     MdoSessionRestoreReservation* Restores;
     size_t RestoreCount;
@@ -972,6 +981,7 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     char MetaPath[MDO_SESSION_PATH_CAPACITY];
     const char* Title;
     bool DirectoryCreated = false;
+    MdoSessionPublication Publication = {0};
 
     xworkErrorInit(Error);
     if ( Options == NULL ) {
@@ -1036,7 +1046,7 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     if ( SnapshotPath == NULL || JournalPath == NULL || ArtifactPath == NULL )
         goto memory;
     if ( !MdoSessionsCreateDirectory(Options->ProjectId, SessionId,
-            DirectoryPath, Error) ) goto done;
+            DirectoryPath, &Publication, Error) ) goto done;
     DirectoryCreated = true;
     Bridge = MdoSessionEventBridgeCreate(Options->ProjectId, SessionId,
         ProjectLease,
@@ -1137,6 +1147,7 @@ done:
             DirectoryPath);
         if ( Saved != NULL ) xrtSetErrorTake(Saved);
     }
+    MdoSessionsPublicationFinish(&Publication);
     xrtFree(SessionId);
     xrtFree(SnapshotPath);
     xrtFree(JournalPath);
@@ -1424,6 +1435,7 @@ MdoSession* MdoSessionFork(MdoSession* Source,
     char Title[MDO_SESSION_TITLE_CAPACITY];
     uint64 SavedThrough = 0u;
     bool DirectoryCreated = false;
+    MdoSessionPublication Publication = {0};
     bool SourceLocked = false;
     bool ManagerLocked = false;
 
@@ -1483,7 +1495,7 @@ MdoSession* MdoSessionFork(MdoSession* Source,
     ArtifactPath = MdoHomeExternalPath(Relative);
     if ( SnapshotPath == NULL || JournalPath == NULL || ArtifactPath == NULL )
         goto memory;
-    if ( !MdoSessionsCreateDirectory(ProjectId, SessionId, DirectoryPath, Error) ) goto done;
+    if ( !MdoSessionsCreateDirectory(ProjectId, SessionId, DirectoryPath, &Publication, Error) ) goto done;
     DirectoryCreated = true;
     Bridge = MdoSessionEventBridgeCreate(ProjectId, SessionId, ProjectLease,
         Options->Runtime.OnEvent, Options->Runtime.EventUserData,
@@ -1616,6 +1628,7 @@ done:
         MdoSessionsRollbackDirectory(ProjectId, SessionId, DirectoryPath);
         if ( Saved != NULL ) xrtSetErrorTake(Saved);
     }
+    MdoSessionsPublicationFinish(&Publication);
     xrtFree(SessionId);
     xrtFree(SnapshotPath);
     xrtFree(JournalPath);
@@ -2682,6 +2695,7 @@ static bool MdoSessionsScanProject(MdoSessionCatalog* Catalog,
                     "session directory identifier is invalid") ) goto fail;
             continue;
         }
+        if ( MdoSessionsPublishing(ProjectId, SessionId) ) continue;
         if ( !MdoSessionsMetaRead(ProjectId, SessionId, &Info) ) {
             Cause = xrtGetError();
             if ( !MdoSessionsCatalogDiagnostic(Catalog, MetaPath,

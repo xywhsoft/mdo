@@ -45,22 +45,52 @@ static MdoSessionRestoreReservation** MdoSessionsRestoreMember(MdoSessionRestore
     return NULL;
 }
 
-/* The native mkdir and absent check are in the same manager boundary as
- * reservation acquisition, so checking before a separate mkdir is insufficient. */
+/* Catalog readers hold the manager lock. Only an owned, in-progress create or
+ * fork is unpublished; ordinary missing metadata must remain a diagnostic. */
+static bool MdoSessionsPublishing(cstr ProjectId, cstr SessionId)
+{
+    for ( MdoSessionPublication* P = g_MdoSessions.Publications; P; P = P->Next )
+        if ( !strcmp(P->ProjectId, ProjectId) && !strcmp(P->SessionId, SessionId) ) return true;
+    return false;
+}
+
+static void MdoSessionsPublicationFinish(MdoSessionPublication* Publication)
+{
+    if ( !g_MdoSessions.Lock ) return;
+    xrtMutexLock(g_MdoSessions.Lock);
+    MdoSessionPublication** Link = &g_MdoSessions.Publications;
+    while ( *Link && *Link != Publication ) Link = &(*Link)->Next;
+    if ( *Link ) {
+        *Link = Publication->Next;
+        MdoSessionsGenerationAdvance();
+    }
+    xrtMutexUnlock(g_MdoSessions.Lock);
+}
+
+/* Register publication in the same manager boundary as mkdir, before another
+ * thread can discover the directory. Keep it registered through rollback. */
 static bool MdoSessionsCreateDirectory(cstr ProjectId, cstr SessionId,
-    cstr Path, xwork_error* Error)
+    cstr Path, MdoSessionPublication* Publication, xwork_error* Error)
 {
     bool Exists, Ok = false;
     xrtMutexLock(g_MdoSessions.Lock);
     if ( MdoSessionsRestoreReserved(ProjectId, SessionId) )
         MdoSessionsError(Error, XWORK_ERROR_CONTEXT, "session ID is reserved for restore");
+    else if ( MdoSessionsPublishing(ProjectId, SessionId) )
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT, "session ID is being created");
     else if ( !MdoHomeExternalStat(Path, &Exists, NULL) )
         MdoSessionsXrtError(Error, XWORK_ERROR_IO, "cannot inspect the requested session directory");
     else if ( Exists )
         MdoSessionsError(Error, XWORK_ERROR_CONTEXT, "the requested session ID already exists");
     else if ( !MdoHomeCreateDirectory(Path) )
         MdoSessionsXrtError(Error, XWORK_ERROR_IO, "cannot create the managed session directory");
-    else Ok = true;
+    else {
+        Publication->ProjectId = ProjectId;
+        Publication->SessionId = SessionId;
+        Publication->Next = g_MdoSessions.Publications;
+        g_MdoSessions.Publications = Publication;
+        Ok = true;
+    }
     xrtMutexUnlock(g_MdoSessions.Lock);
     return Ok;
 }
