@@ -27,6 +27,19 @@ bool MdoApiDirectoryLocationsRoute(MdoApiContext* Context)
     if (Context->Target.Query.Size) return MdoApiReplyError(Context, 400, "invalid_directory_path", "Locations do not take query fields", NULL);
     xvalue *Data = xrtValueObject(), *Items = xrtValueArray();
     char *Home = xrtPathHome(), *Cwd = xrtPathCwd(); xdirroots Roots = {0};
+#if defined(__ANDROID__)
+    /* Android's passwd home is /data, which the app UID cannot enumerate.
+     * Prefer this installation's private Home without creating it on GET. */
+    MdoHomeSnapshot Snapshot = {0}; Snapshot.Size = sizeof(Snapshot);
+    if (MdoHomeGetSnapshot(&Snapshot) && Snapshot.Path) {
+        char* Private = xrtStrDup(Snapshot.Path); xfileinfo Info;
+        if (Private && (!xrtPathStat(Private, true, &Info) || Info.Type != XFILE_TYPE_DIRECTORY)) {
+            char* Parent = xrtPathParent(Private); xrtFree(Private); Private = Parent;
+        }
+        if (Private) { xrtFree(Home); Home = Private; }
+        xrtClearError();
+    }
+#endif
     bool Ok = Data && Items && MdoDirectoryShortcut(Items, "home", Home) && MdoDirectoryShortcut(Items, "cwd", Cwd);
 #if defined(_WIN32)
     const struct { const char* Kind; MdoDirectoryFolderId Id; } Known[] = {

@@ -127,6 +127,9 @@ def run_probe(host: Path) -> None:
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
                 wait_ready(port, process)
                 probe(port, workspace)
+        except Exception:
+            print((base / "runtime.log").read_text(encoding="utf-8", errors="replace")[-4000:])
+            raise
         finally: stop_host(process)
 
 

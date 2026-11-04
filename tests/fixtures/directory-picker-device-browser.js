@@ -1,0 +1,62 @@
+(() => {
+  const target = __DIRECTORY_TARGET__, identity = __DIRECTORY_ID__, checks = {}, errors = [];
+  addEventListener('error', event => errors.push(event.message));
+  addEventListener('unhandledrejection', event => errors.push(String(event.reason)));
+  const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const wait = async predicate => { for (let i = 0; i < 180; ++i) { if (predicate()) return; await pause(60); } throw Error('Timed out: ' + globalThis.__qaStage); };
+  addEventListener('DOMContentLoaded', async () => {
+    try {
+      globalThis.__qaStage = 'boot'; await wait(() => document.querySelector('#prompt:not(:disabled)')); await pause(500);
+      if (innerWidth < 760) document.querySelector('#open-sidebar').click();
+      await wait(() => document.querySelector('[data-sidebar-focus="add-project"]'));
+      document.querySelector('[data-sidebar-focus="add-project"]').click();
+      await wait(() => document.querySelector('#project-dialog').open);
+      const form = document.querySelector('#project-form');
+      form.elements.name.value = 'Android directory QA'; form.elements.name.dispatchEvent(new Event('input'));
+      form.elements.id.value = identity; form.elements.id.dispatchEvent(new Event('input'));
+      document.querySelector('#project-browse').click();
+      await wait(() => document.querySelector('.directory-window .directory-breadcrumbs button'));
+      let dialog = document.querySelector('.directory-window');
+      checks.singleVisibleWindow = document.querySelectorAll('dialog[open]').length === 1;
+      const bounds = dialog.getBoundingClientRect();
+      checks.mobileFullscreen = innerWidth < 760 && Math.abs(bounds.width - innerWidth) < 2;
+      checks.nativeStoragePermissionEntry = typeof globalThis.XsPlatform?.requestStorageAccess === 'function';
+      dialog.querySelector('.directory-footer-actions button:first-child').click();
+      await wait(() => document.querySelector('#project-dialog').open && !document.querySelector('.directory-window'));
+      checks.cancelRetainsForm = form.elements.id.value === identity && form.elements.name.value === 'Android directory QA';
+      document.querySelector('#project-browse').click();
+      await wait(() => document.querySelector('.directory-window .directory-breadcrumbs button'));
+      dialog = document.querySelector('.directory-window');
+      dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', ctrlKey: true, bubbles: true, cancelable: true }));
+      const input = dialog.querySelector('.directory-path-form input');
+      input.value = target; input.dispatchEvent(new Event('input', { bubbles: true }));
+      dialog.querySelector('.directory-path-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      globalThis.__qaStage = 'path';
+      await wait(() => dialog.querySelector('.directory-breadcrumbs button:last-child')?.title === target && !dialog.querySelector('.directory-footer-actions .primary-button').disabled);
+      checks.actualUnicodePath = true;
+      dialog.querySelector('.directory-tools button:last-child').click();
+      const create = dialog.querySelector('.directory-create');
+      create.querySelector('input').value = 'new folder 中文';
+      create.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      globalThis.__qaStage = 'create';
+      await wait(() => dialog.querySelector('[data-directory-name="new folder 中文"]'));
+      // Mobile rows enter on one tap; then confirm the current directory.
+      dialog.querySelector('[data-directory-name="new folder 中文"]').click();
+      await wait(() => dialog.querySelector('.directory-breadcrumbs button:last-child')?.title === target + '/new folder 中文');
+      checks.mobileTapEnters = true;
+      const footer = dialog.querySelector('.directory-footer').getBoundingClientRect();
+      checks.fixedFooterVisible = footer.top >= 0 && footer.bottom <= innerHeight + 1;
+      checks.noHorizontalOverflow = document.documentElement.scrollWidth <= innerWidth;
+      dialog.querySelector('.directory-footer-actions .primary-button').click();
+      await wait(() => document.querySelector('#project-dialog').open && !document.querySelector('.directory-window'));
+      checks.confirmRetainsForm = form.elements.id.value === identity;
+      checks.selectedCanonicalPath = form.elements.workspace_root.value === target + '/new folder 中文';
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      globalThis.__qaStage = 'save'; await wait(() => !document.querySelector('#project-dialog').open);
+      checks.noScriptErrors = errors.length === 0;
+    } catch (error) { checks.exception = false; errors.push(String(error.stack || error)); }
+    const result = document.createElement('output'); result.id = 'result'; result.hidden = true;
+    result.textContent = JSON.stringify({ passed: Object.values(checks).every(Boolean), checks, errors, stage: globalThis.__qaStage, viewport: { width: innerWidth, height: innerHeight } });
+    document.body.append(result);
+  });
+})();
