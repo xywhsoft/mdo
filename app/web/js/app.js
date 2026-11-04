@@ -93,6 +93,7 @@ import { createTaskDialog } from "./features/tasks/task-dialog.js";
 import { createRecoveryDock } from "./features/chat/recovery-dock.js";
 import { recoveryMatchesWorkspace } from "./features/approvals/recovery-decisions.js";
 import { createSettingsView } from "./features/settings/settings-view.js";
+import { openAboutWindow } from "./features/settings/about-window.js";
 import { createSchedulePanel } from "./features/schedules/schedule-panel.js";
 import { createProjectManagement } from "./features/projects/project-management.js";
 import { createMemoryManagement } from "./features/settings/memory-management.js";
@@ -2884,6 +2885,7 @@ export async function boot() {
     closeDrawers,
   });
   $("#open-shortcuts").addEventListener("click", () => shortcuts.openHelp());
+  $("#open-about").addEventListener("click", () => openAboutWindow({ owner: $("#settings-workspace") }));
   $("#toggle-theme").addEventListener("click", () => void toggleTheme());
 
   function scheduleTaskRefresh() {

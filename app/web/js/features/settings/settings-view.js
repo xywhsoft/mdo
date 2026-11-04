@@ -192,7 +192,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
 
   function renderStatus(settings) {
     writeUiText(revision, uiMessage("settings.autosaveDescription", {},
-      "有效更改会自动保存；保存失败时可点击保存重试。"));
+      "有效更改会自动保存。"));
     feedbackText(settings.transaction_service.runtime_consistent
       ? t("settings.synced", {}, "配置与本地服务保持同步。")
       : t("settings.runtimeError", { error: settings.transaction_service.last_error },

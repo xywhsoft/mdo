@@ -1342,7 +1342,17 @@ select:focus-visible,
 .settings-header p { margin: 1px 0 0; color: var(--muted); font-size: 10px; }
 .settings-heading { flex: 1; min-width: 0; }
 .settings-heading p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.settings-shortcuts-button { display: inline-flex; flex: 0 0 auto; min-height: 40px; align-items: center; gap: 7px; white-space: nowrap; }
+.settings-shortcuts-button, .settings-about-button { display: inline-flex; flex: 0 0 auto; min-height: 40px; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; }
+.about-brand { display: flex; align-items: center; gap: 14px; }
+.about-brand img { flex: none; }
+.about-brand h3 { margin: 0; font-size: 1.4rem; }
+.about-description { margin: 20px 0; color: var(--muted); line-height: 1.7; }
+.about-details { display: grid; gap: 16px; margin: 0; }
+.about-details > div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: 12px; align-items: baseline; }
+.about-details dt { color: var(--muted); }
+.about-details dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.about-details a { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; color: inherit; text-underline-offset: 3px; }
+.about-details a .icon { flex: none; width: 14px; height: 14px; }
 .settings-pending-link {
   min-height: 35px;
   margin-left: auto;
@@ -1782,8 +1792,8 @@ select:focus-visible,
   .shortcuts-content dl > div { align-items: flex-start; flex-direction: column; gap: 4px; }
   .shortcuts-content dd { text-align: left; }
   .settings-workspace { grid-row: 1 / -1; }
-  .settings-shortcuts-button { width: 40px; justify-content: center; padding: 0; }
-  .settings-shortcuts-button > [data-i18n] { display: none; }
+  .settings-shortcuts-button, .settings-about-button { width: 40px; justify-content: center; padding: 0; }
+  .settings-shortcuts-button > [data-i18n], .settings-about-button > [data-i18n] { display: none; }
   .settings-pending-link { min-height: 40px; }
   .settings-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
   .settings-navigation { display: none; }
