@@ -12,7 +12,7 @@ import threading
 from manual_live_probe_qa import Proxy as LiveProxy
 from test_api_runtime import request
 from test_packed_home_lease import site, start, stop, wait_bootstrap, release_packed_copies
-from test_sidebar_focus_browser import ResultParser
+from browser_result import ResultParser
 
 ROOT = Path(__file__).resolve().parents[1]
 

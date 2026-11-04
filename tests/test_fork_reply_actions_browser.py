@@ -13,7 +13,7 @@ from test_api_runtime import request
 from test_packed_home_lease import ROOT, site, start, stop, wait_bootstrap, release_packed_copies
 from test_packed_queue_start_recovery import configure_model
 from test_session_purge_browser import Proxy as PackedProxy
-from test_sidebar_focus_browser import ResultParser
+from browser_result import ResultParser
 
 
 class Model(BaseHTTPRequestHandler):
