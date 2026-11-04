@@ -1,0 +1,170 @@
+{
+  "version_name": "0.9.2",
+  "version_code": "05000902",
+  "source_head": "e8fc13380109069bef1378063877b3aa30359a69",
+  "application_source_sha256": "3419c865b4c71a5a4c5b68eb9a4f18d10657403d1372e6eae63c8f827e721549",
+  "release_status": "local-test-build-not-published",
+  "products": [
+    {
+      "filename": "mdo.exe",
+      "path": "D:\\GIT\\mdo\\.build\\local-0.9.2-20261105-directory-browser\\windows\\mdo.exe",
+      "platform": "windows-x86_64",
+      "edition": "desktop",
+      "build_id": 70000260,
+      "bytes": 6899519,
+      "sha256": "2fdbf6d1df5a3a0f8aed7fc0c78b0a5a095c69c2b5a77bcff50938b7bef14ef3",
+      "delivery_path": "D:\\GIT\\mdo\\dist\\0.9.2-r8\\mdo.exe"
+    },
+    {
+      "filename": "mdo-arm64-v8a.apk",
+      "path": "D:\\GIT\\mdo\\.build\\local-0.9.2-20261105-directory-browser\\android\\mdo-arm64-v8a.apk",
+      "platform": "android-arm64-v8a",
+      "edition": "lite",
+      "build_id": 70000266,
+      "bytes": 6739348,
+      "sha256": "5dc0c61a86fc7bd5927a543a892d88a08860aad4797dc07cc34c0c3ac5942113",
+      "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "delivery_path": "D:\\GIT\\mdo\\dist\\0.9.2-r8\\mdo-arm64-v8a.apk"
+    }
+  ],
+  "validation": {
+    "passed": true,
+    "windows_gui_subsystem": true,
+    "windows_bootstrap": {
+      "stage": "ready",
+      "ready": true,
+      "version": "0.9.2"
+    },
+    "android": {
+      "edition": "lite",
+      "bytes": 6739348,
+      "native_elf_files": 3,
+      "runtime_paths": 0
+    },
+    "release_certificate_unchanged": true,
+    "android_device_tested": true,
+    "source_unchanged": true,
+    "root_release_snapshots_unchanged": true,
+    "published": false,
+    "android_device_test_scope": "directory API and actual WebView via exact release pack/runtime in QA package",
+    "android_main_final_bootstrap_tested": false
+  },
+  "verified_source_commit": "39306a12dbff149915a5bd3dbcec231b6b36aaad",
+  "build_source_state": "Built before the final commits; identical application fingerprint verified after commit",
+  "checks": {
+    "windows_c_tcc_directory_runtime": "passed; sorted 300 directories after 4200 files, keyset pages, Unicode, symlinks, invalid input and exclusive creation",
+    "strict_gcc_full_unity": "passed with -Wall -Wextra -Werror",
+    "node_tests": {
+      "passed": 27,
+      "failed": 0
+    },
+    "application_sdk_contracts": {
+      "passed": 12,
+      "failed": 0
+    },
+    "frontend_module_graph": {
+      "parsed_and_reachable": 267
+    },
+    "browser_matrix": [
+      {
+        "locale": "zh-CN",
+        "width": 1400,
+        "passed": true
+      },
+      {
+        "locale": "zh-CN",
+        "width": 390,
+        "passed": true
+      },
+      {
+        "locale": "en-US",
+        "width": 1400,
+        "passed": true
+      },
+      {
+        "locale": "en-US",
+        "width": 390,
+        "passed": true
+      },
+      {
+        "locale": "ru-RU",
+        "width": 1400,
+        "passed": true
+      },
+      {
+        "locale": "ru-RU",
+        "width": 390,
+        "passed": true
+      }
+    ],
+    "actual_windows_exe": {
+      "widths": [
+        1400,
+        390
+      ],
+      "passed": true,
+      "scope": "real C API, path containing spaces plus Unicode, folder creation, project save and SDK"
+    },
+    "android_directory": {
+      "passed": true,
+      "checks": 21,
+      "actual_webview_checks": 11,
+      "viewport": {
+        "width": 361,
+        "height": 710
+      },
+      "paid_model_calls": 0,
+      "scope": "same application pack and libxs.so as the release APK; independent QA package"
+    },
+    "android_existing_runtime": {
+      "passed": true,
+      "scope": "before the isolated Android home shortcut fix; unchanged process/model runtime",
+      "conversation_cases": [
+        "retry",
+        "network",
+        "partial",
+        "quota",
+        "cancel_backoff",
+        "resume_continue_restart"
+      ],
+      "sdk_groups": [
+        {
+          "name": "sdk-processes",
+          "status": "passed",
+          "seconds": 1.281
+        },
+        {
+          "name": "managed-tools",
+          "status": "passed",
+          "seconds": 5.031
+        },
+        {
+          "name": "directories",
+          "status": "passed",
+          "seconds": 3.625
+        }
+      ],
+      "sdk_check_count": 65,
+      "paid_model_calls": 0
+    },
+    "android_release_install": {
+      "installed": true,
+      "package": "org.xleaves.mdo",
+      "build_id": 70000266,
+      "kept_existing_data": true,
+      "final_main_app_bootstrap": "not asserted; USB debugging stopped responding after switching back to the release app"
+    },
+    "test_session_cleanup": {
+      "confirmed": true,
+      "method": "user confirmed deleting the one accidentally created starter conversation; no automated deletion claimed"
+    },
+    "linux_probe": {
+      "passed": false,
+      "scope": "existing pinned Linux host with a Home on the Windows-mounted workspace",
+      "reason": "bootstrap stopped before directory testing: atomic no-replace root rename is unavailable",
+      "linux_build_or_publish_performed": false
+    },
+    "remote_real_device": "not exercised; target scoping, disposal and no local fallback covered by automated tests"
+  },
+  "evidence_directory": "D:\\GIT\\mdo\\.build\\local-0.9.2-20261105-directory-browser"
+}
