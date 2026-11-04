@@ -7,6 +7,10 @@
 #endif
 /* Initial attempt plus ten recoveries for a completed but unusable draft. */
 #define MDO_MODEL_REPAIR_ATTEMPTS 11u
+#define MDO_MODEL_CONNECTION_ATTEMPTS 11u
+#ifndef MDO_MODEL_RECOVERY_BUDGET_US
+#define MDO_MODEL_RECOVERY_BUDGET_US UINT64_C(900000000)
+#endif
 #ifndef MDO_MODEL_RETRY_MAX_MS
 #define MDO_MODEL_RETRY_MAX_MS 300000u
 #endif
@@ -305,6 +309,8 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
     if (!Jitter) Jitter = 1u;
     uint32 Attempt = 1u;
     uint32 AttemptsMade = 0u;
+    uint64 RecoveryStarted = MdoMonotonicUs();
+    uint64 RecoveryDeadline = MdoDeadlineAfterUs(MDO_MODEL_RECOVERY_BUDGET_US);
     uint32 RepairAttempts = 0u;
     uint32 PreviousDelay = 0u;
     bool Retryable = false;
@@ -327,6 +333,8 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
         Stream.pUserData = &Guard;
         Stream.OnEvent = MdoModelsStream;
         xllm_request AttemptRequest = *ActiveRequest;
+        if (AttemptsMade && (AttemptRequest.uDeadline == MDO_DEADLINE_NEVER ||
+                AttemptRequest.uDeadline > RecoveryDeadline)) AttemptRequest.uDeadline = RecoveryDeadline;
         Result = MdoModelsScope(Request, &Error);
         if (Result != XLLM_RESULT_OK) { Retryable = false; break; }
         if (AttemptsMade != UINT32_MAX) ++AttemptsMade;
@@ -380,9 +388,10 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
              !xrtAtomic32Load(&Guard.Delivered, XMEMORY_ACQUIRE))) &&
             !xrtAtomic32Load(&Guard.Stopped, XMEMORY_ACQUIRE));
         if (!Retryable) break;
-        /* Transient/opaque connection failures remain recoverable until a
-         * successful model reply or the caller's cancellation/deadline.
-         * Known malformed/output-limited drafts still have bounded repair. */
+        /* Bound automatic recovery even when the caller has no deadline.
+         * Retain the user's context; a new explicit retry gets a fresh budget. */
+        if (AttemptsMade >= MDO_MODEL_CONNECTION_ATTEMPTS ||
+            MdoMonotonicUs()-RecoveryStarted >= MDO_MODEL_RECOVERY_BUDGET_US) break;
         if (!RenewAuthentication && !MdoModelsRetryable(&Error) &&
             ++RepairAttempts >= MDO_MODEL_REPAIR_ATTEMPTS) break;
         if (RenewAuthentication) AuthenticationRetried = true;
@@ -428,10 +437,12 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
         uint64 Now = MdoMonotonicUs();
         uint32 Delay = MdoModelsRetryDelay(Attempt,
             Error.tDiagnostics.uRetryAfterMs, PreviousDelay, &Jitter);
+        uint64 Elapsed = Now-RecoveryStarted;
+        if (Elapsed >= MDO_MODEL_RECOVERY_BUDGET_US ||
+            (uint64)Delay*1000u > MDO_MODEL_RECOVERY_BUDGET_US-Elapsed) break;
         PreviousDelay = Delay;
         Error.tDiagnostics.uAttemptCount = Attempt;
-        /* Zero means this product policy has no fixed connection-attempt cap. */
-        Error.tDiagnostics.uMaxAttempts = 0u;
+        Error.tDiagnostics.uMaxAttempts = MDO_MODEL_CONNECTION_ATTEMPTS;
         Error.tDiagnostics.uRetryAfterMs = Delay;
         Error.tDiagnostics.bRetryable = true;
         if (Request->pHooks && Request->pHooks->pOnRetry &&
@@ -469,13 +480,13 @@ done:
     /* The overlay owns only its array; every string is borrowed. */
     free(RepairMessages);
     Error.tDiagnostics.uAttemptCount = AttemptsMade;
-    Error.tDiagnostics.uMaxAttempts = 0u;
+    Error.tDiagnostics.uMaxAttempts = MDO_MODEL_CONNECTION_ATTEMPTS;
     Error.tDiagnostics.bRetryable = false;
     Error.tDiagnostics.bRetryExhausted = Retryable &&
         Result != XLLM_RESULT_OK && Result != XLLM_RESULT_CANCELLED;
     if (Response && *Response && Result == XLLM_RESULT_OK) {
         (*Response)->tDiagnostics.uAttemptCount = AttemptsMade;
-        (*Response)->tDiagnostics.uMaxAttempts = 0u;
+        (*Response)->tDiagnostics.uMaxAttempts = MDO_MODEL_CONNECTION_ATTEMPTS;
         (*Response)->tDiagnostics.bRetryable = false;
         (*Response)->tDiagnostics.bRetryExhausted = false;
     }

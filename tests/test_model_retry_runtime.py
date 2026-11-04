@@ -22,6 +22,8 @@ PROBE = r'''
 #include "model-plugin-free.h"
 #define MDO_MODEL_RETRY_BASE_MS 10u
 #define MDO_MODEL_RETRY_MAX_MS 80u
+static unsigned long long TestRecoveryBudget=900000000ULL;
+#define MDO_MODEL_RECOVERY_BUDGET_US TestRecoveryBudget
 #include "src/storage/home.c"
 #include "src/config/config.c"
 #include "src/security/secrets.c"
@@ -33,7 +35,7 @@ static bool Retry(xllm_client* Client, const xllm_diagnostics* Diagnostics,
     uint32 Next, void* Data) {
     Observer* O=Data; (void)Client;
     if (Next != Diagnostics->uAttemptCount + 1u ||
-        Diagnostics->uMaxAttempts != 0u ||
+        Diagnostics->uMaxAttempts != MDO_MODEL_CONNECTION_ATTEMPTS ||
         Diagnostics->uRetryAfterMs < O->LastDelay) return false;
     if (!O->FirstDelay) O->FirstDelay=Diagnostics->uRetryAfterMs;
     O->LastDelay=Diagnostics->uRetryAfterMs;
@@ -64,10 +66,12 @@ void ServiceInit(XS_HostInfo* Host) {
         "cancel","deadline","partial","hook-stop","partial-recover",
         "eof-protected","eof-recover","eof-exhausted",
         "output-protected","output-recover","output-exhausted","malformed-recover","long-recover","local-invalid",
-        "persistent-recover","reset","unknown-recover","retry-after-grow",
+        "persistent-budget","reset","unknown-recover","retry-after-grow",
         "empty-recover","thinking-recover","whitespace-recover","empty-exhausted","empty-protected",
-        "empty-cancel","empty-reset"};
+        "empty-cancel","empty-reset","budget-expired","budget-stall"};
     for (unsigned i=0;i<sizeof(Names)/sizeof(Names[0]);++i) {
+        TestRecoveryBudget=!strcmp(Names[i],"budget-expired")?50000ULL:
+            !strcmp(Names[i],"budget-stall")?200000ULL:900000000ULL;
         Observer O={0}; xllm_request Request; xllmRequestInit(&Request);
         xllmRequestAddTextMessage(&Request,XLLM_ROLE_USER,Names[i]);
         Request.uMaxOutputTokens=128u;
@@ -81,7 +85,7 @@ void ServiceInit(XS_HostInfo* Host) {
         if (!strcmp(Names[i],"cancel") || !strcmp(Names[i],"persistent-cancel") ||
             !strcmp(Names[i],"eof-exhausted") || !strcmp(Names[i],"empty-cancel")) {
             O.Cancel=xrtCancelCreate(); xllmRequestSetCancel(&Request,O.Cancel);
-            O.CancelAt=!strcmp(Names[i],"cancel")?1u:!strcmp(Names[i],"empty-cancel")?10u:11u;
+            O.CancelAt=!strcmp(Names[i],"cancel")?1u:!strcmp(Names[i],"empty-cancel")?10u:10u;
         }
         if (!strcmp(Names[i],"deadline")) Request.uDeadline=MdoMonotonicUs()+200000u;
         if (!strcmp(Names[i],"hook-stop")) O.Stop=true;
@@ -190,6 +194,8 @@ class Model(BaseHTTPRequestHandler):
             return
         if name == 'long-recover' and attempt > 1:
             time.sleep(2)
+        if name == 'budget-stall' and attempt > 1:
+            time.sleep(1)
         if name == 'partial' or (name == 'partial-recover' and attempt == 1):
             self.send_response(200)
             self.send_header('Content-Type', 'text/event-stream')
@@ -226,6 +232,7 @@ class Model(BaseHTTPRequestHandler):
             'service-config': (401, 'upstream_configuration_error'),
             'invalid': (400, 'invalid_request'),
             'persistent-cancel': (503, 'service_unavailable'),
+            'budget-expired': (503, 'service_unavailable'),
             'cancel': (429, 'rate_limit_exceeded'),
             'deadline': (429, 'rate_limit_exceeded'),
             'hook-stop': (429, 'rate_limit_exceeded'),
@@ -236,7 +243,9 @@ class Model(BaseHTTPRequestHandler):
             failure = (429, 'rate_limit_exceeded')
         if name == 'long-recover' and attempt == 1:
             failure = (503, 'service_unavailable')
-        if name == 'persistent-recover' and attempt <= 12:
+        if name == 'budget-stall' and attempt == 1:
+            failure = (503, 'service_unavailable')
+        if name == 'persistent-budget' and attempt <= 12:
             failure = (502, 'upstream_unavailable')
         if name == 'reset' and attempt == 1:
             failure = (503, 'service_unavailable')
@@ -263,7 +272,7 @@ class Model(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(raw)))
-        if name in ('retry-after','retry-after-grow') and attempt == 1:
+        if name in ('retry-after','retry-after-grow','budget-expired') and attempt == 1:
             self.send_header('Retry-After-Ms', '80')
         if name in ('cancel', 'deadline'):
             self.send_header('Retry-After', '1')
@@ -298,28 +307,33 @@ def main():
                         'service-quota': (-1, 'service_quota_exceeded', 1),
                         'service-config': (-1, 'service_configuration', 1),
                         'invalid': (-1, 'invalid_request', 1),
-                        'persistent-cancel': (-3, 'cancelled', 11), 'retry-after': (0, 'unknown', 2),
+                        'persistent-cancel': (-3, 'cancelled', 10), 'retry-after': (0, 'unknown', 2),
                         'cancel': (-3, 'cancelled', 1), 'deadline': (-2, 'timeout', 1),
                         'partial': (-1, 'network', 1), 'hook-stop': (-3, 'cancelled', 1),
                         'partial-recover': (0, 'unknown', 2),
                         'eof-protected': (-1, 'invalid_response', 1),
                         'eof-recover': (0, 'unknown', 2),
-                        'eof-exhausted': (-3, 'cancelled', 11),
+                        'eof-exhausted': (-3, 'cancelled', 10),
                         'output-protected': (-1, 'output_limit', 1),
                         'output-recover': (0, 'unknown', 2),
                         'output-exhausted': (-1, 'output_limit', 11),
                         'malformed-recover': (0, 'unknown', 2),
                         'long-recover': (0, 'unknown', 2),
                         'local-invalid': (-1, 'request_configuration', 1),
-                        'persistent-recover': (0, 'unknown', 13), 'reset': (0, 'unknown', 2),
+                        'persistent-budget': (-1, 'service_unavailable', 11), 'budget-expired': (-1, 'service_unavailable', 1), 'reset': (0, 'unknown', 2),
                         'unknown-recover': (0, 'unknown', 11), 'retry-after-grow': (0, 'unknown', 3),
                         'empty-recover': (0, 'unknown', 11), 'thinking-recover': (0, 'unknown', 11),
                         'whitespace-recover': (0, 'unknown', 11), 'empty-exhausted': (-1, 'empty_response', 11),
                         'empty-protected': (0, 'unknown', 1), 'empty-cancel': (-3, 'cancelled', 10),
                         'empty-reset': (0, 'unknown', 2)}
+            expected['budget-stall'] = (-2, 'timeout', 2)
             for name, (result, kind, count) in expected.items():
                 assert f'case={name} result={result} kind={kind} attempts={count}' in output, output
                 assert Model.calls[name] == (0 if name == 'local-invalid' else count), (name, Model.calls, output)
+            assert 'exhausted=1' in next(line for line in output.splitlines() if line.startswith('case=persistent-budget ')), output
+            assert 'exhausted=1' in next(line for line in output.splitlines() if line.startswith('case=budget-expired ')), output
+            stalled = next(line for line in output.splitlines() if line.startswith('case=budget-stall '))
+            assert 150 <= int(stalled.split('ms=')[1].split()[0]) < 1000 and 'exhausted=1' in stalled, output
             assert 'backoff_growth=1 cap=80 retry_after_retained=1' in output, output
             assert 'daily_message=accurate' in output, output
             assert 'response_attempts_mismatch' not in output, output
