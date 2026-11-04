@@ -19,6 +19,8 @@ import subprocess
 import threading
 import time
 
+from model_fixture import model_catalog
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -174,7 +176,7 @@ def run(args):
         provider = {'id': 'android-fixture', 'name': 'Android fixture', 'builtin': False,
                     'editable': True, 'removable': True, 'verify_peer': True, 'timeout_ms': 15000,
                     'endpoints': {'chat_completions': f'http://127.0.0.1:{model_port}/v1/chat/completions'}}
-        model = dict(config['items'][0])
+        model = model_catalog()['items'][0]
         model.update(id='android-fixture', name='Android fixture', provider='android-fixture',
                      wire_model='android-fixture', builtin=False, free=False, editable=True, removable=True,
                      protocols=['openai-chat-completions'], default_protocol='openai-chat-completions',
@@ -188,6 +190,7 @@ def run(args):
         patch['items'] = [row for row in patch['items'] if row['id'] != 'android-fixture']
         patch['providers'].append(provider)
         patch['items'].append(model)
+        patch['default_model'] = model['id']
         data('POST', '/api/v1/models/setup', {'patch': patch,
              'keys': [{'provider': 'android-fixture', 'value': 'android-fixture-key'}]}, {'If-Match': headers['etag']})
         saved = data('GET', '/api/v1/models/config')
@@ -201,6 +204,9 @@ def run(args):
             return '/api/v1/projects/default/sessions/' + value['id']
 
         def start(path, prompt):
+            # A terminal run snapshot can precede the worker's final session
+            # release. Start the next turn only after that release is visible.
+            wait(lambda: not data('GET', path)['runtime_open'], seconds=5)
             return data('POST', path + '/runs', {'prompt': prompt, 'timeout_ms': 45000})
 
         def terminal(run):

@@ -16,6 +16,7 @@ import time
 import traceback
 
 from android_release_client import AndroidReleaseClient
+from model_fixture import model_catalog
 from test_general_subagent_packed import Model
 
 
@@ -137,7 +138,7 @@ def main():
         provider = dict(id='android-fixture', name='Offline general assistant fixture', builtin=False,
             editable=True, removable=True, verify_peer=True, timeout_ms=15000, proxy={'kind':'none'},
             endpoints={'chat_completions':f'http://127.0.0.1:{port}/v1/chat/completions'})
-        model = json.loads(json.dumps(config['items'][0]))
+        model = model_catalog()['items'][0]
         model.update(id='android-fixture', name='Offline fixture', provider=provider['id'],
             wire_model='fixture-general-wire', builtin=False, free=False, editable=True, removable=True,
             protocols=['openai-chat-completions'], default_protocol='openai-chat-completions',
@@ -148,6 +149,7 @@ def main():
         patch = {key: config[key] for key in ('providers','items','default_model')}
         patch['providers'] = [row for row in patch['providers'] if row['id'] != provider['id']] + [provider]
         patch['items'] = [row for row in patch['items'] if row['id'] != model['id']] + [model]
+        patch['default_model'] = model['id']
         client.data('POST', '/api/v1/models/setup', dict(patch=patch,
             keys=[dict(provider=provider['id'], value='offline-fixture-only')]), extra={'If-Match':headers['etag']})
 

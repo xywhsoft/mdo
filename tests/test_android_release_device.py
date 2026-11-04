@@ -91,8 +91,12 @@ def main():
         merged=run('printf out; printf err >&2',merge_stderr=True)
         merged_bytes=output(merged['stdout'])
         check(merged['stderr_merged'] and len(merged_bytes)==6 and merged_bytes.count(b'out')==1 and merged_bytes.count(b'err')==1,'Explicit stderr merge retains both streams')
-        run('printf streaming-output',stream=True)
-        check('process.stdout' in json.dumps(c.data('GET','/api/v1/application/events')),'Streaming events remain available')
+        cursor=c.data('GET','/api/v1/application/events')['latest']
+        streamed=run('printf streaming-output',stream=True)
+        events=c.data('GET','/api/v1/application/events?after='+str(cursor))['items']
+        check(output(streamed['stdout'])==b'streaming-output' and
+              any(row['topic']=='process.stdout' for row in events),
+              'Streaming events after the saved cursor remain available')
     def managed_tools():
         session=c.data('POST','/api/v1/sessions',dict(project_id='default',title='Android process tool QA',model_id='android-fixture',reasoning_effort='none',permission_profile='full-access',max_output_tokens=1024))
         def tool(name,args):return c.call('tool.call',dict(project='default',session=session['id'],tool=name,arguments=args))
