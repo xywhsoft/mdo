@@ -1,0 +1,160 @@
+{
+  "version_name": "0.9.2",
+  "version_code": "05000902",
+  "source_head": "67016e8635a8e0f2e707f47ed1bc6b116001ce05",
+  "application_source_sha256": "a1d6b4acf5cf0db4357fc165f384a8e384831c10e2cb2b54e82b75e1b347550c",
+  "release_status": "local-test-build-not-published",
+  "products": [
+    {
+      "filename": "mdo.exe",
+      "path": "D:\\GIT\\mdo\\.build\\local-0.9.2-20261104-git-optional\\windows\\mdo.exe",
+      "platform": "windows-x86_64",
+      "edition": "desktop",
+      "build_id": 70000236,
+      "bytes": 6884152,
+      "sha256": "5c95c2f773daa0e854edf7962bc87ad36923919b6199aa4bd48f468e51da6378",
+      "delivery_path": "D:\\GIT\\mdo\\dist\\0.9.2-r5\\mdo.exe"
+    },
+    {
+      "filename": "mdo-arm64-v8a.apk",
+      "path": "D:\\GIT\\mdo\\.build\\local-0.9.2-20261104-git-optional\\android\\mdo-arm64-v8a.apk",
+      "platform": "android-arm64-v8a",
+      "edition": "lite",
+      "build_id": 70000242,
+      "bytes": 6722964,
+      "sha256": "8697e5e7a709bd0fcee9eebbec15a6fea5b198dce27c60c8c3027d5760e68fdd",
+      "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "delivery_path": "D:\\GIT\\mdo\\dist\\0.9.2-r5\\mdo-arm64-v8a.apk"
+    }
+  ],
+  "validation": {
+    "passed": true,
+    "windows_gui_subsystem": true,
+    "windows_bootstrap": {
+      "stage": "ready",
+      "ready": true,
+      "version": "0.9.2"
+    },
+    "android": {
+      "edition": "lite",
+      "bytes": 6722964,
+      "native_elf_files": 3,
+      "runtime_paths": 0
+    },
+    "release_certificate_unchanged": true,
+    "android_device_tested": false,
+    "source_unchanged": true,
+    "root_release_snapshots_unchanged": true,
+    "published": false
+  },
+  "fix_commit": "a3529908",
+  "regressions": {
+    "native_missing_git_and_missing_workspace": true,
+    "native_handoff_and_review": true,
+    "strict_c11": true,
+    "browser": [
+      {
+        "locale": "zh-CN",
+        "width": 1400,
+        "checks": {
+          "temporaryFailureQuiet": true,
+          "pendingCaptureQuiet": true,
+          "nonGitQuiet": true,
+          "gitNotInstalledQuiet": true,
+          "permanentFailureAccurate": true,
+          "explicitRetryWorks": true,
+          "transientReadRecovered": true,
+          "capturePublicationRecovered": true,
+          "disposedReadNotRetried": true,
+          "noOverflow": true
+        },
+        "passed": true
+      },
+      {
+        "locale": "zh-CN",
+        "width": 390,
+        "checks": {
+          "temporaryFailureQuiet": true,
+          "pendingCaptureQuiet": true,
+          "nonGitQuiet": true,
+          "gitNotInstalledQuiet": true,
+          "permanentFailureAccurate": true,
+          "explicitRetryWorks": true,
+          "transientReadRecovered": true,
+          "capturePublicationRecovered": true,
+          "disposedReadNotRetried": true,
+          "noOverflow": true
+        },
+        "passed": true
+      },
+      {
+        "locale": "en-US",
+        "width": 1400,
+        "checks": {
+          "temporaryFailureQuiet": true,
+          "pendingCaptureQuiet": true,
+          "nonGitQuiet": true,
+          "gitNotInstalledQuiet": true,
+          "permanentFailureAccurate": true,
+          "explicitRetryWorks": true,
+          "transientReadRecovered": true,
+          "capturePublicationRecovered": true,
+          "disposedReadNotRetried": true,
+          "noOverflow": true
+        },
+        "passed": true
+      },
+      {
+        "locale": "en-US",
+        "width": 390,
+        "checks": {
+          "temporaryFailureQuiet": true,
+          "pendingCaptureQuiet": true,
+          "nonGitQuiet": true,
+          "gitNotInstalledQuiet": true,
+          "permanentFailureAccurate": true,
+          "explicitRetryWorks": true,
+          "transientReadRecovered": true,
+          "capturePublicationRecovered": true,
+          "disposedReadNotRetried": true,
+          "noOverflow": true
+        },
+        "passed": true
+      },
+      {
+        "locale": "ru-RU",
+        "width": 1400,
+        "checks": {
+          "temporaryFailureQuiet": true,
+          "pendingCaptureQuiet": true,
+          "nonGitQuiet": true,
+          "gitNotInstalledQuiet": true,
+          "permanentFailureAccurate": true,
+          "explicitRetryWorks": true,
+          "transientReadRecovered": true,
+          "capturePublicationRecovered": true,
+          "disposedReadNotRetried": true,
+          "noOverflow": true
+        },
+        "passed": true
+      },
+      {
+        "locale": "ru-RU",
+        "width": 390,
+        "checks": {
+          "temporaryFailureQuiet": true,
+          "pendingCaptureQuiet": true,
+          "nonGitQuiet": true,
+          "gitNotInstalledQuiet": true,
+          "permanentFailureAccurate": true,
+          "explicitRetryWorks": true,
+          "transientReadRecovered": true,
+          "capturePublicationRecovered": true,
+          "disposedReadNotRetried": true,
+          "noOverflow": true
+        },
+        "passed": true
+      }
+    ]
+  }
+}
