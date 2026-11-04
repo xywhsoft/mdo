@@ -13,6 +13,7 @@ import { taskBelongsToSession } from "../tasks/task-owner.js";
 import { renderToolPreview, renderToolArguments } from "../approvals/tool-preview.js";
 import { needsRecoveryCard } from "../../api/read-recovery.js";
 import { createDecisionReadNotice } from "./decision-read-notice.js";
+import { mountIcons } from "../../components/icons.js";
 
 const STATE_KEYS = Object.freeze({ pending: "dock.task.pending", running: "dock.task.running" });
 
@@ -57,10 +58,13 @@ function taskCard(onOpenTasks) {
 }
 
 function todoCard(focusKey, onToggle) {
+  const label = element("span");
   const toggle = element("button", {
     className: "todo-toggle", attrs: { type: "button",
       "data-dock-focus": focusKey },
-  });
+  }, [label, element("span", { className: "icon todo-toggle-icon",
+    attrs: { "data-icon": "chevron-down", "aria-hidden": "true" } })]);
+  mountIcons(toggle);
   toggle.addEventListener("click", onToggle);
   const list = element("ol", { className: "todo-dock-list" });
   const rows = new Map();
@@ -69,7 +73,7 @@ function todoCard(focusKey, onToggle) {
   return { node, sync(items, expanded) {
     const done = items.filter((item) => item.done).length;
     const count = t("dock.todo.count", { done, count: items.length });
-    if (toggle.textContent !== count) writeUiText(toggle, count);
+    if (label.textContent !== count) writeUiText(label, count);
     toggle.setAttribute("aria-expanded", String(expanded));
     list.hidden = !expanded;
     const occurrences = new Map();
