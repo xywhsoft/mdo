@@ -16,7 +16,19 @@ static xvalue* SdkGitTurnRead(const mdo_sdk_context_v1* C,const xvalue* P,mdo_er
         xrtValueRelease(V);return SdkGitFail(E,"git_turn_context_changed","Reply changes do not belong to this conversation and workspace",409),NULL;
     }
     bool Available=false;xrtValueGetBool(SdkGet(V,"available"),&Available);
-    if(!Available){cstr Reason=SdkField(V,"reason");SdkGitFail(E,Reason&&!strcmp(Reason,"git_not_repository")?"git_not_repository":"git_turn_unavailable","File changes could not be captured for this reply",409);xrtValueRelease(V);return NULL;}
+    if(!Available){
+        cstr Reason=SdkField(V,"reason");bool NoRepository=Reason&&!strcmp(Reason,"git_not_repository");
+        /* Earlier completion retried an empty base/root and overwrote the
+         * not-a-repository result. Confirm that case without backfilling or
+         * changing its immutable historical comparison. Real Git failures
+         * and captures with a repository keep their original failure. */
+        cstr Root=SdkField(V,"repository"),Base=SdkField(V,"base");
+        if(!NoRepository&&Reason&&!strcmp(Reason,"git_revision_invalid")&&(!Root||!Root[0])&&(!Base||!Base[0])){
+            xvalue* P=xrtValueObject();SdkPut(P,"repository",C->Workspace);mdo_error_v1 Check={0};char* Current=SdkGitRoot(C,P,&Check);
+            NoRepository=!Current&&!strcmp(Check.Code,"git_not_repository");xrtFree(Current);xrtValueRelease(P);
+        }
+        SdkGitFail(E,NoRepository?"git_not_repository":"git_turn_unavailable","File changes could not be captured for this reply",409);xrtValueRelease(V);return NULL;
+    }
     if(!SdkGitOid(SdkField(V,"base"))||!SdkGitOid(SdkField(V,"current_tree"))){xrtValueRelease(V);return SdkGitFail(E,"git_turn_corrupt","Reply snapshot identities are invalid",503),NULL;}
     /* Import/truncate/recovery must not attach an old receipt to a new event
      * with the same numeric ID. Validate the immutable journal anchor too. */
@@ -41,7 +53,7 @@ xvalue* MdoApplicationTurnChangesBegin(const mdo_sdk_context_v1* Given,uint64 Na
         xvalue* P=xrtValueObject();SdkPut(P,"repository",C.Workspace);char* Root=SdkGitRoot(&C,P,&E);xrtValueRelease(P);
         char* Repo=SdkGitSnapshotRepo(C.ProjectId),*Tree=NULL;char Ref[160];snprintf(Ref,sizeof(Ref),"refs/mdo-turns/%s/before",C.RunId);
         if(Root&&Repo)Tree=SdkGitSnapshot(&C,Root,Repo,Ref,&E);
-        SdkPut(V,"repository",Root);SdkPut(V,"base",Tree);SdkPut(V,"reason",Tree?"":Root?E.Code:"git_not_repository");
+        SdkPut(V,"repository",Root);SdkPut(V,"base",Tree);SdkPut(V,"reason",Tree?"":E.Code[0]?E.Code:"git_snapshot_failed");
         xrtFree(Tree);xrtFree(Repo);xrtFree(Root);xrtMutexUnlock(SdkGitBaselineLock);
     }else SdkPut(V,"reason",E.Code);
 done:xrtClearError();if(Saved)xrtSetErrorTake(Saved);return V;
@@ -56,7 +68,7 @@ void MdoApplicationTurnChangesFinish(const mdo_sdk_context_v1* Given,xvalue* V,b
         if(MdoSessionEventSnapshotAt(Events,i,&Info)&&Info.Kind==XWORK_EVENT_AGENT_START&&!Info.AgentDepth&&Info.RunId==Native&&Info.OccurredAt>=(int64)Lower){Event=Info.EventId;break;}
     }MdoSessionEventSnapshotRelease(Events);char Path[512];if(!SdkGitTurnPath(&C,Event,Path))goto done;
     bool Available=false;
-    if(SdkField(V,"base")&&SdkGitBaselineEnter(&C,&E)){
+    if(SdkGitOid(SdkField(V,"base"))&&SdkGitBaselineEnter(&C,&E)){
         char* Repo=SdkGitSnapshotRepo(C.ProjectId);char Ref[160];snprintf(Ref,sizeof(Ref),"refs/mdo-turns/%s/after",C.RunId);
         char* Tree=Repo?SdkGitSnapshot(&C,SdkField(V,"repository"),Repo,Ref,&E):NULL;
         Available=Tree!=NULL;SdkPut(V,"current_tree",Tree);if(!Available)SdkPut(V,"reason",E.Code);

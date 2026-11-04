@@ -450,6 +450,25 @@ static bool MdoQueueRunPath(char Path[MDO_SESSION_PATH_CAPACITY],
     return Written > 0 && (size_t)Written < MDO_SESSION_PATH_CAPACITY;
 }
 
+bool MdoApiQueueContinuationPending(const char* ProjectId, const char* SessionId)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    MdoQueue Queue;
+    if ( !g_MdoQueueLock || !MdoQueueRunPath(Path, ProjectId, SessionId) ) return false;
+    MdoProjectLease* Lease = MdoProjectLeaseAcquire(ProjectId, MDO_PROJECT_LEASE_SHARED, NULL);
+    if ( !Lease ) return false;
+    xrtMutexLock(g_MdoQueueLock);
+    bool Pending = false;
+    if ( MdoQueueRead(Path, ProjectId, SessionId, &Queue) ) {
+        Pending = Queue.Managed && !Queue.Paused && Queue.Count &&
+            (Queue.Items[0].State == MDO_QUEUE_PENDING || Queue.Items[0].State == MDO_QUEUE_SENDING);
+        MdoQueueRelease(&Queue);
+    }
+    xrtMutexUnlock(g_MdoQueueLock);
+    MdoProjectLeaseRelease(Lease);
+    return Pending;
+}
+
 static bool MdoQueueRunMatches(const MdoQueueItem* Item, xstrview Prompt,
     const char Attachments[4][33], size_t AttachmentCount)
 {

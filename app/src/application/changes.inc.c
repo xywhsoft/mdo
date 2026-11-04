@@ -70,7 +70,13 @@ static bool SdkGitPrivateIndexInit(const mdo_sdk_context_v1* C,cstr Root,cstr He
 static char* SdkGitRoot(const mdo_sdk_context_v1* C,const xvalue* P,mdo_error_v1* E){
     cstr Provided=SdkField(P,"repository");xvalue* Params=xrtValueObject();SdkPut(Params,"path",Provided&&Provided[0]?Provided:".");
     char* Directory=SdkNativePath(C,Params,false,E);xrtValueRelease(Params);if(!Directory)return NULL;
-    const cstr Args[]={"rev-parse","--show-toplevel"};char* Root=SdkGitText(C,Directory,Args,2,false,E);xrtFree(Directory);return Root;
+    const cstr Args[]={"rev-parse","--show-toplevel"};xprocessresult R={0};char* Root=NULL;
+    if(SdkGitRun(C,Directory,Args,2,(xbytesview){0},65536,NULL,NULL,&R,E)){
+        if(R.Status.Code==0){Root=xrtStrDupN((cstr)R.Stdout,R.StdoutSize);SdkGitChomp(Root);}
+        else if(R.Status.Code==128&&R.Stderr&&strstr((cstr)R.Stderr,"not a git repository"))
+            SdkGitFail(E,"git_not_repository","The workspace is not a Git repository",409);
+        else SdkGitSuccess(&R,E,"git_revision_invalid");
+    }xrtProcessResultUnit(&R);xrtFree(Directory);return Root;
 }
 /* Git prints forward slashes on Windows; portable records resolve through the
  * native path API. Compare canonical directories, never their separator style. */

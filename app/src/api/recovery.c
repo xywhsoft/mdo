@@ -285,6 +285,9 @@ bool MdoApiSessionRecoveryRoute(MdoApiContext* Context)
     if ( !MdoApiRecoveryPath(Context, Project, SessionId) )
         return MdoApiReplyError(Context, 400u, "invalid_session_path",
             "The project or session ID is invalid", NULL);
+    if ( MdoApiQueueContinuationPending(Project, SessionId) )
+        return MdoApiReplyError(Context, 409u, "session_busy",
+            "A saved message is continuing this conversation", NULL);
     memset(&Error, 0, sizeof(Error));
     xrtClearError();
     Session = MdoSessionOpen(Project, SessionId, NULL, &Error);
@@ -318,8 +321,12 @@ bool MdoApiSessionRecoveryRoute(MdoApiContext* Context)
         return MdoApiRecoveryFailure(Context, &Error,
             "recovery_state_conflict");
     }
-    Result = MdoApiRecoveryReply(Context, &Info, Snapshot, ResumeRequired,
-        LastSequence);
+    /* The queue may have received input while this read held the runtime.
+     * Do not publish an obsolete recovery decision in that handoff window. */
+    Result = MdoApiQueueContinuationPending(Project, SessionId) ?
+        MdoApiReplyError(Context, 409u, "session_busy",
+            "A saved message is continuing this conversation", NULL) :
+        MdoApiRecoveryReply(Context, &Info, Snapshot, ResumeRequired, LastSequence);
     xworkRecoverySnapshotRelease(Snapshot);
     MdoSessionRelease(Session);
     return Result;
@@ -454,6 +461,11 @@ bool MdoApiSessionResumeRoute(MdoApiContext* Context)
             "Resume requires a recovery token and unique retry or uncertainty decisions",
             NULL);
     }
+    if ( MdoApiQueueContinuationPending(Project, SessionId) ) {
+        MdoApiJsonBodyUnit(&Body);
+        return MdoApiReplyError(Context, 409u, "recovery_state_conflict",
+            "A saved message is continuing this conversation", NULL);
+    }
     xworkResumeOptionsInit(&ResumeOptions);
     ResumeOptions.pDecisions = Decisions;
     ResumeOptions.iDecisionCount = Count;
@@ -537,6 +549,9 @@ bool MdoApiSessionAbandonRoute(MdoApiContext* Context)
         "recovery_abandon_invalid",
         "Abandon requires the exact session revision and ledger sequence",
         NULL);
+    if ( MdoApiQueueContinuationPending(Project, SessionId) )
+        return MdoApiReplyError(Context, 409u, "recovery_state_conflict",
+            "A saved message is continuing this conversation", NULL);
     memset(&Error, 0, sizeof(Error));
     xrtClearError();
     Session = MdoSessionOpen(Project, SessionId, NULL, &Error);

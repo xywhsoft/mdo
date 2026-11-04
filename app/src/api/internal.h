@@ -303,6 +303,8 @@ bool MdoApiDraftCaptureTryLock(void);
 void MdoApiDraftCaptureUnlock(void);
 bool MdoApiQueueCaptureTryLock(void);
 void MdoApiQueueCaptureUnlock(void);
+/* A durable managed send owns the next input across cancellation/settlement. */
+bool MdoApiQueueContinuationPending(const char* ProjectId, const char* SessionId);
 bool MdoApiRunStartRoute(MdoApiContext* pContext);
 bool MdoApiAttachmentsRoute(MdoApiContext* pContext);
 bool MdoApiUploadsRoute(MdoApiContext* pContext);
