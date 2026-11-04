@@ -114,7 +114,7 @@ export function createLiveConnection({
   function connect() {
     if (!token || paused || connection || tokenCheck) return;
     let current;
-    try { current = socket(url(), ["mdo.live.v1", `mdo.token.${token}`]); }
+    try { current = socket(url(), ["mdo.live.v2", "mdo.live.v1", `mdo.token.${token}`]); }
     catch { reconnect(); return; }
     connection = current;
     armWatchdog(current, 10_000);

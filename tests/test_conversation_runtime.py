@@ -107,6 +107,8 @@ def probe(host: Path | None, packed: Path | None = None):
             starts = next(item for item in originals if item["kind"] == 0)
             delta = next(item for item in originals if item["kind"] == 2)
             done = next(item for item in originals if item["kind"] == 10)
+            # Manufactured legacy fragments have no volatile preview ranges.
+            delta.pop("stream", None)
             stop(process); process = None
             records = []
             for turn in range(70):
@@ -159,6 +161,8 @@ def probe(host: Path | None, packed: Path | None = None):
             assert [item["question"] for item in page["items"]] == [f"Question {i}" for i in range(66, 70)]
             assert all(item["state"] == "done" and item["answer"].startswith("Answer ") for item in page["items"])
             assert page["latest_event_id"] == 420 and page["has_more"]
+            _, cached = request(port, "GET", path + "/turns?limit=4")
+            assert cached["data"] == page, "cached navigation changed its content"
             _, doc = request(port, "GET", path + f"/turns?before={page['next_before']}&limit=64")
             assert len(doc["data"]["items"]) == 64 and doc["data"]["has_more"]
             _, doc = request(port, "GET", path + "/turns?before=13&limit=64")
@@ -166,6 +170,7 @@ def probe(host: Path | None, packed: Path | None = None):
             assert not doc["data"]["has_more"]
             for after in (0, 1, 31, 211, 389, 419, 420, 999):
                 _, doc = request(port, "GET", path + f"/events?after={after}&limit=32")
+                assert "data" in doc,(after,doc)
                 items = doc["data"]["items"]
                 assert [item["event_id"] for item in items] == list(range(after + 1, min(after + 33, 421)))
                 assert doc["data"]["latest_event_id"] == 420 and not doc["data"]["history_lost"]
@@ -205,6 +210,25 @@ def probe(host: Path | None, packed: Path | None = None):
             assert not doc["data"]["delta"] and doc["data"]["epoch"] != epoch
             status, _ = request(port, "GET", path + f"/events?after=420&epoch={epoch}")
             assert status == 409
+            _, indexed = request(port, "GET", path + "/turns?limit=4")
+            replacement = journal.with_suffix(".replacement")
+            replaced = journal.read_bytes().replace(b"Question 69", b"Changed  69")
+            replacement.write_bytes(replaced); os.replace(replacement, journal)
+            _, changed = request(port, "GET", path + "/turns?limit=4")
+            assert changed["data"]["epoch"] != indexed["data"]["epoch"]
+            assert any(item["question"] == "Changed  69" for item in changed["data"]["items"])
+            # A legacy reasoning-only suffix can fill the display scan budget.
+            # Its actual user prompt must still be present on the first page.
+            with journal.open("wb") as file:
+                file.write(json.dumps({**starts, "event_id": 1, "user_message_sequence": 1,
+                    "text": "Original thinking-only question"}, separators=(",", ":")).encode() + b"\n")
+                for number in range(2, 602):
+                    file.write(json.dumps({**delta, "event_id": number, "kind": 3,
+                        "text": "x" * 62000}, separators=(",", ":")).encode() + b"\n")
+            _, thinking = request(port, "GET", path + "/conversation?limit=1")
+            rows = json.loads(thinking["data"]["items_json"])
+            assert rows[0]["event_id"] == 1 and rows[0]["text"] == "Original thinking-only question"
+            assert journal.stat().st_size > 32 * 1024 * 1024
             for query in ("limit=5", "epoch=bad", "after=1&before=2", "limit=4&limit=4"):
                 status, _ = request(port, "GET", path + "/conversation?" + query)
                 assert status == 400, query

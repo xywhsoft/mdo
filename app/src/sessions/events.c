@@ -67,6 +67,7 @@ struct MdoSessionEventBridge {
     uint64 MainCompactionRunId;
     struct MdoEventStream* Streams;
     size_t StreamBytes;
+    bool WatermarkAttached;
 
 };
 
@@ -433,6 +434,7 @@ static bool MdoEventsAppend(MdoSessionEventBridge* Bridge,
      * explicit user clear/edit may remove records; append never evicts them. */
     Ok = MdoEventsAppendBytes(Bridge->Path, Json, Size);
     if ( Ok ) {
+        MdoSessionsInternalEventIssued(Bridge->ProjectId, Bridge->SessionId, Bridge->NextEventId,true);
         MdoSessionsInternalPublish(Bridge->ProjectId, Bridge->SessionId,
             xrtStrViewN(Json, Size), Event->eKind != XWORK_EVENT_MODEL_TEXT_DELTA &&
                 Event->eKind != XWORK_EVENT_MODEL_REASONING_DELTA);
@@ -757,7 +759,16 @@ bool MdoSessionsInternalEventVisit(const char* ProjectId, const char* SessionId,
 }
 
 #include "event_reader.inc.c"
+static bool MdoEventRecordContains(xstrview Record,const char* Text,size_t Length)
+{
+    if(!Length||Length>Record.Size)return false;
+    for(size_t I=0;I<=Record.Size-Length;++I)
+        if(Record.Data[I]==Text[0]&&!memcmp(Record.Data+I,Text,Length))return true;
+    return false;
+}
+
 static bool MdoViewEpoch(MdoEventReader* Reader, char Output[65]);
+static bool MdoViewCurrent(const char* Path,const MdoEventReader* Reader);
 #include "conversation_turns.inc.c"
 
 static bool MdoEventsScanLatestPath(const char* Project, const char* Session,
@@ -853,7 +864,8 @@ MdoSessionEventBridge* MdoSessionEventBridgeCreate(
             "session event identity space is exhausted");
         goto fail;
     }
-    Bridge->NextEventId = Latest + 1u;
+    if (!MdoSessionsInternalEventNext(ProjectId,SessionId,Latest,&Bridge->NextEventId)) goto memory;
+    Bridge->WatermarkAttached = true;
     return Bridge;
 memory:
     MdoEventsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
@@ -892,14 +904,24 @@ static bool MdoEventsSingleLedger(const char* Project, const char* Session,
 }
 bool MdoSessionEventBridgeSingleLedger(MdoSessionEventBridge* Bridge, xwork_error* Error)
 {
-    if (!Bridge) return false;
-    char* Data = NULL; size_t Size = 0u; bool Exists = false, Ok = false; xfileinfo Info;
+    if(!Bridge)return false;
+    bool Ok=true;xstrview Record;
     xrtMutexLock(Bridge->Lock);
-    if (!MdoHomeExternalStat(Bridge->Path, &Exists, &Info) ||
-        (Exists && !MdoEventsRead(Bridge->Path, &Data, &Size)))
-        MdoEventsXrtError(Error, "cannot inspect the conversation's ledger ownership");
-    else Ok = MdoEventsSingleLedger(Bridge->ProjectId, Bridge->SessionId, Data, Size, Error);
-    xrtFree(Data); xrtMutexUnlock(Bridge->Lock); return Ok;
+    MdoEventReader* Reader=MdoEventReaderOpen(Bridge->Path);
+    if(!Reader)Ok=false;
+    while(Ok&&MdoEventReaderNext(Reader,&Record)){
+        /* Escaped JSON property names must retain the full parser path. */
+        if(!MdoEventRecordContains(Record,"\"source\"",8u) &&
+            !memchr(Record.Data,'\\',Record.Size))continue;
+        MdoSessionEventOwned Entry;
+        if(MdoEventsParse(Bridge->ProjectId,Bridge->SessionId,Record,&Entry)){
+            bool Member=!Entry.Info.AgentDepth&&Entry.Info.Source.Member[0];
+            MdoEventsOwnedUnit(&Entry);
+            if(Member){MdoEventsError(Error,XWORK_ERROR_CONTEXT,MDO_SESSION_MEMBER_HISTORY_ERROR);Ok=false;}
+        }else xrtClearError();
+    }
+    if(!Reader||(Reader&&Reader->Failed)){MdoEventsXrtError(Error,"cannot inspect the conversation's ledger ownership");Ok=false;}
+    MdoEventReaderClose(Reader);xrtMutexUnlock(Bridge->Lock);return Ok;
 }
 
 /* Forks are prepared before the child Agent is published. Rebuild the UI
@@ -1435,9 +1457,11 @@ void MdoSessionEventBridgeRelease(void* Value)
     Previous = xrtAtomic32FetchSub(&Bridge->Refs, 1u, XMEMORY_ACQ_REL);
     if ( Previous > 1u ) return;
     if ( Previous == 0u ) abort();
-    /* Normal terminal events already drain this buffer. A dropped owner must
-     * still attempt the tail before releasing its anchored Home and lease. */
+    /* Terminal callbacks already commit complete events. Owner loss discards
+     * the unfinished tail without writing a partial event to the journal. */
     MdoEventsStreamDiscard(Bridge);
+    if (Bridge->WatermarkAttached)
+        MdoSessionsInternalEventDetach(Bridge->ProjectId,Bridge->SessionId);
     if ( Bridge->Registered )
         MdoSessionsInternalActiveRelease(Bridge->ProjectId, Bridge->SessionId);
     if ( Bridge->RuntimeLock != NULL ) {
@@ -1692,60 +1716,25 @@ bool MdoSessionEventQueueStartSeen(const char* ProjectId,
     bool* Seen)
 {
     char Path[MDO_SESSION_PATH_CAPACITY];
-    xfileinfo Info;
-    char* Data = NULL;
-    size_t Size = 0u;
-    size_t Start = 0u;
-    bool Exists = false;
-    size_t i;
-    if ( Seen == NULL || QueueItemId == NULL || AgentRunId == 0u ||
-         !MdoEventsIdValid(ProjectId, MDO_PROJECT_ID_CAPACITY) ||
-         !MdoEventsIdValid(SessionId, MDO_SESSION_ID_CAPACITY) ||
-         strlen(QueueItemId) != 32u ||
-         !MdoEventsPath(Path, ProjectId, SessionId) ) return false;
-    *Seen = false;
-    for ( i = 0u; i < 32u; ++i ) {
-        unsigned char Byte = (unsigned char)QueueItemId[i];
-        if ( !((Byte >= '0' && Byte <= '9') ||
-               (Byte >= 'a' && Byte <= 'f')) ) return false;
+    if(!Seen||!QueueItemId||!AgentRunId||
+       !MdoEventsIdValid(ProjectId,MDO_PROJECT_ID_CAPACITY)||
+       !MdoEventsIdValid(SessionId,MDO_SESSION_ID_CAPACITY)||strlen(QueueItemId)!=32u||
+       !MdoEventsPath(Path,ProjectId,SessionId))return false;
+    *Seen=false;
+    for(size_t I=0;I<32u;++I)
+        if(!((QueueItemId[I]>='0'&&QueueItemId[I]<='9')||(QueueItemId[I]>='a'&&QueueItemId[I]<='f')))return false;
+    MdoEventReader* Reader=MdoEventReaderOpen(Path);if(!Reader)return false;
+    xstrview Record;
+    while(MdoEventReaderNext(Reader,&Record)){
+        if(!MdoEventRecordContains(Record,QueueItemId,32u))continue;
+        MdoSessionEventOwned Event;
+        if(MdoEventsParse(ProjectId,SessionId,Record,&Event)){
+            *Seen=Event.Info.Kind==XWORK_EVENT_AGENT_START&&!Event.Info.AgentDepth&&
+                Event.Info.RunId==AgentRunId&&!strcmp(Event.Info.QueueItemId,QueueItemId);
+            MdoEventsOwnedUnit(&Event);if(*Seen)break;
+        }else xrtClearError();
     }
-    if ( !MdoHomeExternalStat(Path, &Exists, &Info) ) return false;
-    if ( !Exists ) return true;
-    if ( Info.Type != XFILE_TYPE_FILE ||
-         (Info.Available & XFILE_INFO_SIZE) == 0u ||
-         !MdoEventsRead(Path, &Data, &Size) ) return false;
-    while ( Start < Size ) {
-        const char* End = (const char*)memchr(Data + Start, '\n',
-            Size - Start);
-        size_t Length;
-        bool Possible = false;
-        if ( End == NULL ) break; /* An unterminated tail proves nothing. */
-        Length = (size_t)(End - (Data + Start));
-        if ( Length <= MDO_SESSION_EVENT_RECORD_LIMIT ) {
-            for ( i = Start; i + 32u <= Start + Length; ++i ) {
-                if ( Data[i] == QueueItemId[0] &&
-                     memcmp(Data + i, QueueItemId, 32u) == 0 ) {
-                    Possible = true;
-                    break;
-                }
-            }
-        }
-        if ( Possible ) {
-            MdoSessionEventOwned Event;
-            if ( MdoEventsParse(ProjectId, SessionId,
-                    xrtStrViewN(Data + Start, Length), &Event) ) {
-                *Seen = Event.Info.Kind == XWORK_EVENT_AGENT_START &&
-                    Event.Info.AgentDepth == 0u &&
-                    Event.Info.RunId == AgentRunId &&
-                    strcmp(Event.Info.QueueItemId, QueueItemId) == 0;
-                MdoEventsOwnedUnit(&Event);
-                if ( *Seen ) break;
-            } else xrtClearError();
-        }
-        Start += Length + 1u;
-    }
-    xrtFree(Data);
-    return true;
+    bool Ok=!Reader->Failed;MdoEventReaderClose(Reader);return Ok;
 }
 
 MdoSessionEventSnapshot* MdoSessionEventSnapshotRef(

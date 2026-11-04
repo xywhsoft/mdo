@@ -12,6 +12,9 @@ typedef struct MdoConversationSummary {
     char Answer[MDO_CONVERSATION_SUMMARY_BYTES + 1u];
 } MdoConversationSummary;
 
+
+#include "conversation_scalar.inc.c"
+
 static void MdoConversationPrefix(char* Output, const char* Text)
 {
     size_t Size = strlen(Text);
@@ -75,6 +78,8 @@ xvalue* MdoSessionConversationTurns(const char* Project, const char* Session,
     Reader = MdoEventReaderOpen(Path);
     if ( Reader == NULL ) goto fail;
     if (!MdoViewEpoch(Reader, Epoch)) goto fail;
+    Result=MdoSessionsInternalIndexRead(Project,Session,Epoch,Reader->Size,Reader->Info.Modified,Before,Limit);
+    if(Result){MdoEventReaderClose(Reader);return Result;}
     memset(&Turn, 0, sizeof(Turn));
     Turn.State = "running";
     End = Reader->Size;
@@ -97,9 +102,9 @@ xvalue* MdoSessionConversationTurns(const char* Project, const char* Session,
         }
     }
     while ( MdoEventReaderPrevious(Reader, &End, &Record) ) {
-        MdoSessionEventOwned Owned;
+        MdoConversationScalar Owned;
         MdoSessionEventInfo* Event = &Owned.Info;
-        if ( !MdoEventsParse(Project, Session, Record, &Owned) ) {
+        if ( !MdoConversationScalarRead(Project, Session, Record, &Owned) ) {
             Lost = true;
             xrtClearError();
             continue;
@@ -136,7 +141,6 @@ xvalue* MdoSessionConversationTurns(const char* Project, const char* Session,
                 HasAnswer = false;
             }
         }
-        MdoEventsOwnedUnit(&Owned);
         if ( HasMore ) break;
     }
     if ( Reader->Failed ) goto fail;
@@ -155,6 +159,8 @@ xvalue* MdoSessionConversationTurns(const char* Project, const char* Session,
          !MdoEventsObjectTake(Result, "has_more", xrtValueBool(HasMore)) ||
          !MdoEventsObjectTake(Result, "history_lost", xrtValueBool(Lost)) ||
          !xrtValueObjectSetTake(Result, xrtStrView("items"), &Items) ) goto fail;
+    if(MdoViewCurrent(Path,Reader))
+        MdoSessionsInternalIndexStore(Project,Session,Epoch,Reader->Size,Reader->Info.Modified,Before,Limit,Result);
     MdoEventReaderClose(Reader);
     return Result;
 fail:

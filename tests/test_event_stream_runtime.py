@@ -1,4 +1,4 @@
-"""Recovered legacy contexts retain pinned text without accumulating live MCP blocks."""
+"""Complete text events persist once; unfinished previews stay in memory."""
 import argparse, json, os, shutil, subprocess, tempfile, time
 from test_api_runtime import ROOT, free_port
 
@@ -13,7 +13,7 @@ static void Watch(cstr P,cstr S,xstrview Json,bool Changed,void* Data){
  (void)Changed;(void)Data;MdoSessionEventOwned E;
  if(!MdoEventsParse(P,S,Json,&E)){++Invalid;return;}
  if(E.Info.StreamVolatile)++Previews;
- else if(E.Info.StreamFirstId){xvalue* Api=NULL;xstrview T;bool Full=MdoApiSessionEventValue(&E.Info,P,S,false,&Api)&&xrtValueGetString(xrtValueObjectGet(Api,XRT_STR_LITERAL("text")),&T)&&T.Size==strlen(E.Text);if(!Full)++Invalid;xrtValueRelease(Api);++Completed;if(E.Info.Kind==XWORK_EVENT_MODEL_REASONING_DELTA)ReasonBytes+=strlen(E.Text);else TextBytes+=strlen(E.Text);}
+ else if(E.Info.StreamFirstId){xvalue* Api=NULL;xstrview T;bool Full=MdoApiSessionEventValue(&E.Info,P,S,true,&Api)&&xrtValueGetString(xrtValueObjectGet(Api,XRT_STR_LITERAL("text")),&T)&&T.Size==strlen(E.Text);if(!Full)++Invalid;xrtValueRelease(Api);++Completed;if(E.Info.Kind==XWORK_EVENT_MODEL_REASONING_DELTA)ReasonBytes+=strlen(E.Text);else TextBytes+=strlen(E.Text);}
  MdoEventsOwnedUnit(&E);
 }
 static uint64 FileSize(MdoSessionEventBridge* B){xfileinfo I;bool Exists=false;return MdoHomeExternalStat(B->Path,&Exists,&I)&&Exists?I.Size:0;}
@@ -21,6 +21,7 @@ static bool Emit(MdoSessionEventBridge* B,xwork_event* E){bool Ok=MdoEventsStrea
 void ServiceInit(XS_HostInfo* Host){
  (void)Host;bool Ok=MdoHomeInit();g_MdoSessions.Lock=xrtMutexCreate();MdoSessionsObserve(Watch,NULL);
  MdoSessionEventBridge B={0};strcpy(B.ProjectId,"default");strcpy(B.SessionId,"0123456789abcdef0123456789abcdef");MdoEventsPath(B.Path,B.ProjectId,B.SessionId);B.NextEventId=1;strcpy(B.ModelId,"fixture");B.ContextWindowTokens=1024;
+ uint64 Next=0;Ok=Ok&&MdoSessionsInternalEventNext(B.ProjectId,B.SessionId,0,&Next)&&Next==1;
  xwork_event E={0};E.uAgentId=1;E.uRunId=1;E.uAgentTurn=1;E.iTextLength=SIZE_MAX;E.eKind=XWORK_EVENT_MODEL_START;E.sText="start";Ok=Ok&&Emit(&B,&E);uint64 Initial=FileSize(&B);
  E.eKind=XWORK_EVENT_MODEL_REASONING_DELTA;E.sText="思";
  for(unsigned I=0;Ok&&I<10000;++I){E.uEventId++;Ok=Emit(&B,&E);}
@@ -41,9 +42,10 @@ void ServiceInit(XS_HostInfo* Host){
  E.eKind=XWORK_EVENT_AGENT_DONE;E.sText="";bool Done=Emit(&B,&E);Ok=Ok&&Done&&TextBytes==130005&&FileSize(&B)>BeforeDone;
  /* Owner loss deliberately discards the current unfinished event. */
  E.eKind=XWORK_EVENT_MODEL_REASONING_DELTA;E.sText="unfinished";Ok=Ok&&Emit(&B,&E);uint64 BeforeDrop=FileSize(&B);MdoEventsStreamDiscard(&B);Ok=Ok&&FileSize(&B)==BeforeDrop&&B.StreamBytes==0;
+ Ok=Ok&&MdoSessionsInternalEventNext(B.ProjectId,B.SessionId,0,&Next)&&Next==B.NextEventId;
  Ok=Ok&&!Invalid&&Previews>0;
  printf("stream_complete=%u previews=%u completed=%u reasoning_bytes=%zu text_bytes=%zu invalid=%u probe_done=1\n",Ok,Previews,Completed,ReasonBytes,TextBytes,Invalid);fflush(stdout);
- MdoSessionsObserve(NULL,NULL);xrtMutexDestroy(g_MdoSessions.Lock);g_MdoSessions.Lock=NULL;MdoHomeUnit();
+ MdoSessionsObserve(NULL,NULL);MdoSessionManagerUnit();MdoHomeUnit();
 }
 void ServiceUnit(XS_HostInfo* Host){(void)Host;}
 

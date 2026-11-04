@@ -53,7 +53,8 @@ class Model(BaseHTTPRequestHandler):
             finish = "tool_calls"
         else:
             output = [{"reasoning_content": "Inspecting live delivery."}]
-            output += [{"content": f"part-{index} "} for index in range(12)]
+            output += [{"content": f"part-{index} " + ("x" * 26000 if "live large" in prompt else "")}
+                       for index in range(12)]
             finish = "stop"
         chunks = [{"role": "assistant"}] + output
         frames = []
@@ -79,7 +80,7 @@ class Model(BaseHTTPRequestHandler):
 
 
 class WebSocket:
-    def __init__(self, port, *, origin=None, token=None, version="13"):
+    def __init__(self, port, *, origin=None, token=None, version="13", snapshots=True):
         self.port = port
         self.socket = socket.create_connection(("127.0.0.1", port), timeout=3)
         self.socket.settimeout(3)
@@ -91,10 +92,11 @@ class WebSocket:
             token = response.getheader("X-Mdo-Write-Token")
             response.read(); connection.close()
         key = base64.b64encode(os.urandom(16)).decode()
+        protocols = "mdo.live.v2, mdo.live.v1" if snapshots else "mdo.live.v1"
         self.socket.sendall((f"GET /api/v1/live HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n"
             f"Origin: {origin or f'http://127.0.0.1:{port}'}\r\nUpgrade: websocket\r\n"
             f"Connection: Upgrade\r\nSec-WebSocket-Version: {version}\r\nSec-WebSocket-Key: {key}\r\n"
-            f"Sec-WebSocket-Protocol: mdo.live.v1, mdo.token.{token}\r\n\r\n").encode())
+            f"Sec-WebSocket-Protocol: {protocols}, mdo.token.{token}\r\n\r\n").encode())
         while b"\r\n\r\n" not in self.buffer:
             self.buffer += self.socket.recv(4096)
         head, self.buffer = self.buffer.split(b"\r\n\r\n", 1)
@@ -103,7 +105,8 @@ class WebSocket:
             accept = base64.b64encode(hashlib.sha1((key +
                 "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest())
             assert b"Sec-WebSocket-Accept: " + accept in head, head
-            assert b"Sec-WebSocket-Protocol: mdo.live.v1" in head
+            assert (b"Sec-WebSocket-Protocol: mdo.live.v2" if snapshots else
+                    b"Sec-WebSocket-Protocol: mdo.live.v1") in head
             assert self.json()["type"] == "ready"
 
     def read(self, count):
@@ -120,7 +123,7 @@ class WebSocket:
         length = second & 127
         if length == 126: length = struct.unpack("!H", self.read(2))[0]
         if length == 127: length = struct.unpack("!Q", self.read(8))[0]
-        assert length <= 256 * 1024
+        assert length <= 4 * 1024 * 1024
         return first & 15, self.read(length)
 
     def json(self):
@@ -254,6 +257,9 @@ def probe(host: Path | None, packed: Path | None):
                 assert packet["type"] == "events" and packet["selection"] in (2, 3), packet
                 if packet["selection"] == 3:
                     subscription_received = True
+            legacy = connect(snapshots=False)
+            legacy.select(session)
+            assert legacy.json()['type'] == 'events'
             status, document = request(port, "POST", path + "/runs", {"prompt": "live stream", "timeout_ms": 10000})
             assert status == 202, document
             run_id = document["data"]["id"]
@@ -269,6 +275,9 @@ def probe(host: Path | None, packed: Path | None):
                     first_partial = time.monotonic()
                     # Disconnect in the middle of a reply and resume from the
                     # last displayed ID. The same run keeps executing.
+                    stored = [json.loads(line) for line in
+                        (home / 'sessions/default' / session / 'ui-events.jsonl').read_text(encoding='utf-8').splitlines()]
+                    assert not any(row['kind'] in (2,3) for row in stored), 'unfinished stream was written to disk'
                     cursor = packet["next_cursor"]; client.close()
                     time.sleep(0.18)
                     client = connect(); client.select(session, cursor, selection=3)
@@ -276,6 +285,14 @@ def probe(host: Path | None, packed: Path | None):
             else: raise AssertionError("live stream did not complete")
             assert first_partial is not None and time.monotonic() - first_partial > 0.4, "no partial delivery before completion"
             assert changed, "run/resource notification missing"
+            legacy_events = []
+            while not any(item['kind'] == 'agent_done' for item in legacy_events):
+                packet = legacy.json()
+                if packet['type'] != 'events': continue
+                legacy_events += packet['items']
+            assert not any(item.get('stream_volatile') for item in legacy_events)
+            assert ''.join(item['text'] for item in legacy_events if item['kind'] == 'model_text_delta') == ''.join(f'part-{i} ' for i in range(12))
+            legacy.close()
             ids = [item["event_id"] for item in delivered]
             assert ids == sorted(set(ids)), ids
             # Run the actual client merge: volatile replacement snapshots are
@@ -305,6 +322,22 @@ console.log(JSON.stringify(mergeTimelineEvents([],JSON.parse(fs.readFileSync(0,'
                 _, document = request(port, "GET", f"/api/v1/runs/{run_id}")
                 if document["data"]["terminal"]: break
             else: raise AssertionError("terminal run change was not announced")
+            # Completed text larger than the former 256 KiB response budget
+            # survives a real WebSocket batch and the first history page.
+            status, document = request(port, "POST", path + "/runs", {"prompt": "live large", "timeout_ms": 10000})
+            assert status == 202, document
+            large = []
+            while not any(item['kind'] == 'agent_done' for item in large):
+                packet = client.json()
+                if packet['type'] == 'events': large += packet['items']
+            reconciled = subprocess.run(['node','--input-type=module','-e',merge_source],
+                cwd=ROOT,input=json.dumps(large),text=True,capture_output=True,check=True)
+            expected_large = ''.join(f'part-{i} ' + 'x' * 26000 for i in range(12))
+            assert ''.join(item['text'] for item in json.loads(reconciled.stdout)
+                           if item['kind'] == 'model_text_delta') == expected_large
+            _, document = request(port, 'GET', path + '/conversation?limit=1')
+            assert any(item['kind'] == 'model_text_delta' and item['text'] == expected_large
+                       for item in json.loads(document['data']['items_json']))
             # Ask appears through invalidation even while the model/tool is
             # waiting and no new text event can wake a legacy polling loop.
             status, document = request(port, "POST", path + "/runs", {"prompt": "live ask", "timeout_ms": 10000})

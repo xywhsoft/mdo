@@ -58,6 +58,7 @@ static bool MdoEventsStreamCommit(MdoSessionEventBridge* Bridge, MdoEventStream*
         char* Json=MdoEventsStreamJson(Bridge,Stream,Stream->Written,Count,false,&Size);
         bool Ok=Json && Size<=MDO_SESSION_EVENT_RECORD_LIMIT && MdoEventsAppendBytes(Bridge->Path,Json,Size);
         if (Ok) {
+            MdoSessionsInternalEventIssued(Bridge->ProjectId,Bridge->SessionId,Bridge->NextEventId,true);
             MdoSessionsInternalPublish(Bridge->ProjectId,Bridge->SessionId,xrtStrViewN(Json,Size),false);
             ++Bridge->NextEventId; Stream->Written+=Count;
         }
@@ -113,7 +114,9 @@ static bool MdoEventsStreamAppend(MdoSessionEventBridge* Bridge, const xwork_eve
     for (Stream=Bridge->Streams;Stream;Stream=Stream->Next) {
         ++Count;
         if (Stream->Agent==Event->uAgentId && Stream->Run==Event->uRunId &&
-            Stream->Depth==Event->uAgentDepth && Stream->Turn==Event->uAgentTurn && Stream->Kind==Event->eKind && !memcmp(&Stream->Source,&Bridge->Source,sizeof(Stream->Source))) break;
+            Stream->Depth==Event->uAgentDepth && Stream->Turn==Event->uAgentTurn && Stream->Kind==Event->eKind &&
+            !strcmp(Stream->Source.Namespace,Bridge->Source.Namespace) && !strcmp(Stream->Source.Member,Bridge->Source.Member) &&
+            !strcmp(Stream->Source.Agent,Bridge->Source.Agent)) break;
     }
     if (!Stream) {
         if (Count>=MDO_STREAM_COUNT_LIMIT) return false;
@@ -147,6 +150,7 @@ static bool MdoEventsStreamAppend(MdoSessionEventBridge* Bridge, const xwork_eve
         size_t Bytes=0u, Prefix=MdoEventsStreamPrefix(Stream,0u);
         char* Json=MdoEventsStreamJson(Bridge,Stream,0u,Prefix,true,&Bytes);
         if (!Json || Bytes>MDO_SESSION_EVENT_RECORD_LIMIT) { xrtFree(Json); return false; }
+        MdoSessionsInternalEventIssued(Bridge->ProjectId,Bridge->SessionId,Bridge->NextEventId,false);
         MdoSessionsInternalPublish(Bridge->ProjectId,Bridge->SessionId,xrtStrViewN(Json,Bytes),false);
         Stream->LastPreview=Bridge->NextEventId++; Stream->LastPublish=Now;
         xrtFree(Json);

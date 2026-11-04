@@ -69,7 +69,7 @@ test("a replacement connection cancels its old probe without clearing the new wa
   try {
     f.fail(); await f.fire(500); f.live.start(fresh); await flush();
     assert.equal(signal.aborted, true); assert.equal(f.sockets.length, 2);
-    assert.deepEqual(f.sockets[1].protocols, ["mdo.live.v1", `mdo.token.${fresh}`]);
+    assert.deepEqual(f.sockets[1].protocols, ["mdo.live.v2", "mdo.live.v1", `mdo.token.${fresh}`]);
     assert.equal(f.timers.size, 1); assert.equal([...f.timers.values()][0].delay, 10000);
     finish(token); await flush(); assert.equal(f.timers.size, 1);
     assert(!f.events.some(e => e.type === "runtime_changed"));
@@ -144,7 +144,7 @@ test("the exported live connection bounds real API JSON and retains the page's m
     assert.equal(signal.aborted, true);
     assert.deepEqual(events.at(-1), { type: "reachable", connected: false });
     await nextTimer(); assert.equal(reads, 3); assert.equal(f.sockets.length, 2);
-    assert.deepEqual(f.sockets[1].protocols, ["mdo.live.v1", `mdo.token.${fresh}`]);
+    assert.deepEqual(f.sockets[1].protocols, ["mdo.live.v2", "mdo.live.v1", `mdo.token.${fresh}`]);
     assert.equal(currentPageWriteToken(), token);
   } finally { liveConnection.stop(); off(); f.live.stop(); Object.assign(globalThis, previous); }
 });

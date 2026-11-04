@@ -147,3 +147,13 @@ test("completion replacement preserves other members, reasoning and completed ch
   const result = mergeTimelineEvents(rows, [part]).events;
   assert.deepEqual(result.map(e => e.event_id), [4, 5, 9, 10]);
 });
+
+test("a new root run discards orphaned previews and retains completed history", () => {
+  const base = { kind: "model_text_delta", agent_id: 1, run_id: 7, agent_depth: 0 };
+  const completed = { ...base, event_id: 1, text: "saved", stream_volatile: false };
+  const unfinished = { ...base, event_id: 2, text: "unfinished", stream_volatile: true };
+  const child = { kind: "agent_start", agent_depth: 1, event_id: 3 };
+  assert.deepEqual(mergeTimelineEvents([completed, unfinished], [child]).events.map(e => e.event_id), [1, 2, 3]);
+  const root = { kind: "agent_start", agent_depth: 0, event_id: 4 };
+  assert.deepEqual(mergeTimelineEvents([completed, unfinished, child], [root]).events.map(e => e.event_id), [1, 3, 4]);
+});

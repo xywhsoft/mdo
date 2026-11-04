@@ -56,9 +56,9 @@ test("cold conversation JSON ignoring abort recovers quietly and ignores its lat
     return url.includes("after=") ? delta(2) : reply(page([2]));
   };
   void selectTimeline("qa", "a").then(() => { settled = true; }); await flush();
-  await step(); assert.equal(time, 8000); assert.equal(signal.aborted, true);
+  await step(); assert.equal(time, 15000); assert.equal(signal.aborted, true);
   assert.equal(timelineStore.get().data.syncError ?? null, null);
-  await step(); assert.equal(time, 8500); assert.equal(settled, true);
+  await step(); assert.equal(time, 15500); assert.equal(settled, true);
   assert.equal(timelineStore.get().data.initializing, false);
   assert.deepEqual(timelineStore.get().data.events.map(e => e.event_id), [2]);
   finish({ ok: true, data: page([1]) }); await flush();
@@ -70,7 +70,7 @@ test("cached messages remain visible through a slow refresh and automatic recove
   await selectTimeline("qa", "a"); let calls = 0, finish, settled = false;
   fetcher = () => ++calls === 1 ? new Promise(resolve => { finish = resolve; }) : reply(page([2], { delta: true }));
   void refreshSelectedTimeline().then(() => { settled = true; }); await flush();
-  await step(); assert.equal(time, 8000); assert.equal(settled, false);
+  await step(); assert.equal(time, 15000); assert.equal(settled, false);
   assert.equal(timelineStore.get().data.events[0].text, "text 1");
   assert.equal(timelineStore.get().data.syncError ?? null, null);
   await step(); assert.equal(settled, true);
@@ -79,14 +79,14 @@ test("cached messages remain visible through a slow refresh and automatic recove
   assert.deepEqual(timelineStore.get().data.events.map(e => e.event_id), [1, 2]);
 });
 
-test("six uncooperative history reads end one budget with a single final read error", async () => {
+test("four uncooperative history reads end one budget with a single final read error", async () => {
   let calls = 0, settled = false;
   const failures = [], signals = [];
   const off = timelineStore.subscribe(state => { if (state.data?.syncError) failures.push(state.data.syncError); });
   fetcher = (_url, options) => { calls++; signals.push(options.signal); return new Promise(() => {}); };
   void selectTimeline("qa", "a").then(() => { settled = true; }); await flush();
   for (let i = 0; i < 15 && !settled; ++i) await step();
-  off(); assert.equal(settled, true); assert.equal(calls, 6); assert.equal(time, 60000);
+  off(); assert.equal(settled, true); assert.equal(calls, 4); assert.equal(time, 60000);
   assert.equal(failures.length, 1); assert.equal(failures[0].code, "network_error");
   assert(signals.every(signal => signal.aborted));
 });

@@ -33,7 +33,7 @@ test("same-origin token and ready gate protect a single connection", () => {
   const { live, sockets, events } = fixture();
   live.start("invalid"); assert.equal(sockets.length, 0);
   live.start(token); live.start(token); assert.equal(sockets.length, 1);
-  assert.deepEqual(sockets[0].protocols, ["mdo.live.v1", `mdo.token.${token}`]);
+  assert.deepEqual(sockets[0].protocols, ["mdo.live.v2", "mdo.live.v1", `mdo.token.${token}`]);
   assert.equal(live.isConnected(), false);
   sockets[0].message({ type: "changed" }); assert.equal(events.length, 0);
   sockets[0].message({ type: "ready", version: 1 });
@@ -51,7 +51,7 @@ test("restart renews only the read socket and announces the stale page before co
   await flush();
   assert.equal(reads, 1);
   assert.equal(f.sockets.length, 2);
-  assert.deepEqual(f.sockets[1].protocols, ["mdo.live.v1", `mdo.token.${fresh}`]);
+  assert.deepEqual(f.sockets[1].protocols, ["mdo.live.v2", "mdo.live.v1", `mdo.token.${fresh}`]);
   assert.deepEqual(f.events.slice(-2), [
     { type: "runtime_changed", reason: "restart" }, { type: "reachable", connected: true },
   ]);

@@ -61,6 +61,11 @@ bool MdoSessionsRestoreRelease(MdoSessionRestoreReservation** Reservation,
 typedef bool (*MdoSessionEventVisitor)(const MdoSessionEventInfo* Event, void* Data);
 bool MdoSessionsInternalEventVisit(const char* ProjectId, const char* SessionId,
     xstrview Json, MdoSessionEventVisitor Visitor, void* Data);
+bool MdoSessionsInternalEventNext(cstr Project,cstr Session,uint64 Latest,uint64* Next);
+void MdoSessionsInternalEventIssued(cstr Project,cstr Session,uint64 Issued,bool Committed);
+void MdoSessionsInternalEventDetach(cstr Project,cstr Session);
+xvalue* MdoSessionsInternalIndexRead(cstr Project,cstr Session,cstr Epoch,uint64 Bytes,int64 Modified,uint64 Before,size_t Limit);
+void MdoSessionsInternalIndexStore(cstr Project,cstr Session,cstr Epoch,uint64 Bytes,int64 Modified,uint64 Before,size_t Limit,const xvalue* Document);
 xvalue* MdoSessionsInternalTodoParse(xstrview Json, bool Stored);
 
 /* Publish a committed project bucket removal to catalog observers. The

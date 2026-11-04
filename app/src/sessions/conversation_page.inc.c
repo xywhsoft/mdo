@@ -315,11 +315,18 @@ static MdoSessionEventSnapshot* MdoReadConversationPage(const char* Project,
             FirstMain->Kind != MDO_SESSION_EVENT_HISTORY_TRUNCATED &&
             !(FirstMain->Kind == XWORK_EVENT_AGENT_START &&
               (FirstMain->UserMessageSequence || FirstMain->SchemaVersion < 3u))) {
-            uint64 ContextEnd = End, ContextScanned = 0u;
-            while (ContextScanned < MDO_VIEW_SCAN &&
+            uint64 ContextEnd = End, ContextScanned = 0u, ContextStart = MdoMonotonicUs();
+            while (ContextScanned < 32u * (uint64)MDO_VIEW_SCAN &&
+                   MdoMonotonicUs()-ContextStart < 3000000u &&
                    MdoEventReaderPrevious(Reader, &ContextEnd, &Record)) {
                 MdoSessionEventOwned Input;
+                MdoConversationScalar Scalar;
                 ContextScanned = End - ContextEnd;
+                if (!MdoConversationScalarRead(Project, Session, Record, &Scalar)) {
+                    xrtClearError(); continue;
+                }
+                if (Scalar.Info.Kind != MDO_SESSION_EVENT_HISTORY_TRUNCATED &&
+                    !(Scalar.Info.Kind == XWORK_EVENT_AGENT_START && !Scalar.Info.AgentDepth)) continue;
                 if (!MdoEventsParse(Project, Session, Record, &Input)) {
                     xrtClearError(); continue;
                 }
@@ -335,6 +342,20 @@ static MdoSessionEventSnapshot* MdoReadConversationPage(const char* Project,
                     }
                     Snapshot->ActionPrompt = Input;
                     Page->ActionPrompt = Input.Info;
+                    /* A thinking-only/retrying suffix has no public reply on
+                     * which to attach action_prompt. Include its real input
+                     * row, with its original durable identity, instead. */
+                    bool HasReply = false;
+                    for (size_t I=0u; I<Snapshot->Count; ++I)
+                        if (!Snapshot->Events[I].Info.AgentDepth && Snapshot->Events[I].Info.Kind==XWORK_EVENT_MODEL_TEXT_DELTA)
+                            HasReply = true;
+                    if (!HasReply) {
+                        MdoSessionEventOwned Prompt;
+                        if (!MdoEventsParse(Project,Session,Record,&Prompt)) goto io;
+                        if (!MdoEventsSnapshotGrow(Snapshot)) { MdoEventsOwnedUnit(&Prompt); goto memory; }
+                        memmove(Snapshot->Events+1u,Snapshot->Events,Snapshot->Count*sizeof(*Snapshot->Events));
+                        Snapshot->Events[0]=Prompt; ++Snapshot->Count;
+                    }
                     break;
                 }
                 MdoEventsOwnedUnit(&Input);

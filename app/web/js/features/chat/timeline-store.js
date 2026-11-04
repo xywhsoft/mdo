@@ -76,6 +76,8 @@ async function readTimeline(path, signal = selectionAbort?.signal) {
   const recovery = createRequestRecovery({
     setTimer: (...args) => window.setTimeout(...args),
     clearTimer: id => window.clearTimeout(id),
+    ...(path.includes("/turns?") ? { requestMs: 30000 } :
+      path.includes("/conversation?") ? { requestMs: 15000 } : {}),
   });
   const cancel = () => recovery.dispose();
   signal?.addEventListener("abort", cancel, { once: true });
@@ -118,13 +120,16 @@ export function historyRemovalRange(event) {
 export function mergeTimelineEvents(retained, additions) {
   const unique = new Map(retained.map(event => [event.event_id, event]));
   for (const event of additions) {
+    if (event.kind === "agent_start" && !event.agent_depth)
+      for (const [id, prior] of unique) if (prior.stream_volatile) unique.delete(id);
     const first = event.stream_first_id, through = event.stream_through_id;
     if (Number.isSafeInteger(first) && first > 0 && Number.isSafeInteger(through) && through < event.event_id) {
       for (const [id, prior] of unique) {
         if (prior.stream_volatile && id >= first && id <= through && prior.kind === event.kind &&
             prior.agent_id === event.agent_id && prior.run_id === event.run_id &&
             prior.agent_turn === event.agent_turn && prior.agent_depth === event.agent_depth &&
-            prior.source?.member === event.source?.member && prior.source?.namespace === event.source?.namespace)
+            prior.source?.member === event.source?.member && prior.source?.namespace === event.source?.namespace &&
+            prior.source?.agent === event.source?.agent)
           unique.delete(id);
       }
     }

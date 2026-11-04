@@ -19,6 +19,7 @@
 #define MDO_LIVE_RECORDS 512u
 #define MDO_LIVE_BYTES (2u * 1024u * 1024u)
 #define MDO_LIVE_BATCH 32u
+#define MDO_LIVE_RESPONSE_BYTES (4u * 1024u * 1024u)
 #define MDO_LIVE_INPUT 4096u
 #define MDO_LIVE_TICK_US 25000u
 #define MDO_LIVE_SEND_US 2000000u
@@ -27,6 +28,7 @@
 
 typedef struct MdoLiveRecord {
     uint64 Revision;
+    uint64 StreamFirst;
     char Project[MDO_PROJECT_ID_CAPACITY];
     char Session[MDO_SESSION_ID_CAPACITY];
     char* Json;
@@ -34,6 +36,7 @@ typedef struct MdoLiveRecord {
 } MdoLiveRecord;
 
 typedef struct MdoLiveClient {
+    bool StreamSnapshots;
     XS_HttpReq Request;
     MdoApiContext Context;
     char Head[512];
@@ -96,6 +99,14 @@ static void MdoLivePublish(cstr Project, cstr Session, xstrview Json,
     MdoLiveRecord* Record;
     char* Copy;
     (void)Data;
+    uint64 StreamFirst=0u; bool Volatile=false;
+    xvalue* Parsed=xrtJsonParse(Json);
+    const xvalue* Stream=Parsed?xrtValueObjectGet(Parsed,XRT_STR_LITERAL("stream")):NULL;
+    if(Stream){
+        (void)xrtValueGetUInt(xrtValueObjectGet(Stream,XRT_STR_LITERAL("first")),&StreamFirst);
+        (void)xrtValueGetBool(xrtValueObjectGet(Stream,XRT_STR_LITERAL("volatile")),&Volatile);
+    }
+    xrtValueRelease(Parsed);
     xrtMutexLock(g_MdoLive.Lock);
     if ( g_MdoLive.Stopping ) goto done;
     ++g_MdoLive.Revision;
@@ -108,10 +119,23 @@ static void MdoLivePublish(cstr Project, cstr Session, xstrview Json,
         goto notify;
     }
     memcpy(Copy, Json.Data, Json.Size);
+    /* Previews are replacement snapshots. Keeping every obsolete preview
+     * wastes the bounded cache and can push a slow client into replay loops. */
+    for(size_t I=0u; StreamFirst && I<g_MdoLive.Count;){
+        size_t Slot=(g_MdoLive.First+I)%MDO_LIVE_RECORDS;
+        MdoLiveRecord* Old=&g_MdoLive.Records[Slot];
+        if(Old->StreamFirst!=StreamFirst || strcmp(Old->Project,Project) || strcmp(Old->Session,Session)){++I;continue;}
+        g_MdoLive.Bytes-=Old->Size;xrtFree(Old->Json);
+        for(size_t J=I;J+1u<g_MdoLive.Count;++J)
+            g_MdoLive.Records[(g_MdoLive.First+J)%MDO_LIVE_RECORDS]=g_MdoLive.Records[(g_MdoLive.First+J+1u)%MDO_LIVE_RECORDS];
+        memset(&g_MdoLive.Records[(g_MdoLive.First+g_MdoLive.Count-1u)%MDO_LIVE_RECORDS],0,sizeof(*Old));
+        --g_MdoLive.Count;
+    }
     while ( g_MdoLive.Count == MDO_LIVE_RECORDS ||
             g_MdoLive.Bytes > MDO_LIVE_BYTES - Json.Size ) MdoLiveEvict();
     Record = &g_MdoLive.Records[(g_MdoLive.First + g_MdoLive.Count) % MDO_LIVE_RECORDS];
     Record->Revision = g_MdoLive.Revision;
+    Record->StreamFirst = Volatile ? StreamFirst : 0u;
     snprintf(Record->Project, sizeof(Record->Project), "%s", Project);
     snprintf(Record->Session, sizeof(Record->Session), "%s", Session);
     Record->Json = Copy; Record->Size = Json.Size;
@@ -147,7 +171,7 @@ static bool MdoLiveValue(MdoLiveClient* Client, xvalue* Value)
 {
     size_t Size = 0u;
     str Json = Value != NULL ? xrtJsonStringify(Value, false, &Size) : NULL;
-    bool Ok = Json != NULL && Size <= MDO_API_RESPONSE_MAX_BYTES &&
+    bool Ok = Json != NULL && Size <= MDO_LIVE_RESPONSE_BYTES &&
         MdoLiveFrame(Client, XWS_OPCODE_TEXT, Json, Size);
     xrtValueRelease(Value); xrtFree(Json);
     return Ok;
@@ -300,8 +324,9 @@ static bool MdoLiveVisit(const MdoSessionEventInfo* Event, void* Data)
     MdoLiveBatch* Batch = (MdoLiveBatch*)Data;
     xvalue* Item = NULL;
     bool Ok;
+    if (Event->StreamVolatile && !Batch->Client->StreamSnapshots) return true;
     if ( Event->EventId <= Batch->Client->Cursor ) return true;
-    Ok = MdoApiSessionEventValue(Event, Batch->Client->Project, Batch->Client->Session, false, &Item) &&
+    Ok = MdoApiSessionEventValue(Event, Batch->Client->Project, Batch->Client->Session, Event->StreamFirstId != 0u, &Item) &&
         MdoApiValueAppendTake(Batch->Items, &Item);
     xrtValueRelease(Item);
     if ( Ok ) Batch->Client->Cursor = Event->EventId;
@@ -543,11 +568,12 @@ bool MdoApiLiveRoute(MdoApiContext* Context)
     xtaskargs Args = {0};
     if ( !MdoLiveAuthorized(Context) ) return MdoApiReplyError(Context, 403u, "live_forbidden",
         "Use this page's origin and startup token for live updates", NULL);
-    xrtWsUpgradeServerConfigInit(&Config); Config.Protocols = XRT_STR_LITERAL("mdo.live.v1");
+    xrtWsUpgradeServerConfigInit(&Config); Config.Protocols = XRT_STR_LITERAL("mdo.live.v2, mdo.live.v1");
     if ( !xrtWsUpgradeRequestCheck(Context->Request->head, &Config, &Upgrade) || Upgrade.Protocol.Size == 0u )
         return MdoApiReplyError(Context, 400u, "live_upgrade_invalid", "A WebSocket version 13 upgrade is required", NULL);
     Client = (MdoLiveClient*)xrtCalloc(1u, sizeof(*Client));
     if ( Client == NULL ) goto unavailable;
+    Client->StreamSnapshots = xrtStrEqual(Upgrade.Protocol, XRT_STR_LITERAL("mdo.live.v2"));
     if ( !xrtWsUpgradeResponseFields(xrtStrView(Upgrade.Accept), Upgrade.Protocol, xrtStrView(""), Fields, XWS_UPGRADE_RESPONSE_FIELDS_MAX, &Count) ||
          !xrtHttp1ResponseWrite(XHTTP_VERSION_1_1, 101u, XRT_STR_LITERAL("Switching Protocols"), Fields, Count,
             Client->Head, sizeof(Client->Head), &Client->HeadSize) ) goto unavailable;

@@ -25,6 +25,20 @@ typedef struct MdoSessionActive {
     MdoApprovalScope* PermissionScope;
 } MdoSessionActive;
 
+typedef struct MdoEventWatermark {
+    struct MdoEventWatermark* Next;
+    char Project[MDO_PROJECT_ID_CAPACITY], Session[MDO_SESSION_ID_CAPACITY];
+    uint64 Issued, Committed;
+} MdoEventWatermark;
+
+typedef struct MdoConversationIndexCache {
+    char Project[MDO_PROJECT_ID_CAPACITY], Session[MDO_SESSION_ID_CAPACITY], Epoch[65];
+    uint64 Bytes, Before;
+    int64 Modified;
+    size_t Limit;
+    xvalue* Document;
+} MdoConversationIndexCache;
+
 typedef struct MdoSessionManagerState {
     xmutex* Lock;
     MdoSessionEventObserver Observer;
@@ -39,6 +53,10 @@ typedef struct MdoSessionManagerState {
     MdoSessionRestoreReservation* Restores;
     size_t RestoreCount;
     bool Initialized;
+    MdoEventWatermark* Watermarks;
+    size_t WatermarkCount;
+    MdoConversationIndexCache IndexCache[8];
+    size_t IndexNext;
 } MdoSessionManagerState;
 typedef struct MdoSessionBorrowedScope {
     char Project[MDO_PROJECT_ID_CAPACITY],Session[MDO_SESSION_ID_CAPACITY];
@@ -88,6 +106,69 @@ void MdoSessionsInternalPublish(cstr Project, cstr Session, xstrview Record,
     if ( g_MdoSessions.Observer != NULL )
         g_MdoSessions.Observer(Project, Session, Record, StateChanged,
             g_MdoSessions.ObserverData);
+    xrtMutexUnlock(g_MdoSessions.Lock);
+}
+
+/* Volatile IDs must not be reused when an unfinished runtime is closed and
+ * reopened in the same host. A process restart also resets live connections;
+ * no new persistent sidecar or per-fragment write is required. */
+bool MdoSessionsInternalEventNext(cstr Project,cstr Session,uint64 Latest,uint64* Next)
+{
+    if (!g_MdoSessions.Lock) return false;
+    xrtMutexLock(g_MdoSessions.Lock);
+    MdoEventWatermark* W=g_MdoSessions.Watermarks;
+    while(W && (strcmp(W->Project,Project)||strcmp(W->Session,Session))) W=W->Next;
+    if(!W && g_MdoSessions.WatermarkCount<MDO_SESSION_CATALOG_MAX){
+        W=xrtCalloc(1u,sizeof(*W));
+        if(W){snprintf(W->Project,sizeof(W->Project),"%s",Project);snprintf(W->Session,sizeof(W->Session),"%s",Session);
+            W->Next=g_MdoSessions.Watermarks;g_MdoSessions.Watermarks=W;++g_MdoSessions.WatermarkCount;}
+    }
+    if(W && Latest>W->Issued)W->Issued=Latest;
+    if(W && Latest>W->Committed)W->Committed=Latest;
+    bool Ok=W && W->Issued!=UINT64_MAX;
+    if(Ok)*Next=W->Issued+1u;
+    xrtMutexUnlock(g_MdoSessions.Lock);return Ok;
+}
+void MdoSessionsInternalEventIssued(cstr Project,cstr Session,uint64 Issued,bool Committed)
+{
+    if(!g_MdoSessions.Lock)return;
+    xrtMutexLock(g_MdoSessions.Lock);
+    for(MdoEventWatermark* W=g_MdoSessions.Watermarks;W;W=W->Next)
+        if(!strcmp(W->Project,Project)&&!strcmp(W->Session,Session)){if(Issued>W->Issued)W->Issued=Issued;if(Committed&&Issued>W->Committed)W->Committed=Issued;break;}
+    xrtMutexUnlock(g_MdoSessions.Lock);
+}
+
+void MdoSessionsInternalEventDetach(cstr Project,cstr Session)
+{
+    if(!g_MdoSessions.Lock)return;
+    xrtMutexLock(g_MdoSessions.Lock);
+    MdoEventWatermark** Link=&g_MdoSessions.Watermarks;
+    while(*Link){MdoEventWatermark* W=*Link;
+        if(!strcmp(W->Project,Project)&&!strcmp(W->Session,Session)){
+            if(W->Issued==W->Committed){*Link=W->Next;xrtFree(W);--g_MdoSessions.WatermarkCount;}break;}
+        Link=&W->Next;}
+    xrtMutexUnlock(g_MdoSessions.Lock);
+}
+
+xvalue* MdoSessionsInternalIndexRead(cstr Project,cstr Session,cstr Epoch,uint64 Bytes,int64 Modified,uint64 Before,size_t Limit)
+{
+    if(!g_MdoSessions.Lock)return NULL;
+    xvalue* Document=NULL;xrtMutexLock(g_MdoSessions.Lock);
+    for(size_t I=0;I<8u;++I){MdoConversationIndexCache* C=&g_MdoSessions.IndexCache[I];
+        if(C->Document&&C->Bytes==Bytes&&C->Modified==Modified&&C->Before==Before&&C->Limit==Limit&&
+            !strcmp(C->Project,Project)&&!strcmp(C->Session,Session)&&!strcmp(C->Epoch,Epoch)){
+            Document=xrtValueClone(C->Document);break;}}
+    xrtMutexUnlock(g_MdoSessions.Lock);return Document;
+}
+void MdoSessionsInternalIndexStore(cstr Project,cstr Session,cstr Epoch,uint64 Bytes,int64 Modified,uint64 Before,size_t Limit,const xvalue* Document)
+{
+    if(!g_MdoSessions.Lock)return;
+    xvalue* Copy=xrtValueClone(Document);if(!Copy)return;
+    xrtMutexLock(g_MdoSessions.Lock);
+    MdoConversationIndexCache* C=&g_MdoSessions.IndexCache[g_MdoSessions.IndexNext++%8u];
+    xrtValueRelease(C->Document);C->Document=Copy;
+    snprintf(C->Project,sizeof(C->Project),"%s",Project);snprintf(C->Session,sizeof(C->Session),"%s",Session);
+    snprintf(C->Epoch,sizeof(C->Epoch),"%s",Epoch);C->Bytes=Bytes;C->Modified=Modified;C->Before=Before;C->Limit=Limit;
     xrtMutexUnlock(g_MdoSessions.Lock);
 }
 
@@ -704,6 +785,8 @@ void MdoSessionManagerUnit(void)
     MdoSessionDataUnit();
     if ( g_MdoSessions.Runtime != NULL )
         xworkRuntimeRelease(g_MdoSessions.Runtime);
+    for(size_t I=0;I<8u;++I)xrtValueRelease(g_MdoSessions.IndexCache[I].Document);
+    while(g_MdoSessions.Watermarks){MdoEventWatermark* W=g_MdoSessions.Watermarks;g_MdoSessions.Watermarks=W->Next;xrtFree(W);}
     if ( g_MdoSessions.Lock != NULL ) xrtMutexDestroy(g_MdoSessions.Lock);
     xrtFree(g_MdoSessions.Active);
     memset(&g_MdoSessions, 0, sizeof(g_MdoSessions));

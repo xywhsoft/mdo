@@ -387,7 +387,7 @@ bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
     const char* ProjectId, const char* SessionId, bool FullText, xvalue** pValue)
 {
     return MdoApiSessionEventValueLimit(Event, ProjectId, SessionId,
-        (FullText || Event->StreamFirstId) ? MDO_API_EVENT_SINGLE_TEXT_BYTES : MDO_API_EVENT_TEXT_BYTES, pValue);
+        FullText ? MDO_API_EVENT_SINGLE_TEXT_BYTES : MDO_API_EVENT_TEXT_BYTES, pValue);
 }
 
 static xvalue* MdoApiConversationNotices(const MdoConversationPageInfo* Page)
