@@ -767,6 +767,7 @@ export async function boot() {
   let queueEditKey = "";
   const promptQueue = createPromptQueue({
     container: $("#prompt-queue"), navigation, modelsStore,
+    isMessagePresented: id => submissionTimeline?.isPresented(id) ?? false,
     isRunFinishing: () => runAwaitingRelease(activeRun, timelineStore.get().data),
     onUpdated: () => { submissionTimeline?.render(); scheduleRunsRefresh(); },
     isRunActive: () => Boolean(activeRun),
@@ -1390,6 +1391,7 @@ export async function boot() {
   $("#timeline").after(submissionRows);
   submissionTimeline = createSubmissionTimeline({ container: submissionRows, host: $(".conversation"),
     scope: () => promptQueue.stamp(),
+    onPresentationChange: () => promptQueue.render(),
     snapshot() {
       const route = navigation.get(), projectId = route.projectId || "default";
       const task = draftStore.newTask();

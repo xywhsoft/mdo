@@ -22,6 +22,7 @@ function newId() {
 export function createPromptQueue({ container, navigation, isRunActive, stagedEntries,
   createRecovery, stamp,
   isRunFinishing = () => false, onUpdated = () => {},
+  isMessagePresented = () => false,
   isProfileBusy = () => false,
   isRunReviewPending = () => false, isSessionWritable = () => true,
   isSessionRunActive = () => false, modelsStore,
@@ -41,7 +42,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     snapshot: () => { const key = selectedKey(); return { key,
       origin: transport.stamp(),
       revision: metadata.get(key)?.revision ?? 0,
-      ids: (queues.get(key) ?? []).filter(canChange).map(item => item.id) }; },
+      ids: (queues.get(key) ?? []).filter(item => canChange(item) && !isMessagePresented(item.id)).map(item => item.id) }; },
     onMove: (id, before, owner) => runAction(owner.key,
       () => performAction(owner.key, "move", id, before, 0, owner.revision), owner.origin),
     onEnd: () => render(),
@@ -147,8 +148,20 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     }
     const saved = queues.get(key) ?? [];
     const staged = stagedEntries?.() ?? [];
-    const entries = [...saved, ...staged];
+    // Display ownership is independent of durable queue ownership. Retain
+    // every item for dispatch/receipts, but never repeat a conversation row.
+    const entries = [...saved, ...staged].filter(item => !isMessagePresented(item.id));
     const meta = metadata.get(key) ?? {};
+    const uncertain = saved[0]?.state === "sending";
+    // This page still owns the dispatch while exclusive() is running. A
+    // persisted sending item without that owner needs review after reload.
+    const sendingLocally = uncertain && (busy.has(key) || meta.managed && !meta.paused);
+    const acceptedRun = uncertain && Boolean(saved[0]?.run_id);
+    const claimedRun = uncertain && saved[0]?.start_claimed === true;
+    const stagedHead = saved[0]?.state === "staged";
+    const reviewHead = saved.length && isMessagePresented(saved[0].id) &&
+      (meta.paused || uncertain && !sendingLocally || stagedHead && !meta.managed);
+    const reviewOnly = reviewHead && !entries.length;
     const focused = container.dataset.queueKey === key &&
       container.contains(document.activeElement) ? document.activeElement : null;
     const previousList = container.dataset.queueKey === key &&
@@ -177,30 +190,26 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     const focusKey = focused?.dataset.queueFocus;
     const imageRef = focused?.dataset.imageRef;
     const focusIndex = Number(focused?.dataset.queueIndex ?? 0);
-    if (previousList && entries.length) {
+    if (previousList && (entries.length || reviewOnly)) {
       for (const child of [...container.children]) {
         if (child !== previousList) child.remove();
       }
     } else clear(container);
     container.dataset.queueKey = key;
-    container.hidden = entries.length === 0;
-    if (!entries.length) {
+    container.hidden = !entries.length && !reviewOnly;
+    if (container.hidden) {
       if (focused) document.querySelector("#prompt")?.focus({ preventScroll: true });
       return;
     }
-    const uncertain = saved[0]?.state === "sending";
-    // This page still owns the dispatch while exclusive() is running. A
-    // persisted sending item without that owner needs review after reload.
-    const sendingLocally = uncertain && (busy.has(key) || meta.managed && !meta.paused);
-    const acceptedRun = uncertain && Boolean(saved[0]?.run_id);
-    const claimedRun = uncertain && saved[0]?.start_claimed === true;
-    const stagedHead = saved[0]?.state === "staged";
     const reviewPending = isRunReviewPending(key);
     const writable = isSessionWritable();
     let open = expanded.get(key) ?? true;
-    const toggle = element("button", { className: "prompt-queue-toggle",
-      text: uiMessage("queue.count", { count: entries.length }),
-      attrs: { type: "button", "aria-expanded": String(open),
+    const toggle = element(reviewOnly ? "span" : "button", {
+      className: reviewOnly ? "prompt-queue-waiting" : "prompt-queue-toggle",
+      text: reviewOnly ? uiMessage(meta.paused ? "queue.paused" : "queue.reviewRun") :
+        uiMessage("queue.count", { count: entries.length }),
+      attrs: reviewOnly ? { tabindex: "-1", "data-queue-focus": "toggle" } : {
+        type: "button", "aria-expanded": String(open),
         "aria-controls": "prompt-queue-list", "data-queue-focus": "toggle" },
     });
     const waitingForRun = !meta.paused && !uncertain && !stagedHead && isRunActive();
@@ -225,13 +234,25 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     }
     const header = element("div", { className: "prompt-queue-header" }, [
       toggle, retry ?? element("span", { className: "prompt-queue-waiting",
-        text: meta.paused ? uiMessage("queue.paused", {}, "队列已暂停") : uiMessage(!writable ? "queue.restoreToSend" : sendingLocally ? "queue.sending" :
+        text: meta.paused ? uiMessage("queue.paused", {}, "队列已暂停") : uiMessage(!writable ? "queue.restoreToSend" :
+          entries.length && !reviewHead && saved[0] && isMessagePresented(saved[0].id) ? "queue.waitForRun" : sendingLocally ? "queue.sending" :
           acceptedRun ? "queue.runAccepted" : claimedRun
           ? "queue.runStarting" : reviewPending
           ? "queue.reviewRun" : waitingForProfile ? "queue.waitForProfile" : saved.length
           ? (waitingForRun && isRunFinishing() ? "queue.waitForRelease" : "queue.waitForRun") : entries[0]?.rejected
             ? "queue.rejected" : "queue.awaitingAdmission") }),
     ]);
+    let reviewRemove = null;
+    if (reviewHead) {
+      const entry = saved[0], origin = transport.stamp();
+      reviewRemove = element("button", { text: uiMessage("queue.removeNumber", { number: 1 }), attrs: {
+        type: "button", "data-queue-focus": "review-remove" } });
+      reviewRemove.disabled = !writable || busy.has(key) || actionBusy.has(key) ||
+        (!canChange(entry) && !(meta.paused && entry.state === "sending"));
+      reviewRemove.addEventListener("click", () => void runAction(key,
+        () => removeItem(entry.id, key), origin));
+      header.append(reviewRemove);
+    }
     container.insertBefore(header, previousList);
     if (meta.paused && meta.error) container.insertBefore(element("p", {
       className: "prompt-queue-warning", text: errorMessage({ code: meta.error }),
@@ -245,8 +266,8 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     const list = previousList ?? element("ol", { className: "prompt-queue-list",
       attrs: { id: "prompt-queue-list" } });
     const nextCards = [];
-    list.hidden = !open;
-    toggle.addEventListener("click", () => {
+    list.hidden = !open || !entries.length;
+    if (!reviewOnly) toggle.addEventListener("click", () => {
       open = !open;
       expanded.set(key, open);
       toggle.setAttribute("aria-expanded", String(open));
@@ -384,6 +405,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       const removes = [...list.querySelectorAll("button[data-queue-index]")];
       const target = focusKey === "toggle" ? toggle :
         focusKey === "retry" ? retry ?? toggle :
+        focusKey === "review-remove" ? reviewRemove ?? toggle :
         imageRef ? [...list.querySelectorAll("button[data-image-ref]")]
           .find((item) => item.dataset.imageRef === imageRef) :
         [...list.querySelectorAll("button[data-queue-focus]")].find(item => item.dataset.queueFocus === focusKey) ??

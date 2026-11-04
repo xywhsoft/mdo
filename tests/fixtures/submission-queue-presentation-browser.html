@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Submission and pending queue presentation regression</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>body { margin:0 } main { height:100vh;display:grid;grid-template-rows:minmax(0,1fr) auto }
+.conversation { padding:20px } .composer textarea { width:100% } #result { display:none }</style>
+<main><section class="conversation"><ol class="timeline" id="history"></ol><ol class="timeline" id="submissions"></ol></section>
+<section class="composer-region"><div class="prompt-queue" id="prompt-queue" hidden></div><form class="composer"><textarea id="prompt"></textarea></form></section></main><pre id="result"></pre>
+<script type="module">
+import { createPromptQueue } from "/app/web/js/features/chat/prompt-queue.js";
+import { createSubmissionTimeline } from "/app/web/js/features/chat/submission-timeline.js";
+import { loadLocale, t } from "/app/web/js/i18n.js";
+const originalFetch=globalThis.fetch;
+globalThis.fetch=url=>originalFetch(String(url).replace(/^\/lang\//,"/app/web/lang/"));
+await loadLocale("zh-CN");
+const container=document.querySelector("#prompt-queue"), conversation=document.querySelector("#submissions");
+const ids=["a","b","c"].map(c=>c.repeat(32));
+const item=(i,text)=>({id:ids[i],text,state:"pending",priority:false,attachments:[]});
+let view,active=false,drafts=[],events=[],route={projectId:"default",sessionId:""},retries=0,writes=0;
+const data={items:[],managed:true,paused:false,error:"",revision:1,actions:[]};
+globalThis.fetch=async(url,options={})=>{
+  if(options.method==="DELETE") { writes++;data.items=data.items.filter(item=>item.id!==url.split("/").at(-1));data.revision++; }
+  else if(options.method!=="GET") throw new Error("Rendering must not send a message");
+  return Response.json({ok:true,data});
+};
+const queue=createPromptQueue({container,navigation:{get:()=>route,subscribe(){}},
+  isRunActive:()=>active,stagedEntries:()=>drafts.map(item=>({...item,staged:true})),
+  isMessagePresented:id=>view?.isPresented(id)??false,onUpdated:()=>view?.render(),
+  onRetry:()=>{retries++},onRemoved:(_key,item)=>view.forget(item.id)});
+view=createSubmissionTimeline({container:conversation,host:document.querySelector(".conversation"),scope:()=>"local",
+  onPresentationChange:()=>queue.render(),snapshot:()=>({...route,active,events,paused:data.paused,error:data.error,
+    entries:[...(queue.snapshot(route.projectId,route.sessionId).items??[]),...drafts]})});
+const select=()=>queue.select(route.projectId,route.sessionId),frame=()=>new Promise(r=>setTimeout(r,25));
+const pending=()=>[...container.querySelectorAll("li")].map(node=>node.dataset.queueItemId);
+const users=()=>[...conversation.querySelectorAll(".submission-user")].map(node=>node.dataset.submissionId);
+const results={};
+try {
+  const first=item(0,"First message"),second=item(1,"Second message"),third=item(2,"Third message");
+  view.begin({...first,projectId:route.projectId,sessionId:route.sessionId});drafts=[first];view.render();queue.render();
+  results.firstBeforeSession=container.hidden&&users().join()===ids[0];
+  route={...route,sessionId:"created"};drafts=[];data.items=[first];await select();view.bindProject("default","created");
+  results.firstAfterAdmission=container.hidden&&users().join()===ids[0]&&queue.snapshot("default","created").items.length===1;
+  active=true;data.items=[{...first,state:"sending"},second,third];data.revision++;await select();
+  results.waitingOnly=pending().join()===[ids[1],ids[2]].join()&&users().join()===ids[0];
+  results.waitingHintMatchesVisibleQueue=container.querySelector('.prompt-queue-waiting')?.textContent===t('queue.waitForRun');
+  results.queueActionsRetained=container.querySelectorAll('[data-queue-drag]').length===2&&
+    container.querySelector('[data-queue-focus="'+ids[1]+':steer"]')?.disabled===false;
+  events=[{kind:"agent_start",queue_item_id:ids[0]}];view.render();
+  results.historySuppressesLaggingQueue=pending().join()===[ids[1],ids[2]].join()&&!users().includes(ids[0]);
+  data.items=[second,third];data.revision++;await select();active=false;view.render();
+  results.nextPromotesOnce=users().join()===ids[1]&&pending().join()===ids[2]&&queue.snapshot("default","created").items.length===2;
+  data.items=[second];data.paused=true;data.error="profile_model_missing";data.revision++;await select();
+  results.failedPromptNotDuplicated=users().join()===ids[1]&&pending().length===0&&!container.textContent.includes(second.text)&&
+    conversation.querySelector('.submission-reply[data-state="error"]')!==null;
+  const retry=container.querySelector('[data-queue-focus="retry"]');retry.click();await frame();
+  results.retryRetained=retries===1&&writes===0;
+  const remove=container.querySelector('[data-queue-focus="review-remove"]');
+  const bounds=remove.getBoundingClientRect();results.mobileControlsFit=bounds.left>=0&&bounds.right<=innerWidth;
+  remove.click();await frame();
+  results.removeRetained=writes===1&&container.hidden&&conversation.hidden&&queue.snapshot("default","created").items.length===0;
+  results.passed=Object.values(results).every(value=>value===true);
+  // Leave a representative normal state for the desktop/mobile screenshots.
+  if(results.passed) {
+    events=[];active=true;data.paused=false;data.error="";
+    data.items=[{...first,state:"sending"},second,third];data.revision++;await select();
+  }
+} catch(error) {results.error=error.stack;results.passed=false;}
+document.querySelector("#result").textContent=JSON.stringify(results);
+</script></html>

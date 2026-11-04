@@ -40,7 +40,8 @@ if __name__ == "__main__":
         Path("C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe")] if path and path.is_file())
     reports = {f"{fixture}:{width}": run(browser, width, fixture)
         for fixture in ("prompt-queue-actions-browser.html", "queue-remove-focus-browser.html",
-                        "queue-scroll-browser.html", "queue-session-lock-browser.html")
+                        "queue-scroll-browser.html", "queue-session-lock-browser.html",
+                        "submission-queue-presentation-browser.html")
         for width in (1280, 520)}
     print(json.dumps(reports, ensure_ascii=False))
     assert all(report["passed"] for report in reports.values()), reports

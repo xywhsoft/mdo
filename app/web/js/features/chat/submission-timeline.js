@@ -5,9 +5,11 @@ import { promptContextChips } from "./context-chips.js";
 
 // Presentation only. The existing Home draft, queue ID and run receipt remain
 // the authoritative submission journal; displaying a bubble never sends it.
-export function createSubmissionTimeline({ container, host, snapshot, scope }) {
+export function createSubmissionTimeline({ container, host, snapshot, scope,
+  onPresentationChange = () => {} }) {
   const rows = new Map();
   let owner = scope(), serial = 0, errorBinding = null;
+  let presented = new Set(), presentedProject, presentedSession, presentedScope;
   function detachError() {
     if (!errorBinding) return;
     const { node, parent, next } = errorBinding;
@@ -24,6 +26,10 @@ export function createSubmissionTimeline({ container, host, snapshot, scope }) {
   }
   function remember(value, projectId, sessionId) {
     let row = rows.get(value.id);
+    if (row && (row.projectId !== projectId || row.sessionId && row.sessionId !== sessionId)) {
+      if (errorBinding?.id === row.id) detachError();
+      row = null;
+    }
     if (!row) {
       const user = element("li", { className: "timeline-item submission-user", attrs: {
         "data-kind": "user", "data-submission-id": value.id } });
@@ -41,16 +47,29 @@ export function createSubmissionTimeline({ container, host, snapshot, scope }) {
   function render() {
     checkScope();
     const state = snapshot();
-    const seen = new Set((state.events ?? []).filter(e => e.kind === "agent_start")
+    const seen = new Set((state.events ?? []).filter(e => e.kind === "agent_start" && !e.agent_depth)
       .map(e => e.queue_item_id).filter(Boolean));
     for (const id of seen) rows.delete(id);
     for (const item of state.entries ?? []) {
       if (seen.has(item.id)) continue;
       remember({ ...item, durable: true }, state.projectId, state.sessionId);
     }
-    const visible = [...rows.values()].filter(row => row.projectId === state.projectId &&
+    const queued = new Set((state.entries ?? []).map(item => item.id));
+    for (const [id, row] of rows) if (row.durable && !row.entered && !queued.has(id) &&
+        row.projectId === state.projectId && row.sessionId === state.sessionId) rows.delete(id);
+    const current = [...rows.values()].filter(row => row.projectId === state.projectId &&
       (row.sessionId === state.sessionId || !row.sessionId && !state.sessionId))
       .sort((a, b) => a.order - b.order);
+    const head = (state.entries ?? []).find(item => !seen.has(item.id))?.id ?? current[0]?.id;
+    for (const row of current) {
+      // A message enters the conversation when dispatch can begin. Later
+      // messages stay in the editable queue until their own turn starts.
+      // Once shown, retain it through preparation, errors and lost replies.
+      if (row.error || row.state === "sending" || row.start_claimed || row.run_id ||
+          row.id === head && !state.active &&
+            !current.some(other => other.id !== row.id && other.entered)) row.entered = true;
+    }
+    const visible = current.filter(row => row.entered);
     const nodes = [];
     for (const [index, row] of visible.entries()) {
       if (row.painted !== row.text) {
@@ -61,7 +80,7 @@ export function createSubmissionTimeline({ container, host, snapshot, scope }) {
           uiMessage("submission.images", { count: row.attachments.length }, "附加图片：{count}") }));
         row.painted = row.text;
       }
-      const error = row.error || (index === 0 && state.paused && state.error
+      const error = row.error || (row.id === head && state.paused && state.error
         ? errorMessage({ code: state.error }) : "");
       setUiText(row.status, error || !row.durable
         ? error || uiMessage("submission.saving", {}, "正在保存消息…")
@@ -85,6 +104,13 @@ export function createSubmissionTimeline({ container, host, snapshot, scope }) {
     }
     container.hidden = !nodes.length;
     host.classList.toggle("has-submissions", Boolean(nodes.length));
+    const nextPresented = new Set([...seen, ...visible.map(row => row.id)]);
+    const changed = presentedProject !== state.projectId || presentedSession !== state.sessionId ||
+      presentedScope !== owner || nextPresented.size !== presented.size ||
+      [...nextPresented].some(id => !presented.has(id));
+    presented = nextPresented; presentedProject = state.projectId;
+    presentedSession = state.sessionId; presentedScope = owner;
+    if (changed) onPresentationChange();
   }
   const unsubscribe = subscribeLocale(render);
   return {
@@ -117,7 +143,13 @@ export function createSubmissionTimeline({ container, host, snapshot, scope }) {
       errorBinding = { node, id, parent: node.parentElement, next: node.nextSibling };
       render();
     },
+    isPresented(id) {
+      const state = snapshot();
+      return owner === scope() && presentedProject === state.projectId &&
+        presentedSession === state.sessionId && presented.has(id);
+    },
     detachError, render, reset,
-    destroy() { unsubscribe(); detachError(); rows.clear(); container.replaceChildren(); host.classList.remove("has-submissions"); },
+    destroy() { unsubscribe(); detachError(); rows.clear(); presented.clear();
+      container.replaceChildren(); host.classList.remove("has-submissions"); onPresentationChange(); },
   };
 }
