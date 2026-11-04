@@ -1,0 +1,81 @@
+{
+  "version_name": "0.9.2",
+  "version_code": "05000902",
+  "source_head": "383856cf296c573483062130821da6df5fc987bf",
+  "application_source_sha256": "3a6e40b56624b877a769b14084e0bd1bdaf45ebac9b053dd5140aecb6f5c772d",
+  "release_status": "local-test-build-not-published",
+  "products": [
+    {
+      "filename": "mdo.exe",
+      "path": "D:\\GIT\\mdo\\.build\\local-0.9.2-20261104-todo-svg\\windows\\mdo.exe",
+      "platform": "windows-x86_64",
+      "edition": "desktop",
+      "build_id": 70000244,
+      "bytes": 6884179,
+      "sha256": "10fa9114f4bf41d65ec1720051920a5bf5b2f005a83eb9068e5b78e5d570ea05",
+      "delivery_path": "D:\\GIT\\mdo\\dist\\0.9.2-r6\\mdo.exe"
+    },
+    {
+      "filename": "mdo-arm64-v8a.apk",
+      "path": "D:\\GIT\\mdo\\.build\\local-0.9.2-20261104-todo-svg\\android\\mdo-arm64-v8a.apk",
+      "platform": "android-arm64-v8a",
+      "edition": "lite",
+      "build_id": 70000250,
+      "bytes": 6722964,
+      "sha256": "849820564779976ad4f3d9251ecfc57f72217a8aec22ca973875eb2fe6c3247f",
+      "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "delivery_path": "D:\\GIT\\mdo\\dist\\0.9.2-r6\\mdo-arm64-v8a.apk"
+    }
+  ],
+  "validation": {
+    "passed": true,
+    "windows_gui_subsystem": true,
+    "windows_bootstrap": {
+      "stage": "ready",
+      "ready": true,
+      "version": "0.9.2"
+    },
+    "android": {
+      "edition": "lite",
+      "bytes": 6722964,
+      "native_elf_files": 3,
+      "runtime_paths": 0
+    },
+    "release_certificate_unchanged": true,
+    "android_device_tested": false,
+    "source_unchanged": true,
+    "root_release_snapshots_unchanged": true,
+    "published": false
+  },
+  "fix_commit": "b0c1b520",
+  "regressions": {
+    "todo_and_locale_node_tests": 18,
+    "frontend_modules": 264,
+    "browser": [
+      {
+        "theme": "light",
+        "width": 1400,
+        "passed": true,
+        "progressKept": true,
+        "insertionKept": true,
+        "reorderKept": true,
+        "collapsed": true,
+        "expanded": true,
+        "svgPresent": true,
+        "noTextArrow": true
+      },
+      {
+        "theme": "dark",
+        "width": 390,
+        "passed": true,
+        "progressKept": true,
+        "insertionKept": true,
+        "reorderKept": true,
+        "collapsed": true,
+        "expanded": true,
+        "svgPresent": true,
+        "noTextArrow": true
+      }
+    ]
+  }
+}
