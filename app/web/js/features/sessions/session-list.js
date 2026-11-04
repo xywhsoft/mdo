@@ -30,7 +30,31 @@ function activityText(activity) {
   if (activity === "created") return t("run.created", {}, "准备中");
   if (activity === "running") return t("run.running", {}, "运行中");
   if (activity === "stopping") return t("task.stopping", {}, "正在停止…");
+  if (activity === "succeeded") return t("run.succeeded", {}, "已完成");
+  if (activity === "failed") return t("run.failed", {}, "运行失败");
+  if (activity === "cancelled") return t("run.cancelled", {}, "已停止");
   return "";
+}
+
+export function sessionRunOutcomes(runs = [], sessions = []) {
+  const outcomes = new Map(), times = new Map();
+  for (const session of sessions) {
+    const key = `${session.project_id}/${session.id}`;
+    times.set(key, Number(session.last_run_at) || 0);
+    if (["succeeded", "failed", "cancelled"].includes(session.last_run_outcome))
+      outcomes.set(key, session.last_run_outcome);
+  }
+  for (const run of runs) {
+    if (run?.terminal !== true || typeof run.project_id !== "string" || !run.project_id ||
+        typeof run.session_id !== "string" || !run.session_id ||
+        !["succeeded", "failed", "timed_out", "cancelled"].includes(run.state)) continue;
+    const key = `${run.project_id}/${run.session_id}`, ended = Number(run.ended_at);
+    // Persisted completion, queue blockage or a new start wins over older runs.
+    if (!Number.isFinite(ended) || ended <= (times.get(key) ?? 0)) continue;
+    times.set(key, ended);
+    outcomes.set(key, run.state === "timed_out" ? "failed" : run.state);
+  }
+  return outcomes;
 }
 
 export function createSessionList({ container, count, filter, searchButton, store, projectsStore, runsStore,
@@ -43,7 +67,8 @@ export function createSessionList({ container, count, filter, searchButton, stor
   let state = store.get();
   let renderedStoreKey = null;
   let unread = new Set();
-  let activities = sessionRunActivities(runsStore?.get().data?.items);
+  let latestRuns = runsStore?.get().data?.items ?? [];
+  let activities = sessionRunActivities(latestRuns);
   let openMenuNode = null;
   let openMenuButton = null;
   const collapsed = new Set();
@@ -103,9 +128,11 @@ export function createSessionList({ container, count, filter, searchButton, stor
     // A revision or timestamp can change without changing any visible row.
     // Keep the row mounted so polling cannot clear selection or menu focus.
     const timeline = layoutStore.get().view === "timeline";
-    return JSON.stringify([timeline ? new Date().toDateString() : "", recentSessions(items).map(({ project_id, id, title, status, pinned,
-      model_id, agent_id, updated_at, last_activated_at }) => [project_id, id, title, status, pinned, model_id, agent_id,
-        timeline ? new Date(Number(last_activated_at || updated_at || 0) / 1000).toDateString() : ""])]);
+    return JSON.stringify([timeline ? new Date().toDateString() : "", recentSessions(items).map(session => {
+      const { project_id, id, title, status, pinned, model_id, agent_id } = session;
+      return [project_id, id, title, status, pinned, model_id, agent_id,
+        timeline ? new Date(sessionActivity(session) / 1000).toDateString() : ""];
+    })]);
   }
 
   function syncTimes() {
@@ -124,16 +151,21 @@ export function createSessionList({ container, count, filter, searchButton, stor
   function syncIndicators() {
     // Polling changes only the status spans. Keep row/menu nodes, selection,
     // and scroll intact while another task finishes.
+    const outcomes = sessionRunOutcomes(latestRuns, state.data?.items ?? []);
     for (const button of container.querySelectorAll(".session-item")) {
       const key = button.dataset.sessionKey;
       const row = button.parentElement;
-      const activity = activities.get(key) || "";
+      const activity = activities.get(key) || outcomes.get(key) || "";
       if (activity) row.setAttribute("data-run-state", activity);
       else row.removeAttribute("data-run-state");
       if (unread.has(key)) row.setAttribute("data-unread", "true");
       else row.removeAttribute("data-unread");
       const indicator = button.querySelector(".session-item-activity");
       const activityLabel = activityText(activity);
+      const dot = button.querySelector(".session-run-indicator");
+      dot.className = `session-run-indicator${activity ? ` is-${activity}` : ""}`;
+      if (activityLabel) dot.setAttribute("title", activityLabel);
+      else dot.removeAttribute("title");
       if (indicator.textContent !== activityLabel) writeUiText(indicator, activityLabel);
       const result = button.querySelector(".session-item-unread");
       const resultLabel = unread.has(key) ? t("nav.unread", {}, "有新结果") : "";
@@ -585,6 +617,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
     } else {
       container.setAttribute("aria-busy", String(coldRead(next) || layoutStore.busy()));
       syncTimes();
+      syncIndicators();
     }
     syncReadNotice();
   });
@@ -609,8 +642,9 @@ export function createSessionList({ container, count, filter, searchButton, stor
   const unsubscribeLocale = subscribeLocale(render);
   const unsubscribeRuns = runsStore?.subscribe((snapshot) => {
     // An unreadable refresh is not evidence that a task has stopped.
-    if (snapshot.status !== "ready") return;
-    activities = sessionRunActivities(snapshot.data?.items);
+    if (!["ready", "idle"].includes(snapshot.status)) return;
+    latestRuns = snapshot.data?.items ?? [];
+    activities = sessionRunActivities(latestRuns);
     syncIndicators();
   });
   function onFilterChange() {

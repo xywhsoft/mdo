@@ -499,11 +499,16 @@ select:focus-visible,
 .session-item-title { overflow: hidden; font-size: 13px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 .session-item-trailing { display: flex; flex: 0 0 auto; align-items: center; gap: 7px; }
 .session-run-indicator { display: none; width: 12px; height: 12px; border: 1.5px solid var(--border-strong); border-top-color: var(--muted); border-radius: 50%; }
-.session-item-row[data-run-state] .session-run-indicator { display: block; }
-.session-item-row[data-run-state="running"] .session-run-indicator { animation: sidebar-spin 1.1s linear infinite; }
-.session-item-row[data-run-state="stopping"] .session-run-indicator { border-top-color: var(--warning); animation: pulse 1.5s ease-in-out infinite; }
+.session-run-indicator:is(.is-created, .is-running, .is-stopping, .is-succeeded, .is-failed) { display: block; }
+.session-run-indicator.is-running { animation: sidebar-spin 1.1s linear infinite; }
+.session-run-indicator.is-stopping { border-top-color: var(--warning); animation: pulse 1.5s ease-in-out infinite; }
+.session-run-indicator.is-succeeded,
+.session-run-indicator.is-failed { width: 7px; height: 7px; border: 0; }
+.session-run-indicator.is-succeeded { background-color: var(--success); }
+.session-run-indicator.is-failed { background-color: var(--danger); }
+.session-run-indicator.is-cancelled { display: none; }
 @keyframes sidebar-spin { to { transform: rotate(360deg); } }
-.session-item-row[data-unread="true"] .session-item-title::after { content: "●"; margin-left: 6px; color: var(--success); font-size: 8px; vertical-align: middle; }
+.session-item-row[data-unread="true"]:not([data-run-state]) .session-item-title::after { content: "●"; margin-left: 6px; color: var(--success); font-size: 8px; vertical-align: middle; }
 .session-item-time { max-width: 64px; overflow: hidden; color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; text-overflow: ellipsis; }
 @media (min-width: 761px) and (hover: hover) and (pointer: fine) {
   .session-more, .session-project-heading > .session-group-new, .session-project-heading > .session-group-manage { opacity: 0; pointer-events: none; }
@@ -511,8 +516,8 @@ select:focus-visible,
   .session-project-heading:hover > .session-group-new, .session-project-heading:hover > .session-group-manage,
   .session-project-heading:focus-within > .session-group-new, .session-project-heading:focus-within > .session-group-manage,
   .session-group-manage[aria-expanded="true"], .session-more[aria-expanded="true"] { opacity: 1; pointer-events: auto; }
-  .session-item-row:hover .session-item-trailing, .session-item-row:focus-within .session-item-trailing,
-  .session-item-row:has(.session-more[aria-expanded="true"]) .session-item-trailing { visibility: hidden; }
+  .session-item-row:hover .session-item-time, .session-item-row:focus-within .session-item-time,
+  .session-item-row:has(.session-more[aria-expanded="true"]) .session-item-time { visibility: hidden; }
 }
 @media (hover: none), (pointer: coarse) {
   .session-item { min-height: 40px; padding-right: 43px; }

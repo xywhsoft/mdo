@@ -295,6 +295,13 @@ static void MdoRunsCleanup(MdoRunCleanup* Items, size_t Count,
             }
             xworkRunResultUnit(&Items[i].Result);
         }
+        MdoSessionInfo SessionInfo = {0}; SessionInfo.Size = sizeof(SessionInfo);
+        if ( MdoSessionGetInfo(Items[i].Session, &SessionInfo) ) {
+            MdoSessionOutcome Outcome = RequestCancel ? MDO_SESSION_OUTCOME_CANCELLED :
+                Items[i].State == XWORK_RUN_SUCCEEDED ? MDO_SESSION_OUTCOME_SUCCEEDED :
+                Items[i].State == XWORK_RUN_CANCELLED ? MDO_SESSION_OUTCOME_CANCELLED : MDO_SESSION_OUTCOME_FAILED;
+            (void)MdoSessionRecordActivity(SessionInfo.ProjectId, SessionInfo.Id, false, Outcome);
+        }
         MdoSessionRelease(Items[i].Session);
         MdoApplicationRunRouteRelease(Items[i].Route);
         xrtCancelDestroy(Items[i].Cancel);

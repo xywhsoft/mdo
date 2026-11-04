@@ -1,6 +1,7 @@
 // The sidebar is a view of the existing catalog. Pinning never duplicates a
 // session, and removing a project definition must not hide its saved history.
-export const sessionActivity = session => Number(session.last_activated_at || session.updated_at || 0);
+// Viewing, renaming and configuration changes never move an existing thread.
+export const sessionActivity = session => Number(session.last_message_at ?? session.updated_at ?? session.created_at ?? 0);
 export function recentSessions(sessions) {
   return [...sessions].sort((a, b) =>
     sessionActivity(b) - sessionActivity(a) ||

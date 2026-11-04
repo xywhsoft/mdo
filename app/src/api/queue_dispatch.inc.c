@@ -45,6 +45,7 @@ static void MdoQueueDispatchSession(const MdoSessionInfo* Session)
     MdoQueueItem* Head = &Queue.Items[0];
     uint64 Revision = Queue.Revision;
     bool Start = false;
+    MdoSessionOutcome Outcome = MDO_SESSION_OUTCOME_KEEP;
     char Cancel[MDO_RUN_ID_CAPACITY] = {0};
     if ( Head->State == MDO_QUEUE_SENDING && Head->RunId[0] ) {
         snprintf(Queue.LastRunId, sizeof(Queue.LastRunId), "%s", Head->RunId);
@@ -54,7 +55,7 @@ static void MdoQueueDispatchSession(const MdoSessionInfo* Session)
     } else if ( Head->State == MDO_QUEUE_SENDING ) {
         Queue.Paused = true;
         snprintf(Queue.Error, sizeof(Queue.Error), "%s", Head->StartClaimed ? "queue_run_starting" : "queue_confirmation_pending");
-        (void)MdoQueueWrite(Path, &Queue);
+        if ( MdoQueueWrite(Path, &Queue) ) Outcome = MDO_SESSION_OUTCOME_FAILED;
     } else if ( Head->State == MDO_QUEUE_PENDING ) {
         if ( Active.Id[0] ) {
             bool Changed = strcmp(Queue.LastRunId, Active.Id) != 0;
@@ -69,7 +70,10 @@ static void MdoQueueDispatchSession(const MdoSessionInfo* Session)
                 }
                 Changed = true;
             }
-            if ( Changed && !MdoQueueWrite(Path, &Queue) ) Cancel[0] = '\0';
+            if ( Changed ) {
+                if ( !MdoQueueWrite(Path, &Queue) ) Cancel[0] = '\0';
+                else if ( Queue.Paused ) Outcome = MDO_SESSION_OUTCOME_FAILED;
+            }
         } else {
             Last.Size = sizeof(Last);
             bool Found = Queue.LastRunId[0] && MdoRunSnapshotFind(Runs, Queue.LastRunId, &Last);
@@ -78,7 +82,8 @@ static void MdoQueueDispatchSession(const MdoSessionInfo* Session)
                 Queue.Paused = true;
                 snprintf(Queue.Error, sizeof(Queue.Error), "%s", !Found ? "queue_previous_run_unknown" :
                     Last.State == XWORK_RUN_CANCELLED || Last.CancelRequested ? "queue_stopped" : "queue_previous_run_failed");
-                (void)MdoQueueWrite(Path, &Queue);
+                if ( MdoQueueWrite(Path, &Queue) ) Outcome = !strcmp(Queue.Error, "queue_stopped") ?
+                    MDO_SESSION_OUTCOME_CANCELLED : MDO_SESSION_OUTCOME_FAILED;
             } else {
                 Head->State = MDO_QUEUE_SENDING;
                 Queue.LastRunId[0] = '\0';
@@ -87,6 +92,8 @@ static void MdoQueueDispatchSession(const MdoSessionInfo* Session)
         }
     }
     xrtMutexUnlock(g_MdoQueueLock);
+    if ( Outcome != MDO_SESSION_OUTCOME_KEEP )
+        (void)MdoSessionRecordActivity(Session->ProjectId, Session->Id, false, Outcome);
     if ( Cancel[0] ) { MdoRunInfo Info = {0}; Info.Size = sizeof(Info); (void)MdoRunCancel(Cancel, &Info, &Error); }
     if ( Start ) {
         /* Reuse the complete production start path: image capability/ownership,
@@ -113,6 +120,7 @@ static void MdoQueueDispatchSession(const MdoSessionInfo* Session)
         (void)MdoQueueString(Data, "id", &RunId);
         xrtMutexLock(g_MdoQueueLock);
         MdoQueue After;
+        bool Blocked = false;
         if ( MdoQueueRead(Path, Session->ProjectId, Session->Id, &After) ) {
             size_t Index = MdoQueueFind(&After, Head->Id);
             if ( Index != SIZE_MAX && After.Items[Index].State == MDO_QUEUE_SENDING ) {
@@ -129,11 +137,12 @@ static void MdoQueueDispatchSession(const MdoSessionInfo* Session)
                     snprintf(After.Error, sizeof(After.Error), "%.*s", (int)(Code.Size ? Code.Size : 17u),
                         Code.Size ? Code.Data : "queue_unavailable");
                 }
-                (void)MdoQueueWrite(Path, &After);
+                Blocked = MdoQueueWrite(Path, &After) && After.Paused;
             }
             MdoQueueRelease(&After);
         }
         xrtMutexUnlock(g_MdoQueueLock);
+        if ( Blocked ) (void)MdoSessionRecordActivity(Session->ProjectId, Session->Id, false, MDO_SESSION_OUTCOME_FAILED);
         xrtValueRelease(Reply); xrtValueRelease(Body); MdoQueueResponseUnit(&Response);
         MdoApiLiveChanged(NULL);
     }

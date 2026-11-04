@@ -90,9 +90,12 @@ test("older selected tasks remain visible without rendering the whole hidden pre
 });
 
 
-test("navigation activity controls order independently of edits and project recency", () => {
-  const rows = [session("edited", "alpha", { updated_at: 1000, last_activated_at: 10 }),
-    session("visited", "default", { updated_at: 1, last_activated_at: 20 }),
+test("messages control order independently of viewing, metadata edits and project recency", () => {
+  const rows = [session("edited", "alpha", { updated_at: 1000, last_activated_at: 10, last_message_at: 10 }),
+    session("visited", "default", { updated_at: 1, last_activated_at: 2000, last_message_at: 20 }),
     session("legacy", "alpha", { updated_at: 15 })];
   assert.deepEqual(recentSessions(rows).map(s => s.id), ["visited", "legacy", "edited"]);
+  rows[0].last_message_at = 30;
+  assert.deepEqual(recentSessions(rows).map(s => s.id), ["edited", "visited", "legacy"]);
+  assert.deepEqual(sidebarGroups({ sessions: rows, projects, projectSort: "recent" }).projects.map(p => p.id), ["alpha", "empty"]);
 });

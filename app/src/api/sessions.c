@@ -302,6 +302,9 @@ static bool MdoApiSessionInfoValue(const MdoSessionInfo* Info,
         MdoApiValueSetInt(Data, "created_at", Info->CreatedAt) &&
         MdoApiValueSetInt(Data, "updated_at", Info->UpdatedAt) &&
         MdoApiValueSetInt(Data, "last_activated_at", Info->LastActivatedAt) &&
+        MdoApiValueSetInt(Data, "last_message_at", Info->LastMessageAt) &&
+        MdoApiValueSetInt(Data, "last_run_at", Info->LastRunAt) &&
+        MdoApiValueSetString(Data, "last_run_outcome", MdoSessionOutcomeName(Info->LastRunOutcome)) &&
         MdoApiValueSetBool(Data, "pinned", Info->Pinned) &&
         MdoApiValueSetBool(Data, "runtime_open", Info->RuntimeOpen) &&
         MdoApiValueSetUInt(Data, "config_revision", Info->ConfigRevision) &&

@@ -770,6 +770,10 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
     if ( Add ) MdoApiJsonBodyUnit(&Body);
     if ( !Ok ) { MdoQueueRelease(&Queue); return MdoApiReplyError(Context,
         503u, "queue_unavailable", "The queue could not be read or saved", NULL); }
+    if ( Add && Index == SIZE_MAX && !Duplicate && !Full && !Consumed )
+        /* Queue admission can race a very fast run. Only the actual root start
+         * clears its previous result; admission must not erase a later finish. */
+        (void)MdoSessionRecordActivity(ProjectId, SessionId, true, MDO_SESSION_OUTCOME_KEEP);
     if ( Duplicate || Full || Consumed ) {
         MdoQueueRelease(&Queue);
         return MdoApiReplyError(Context, Full ? 422u : 409u,

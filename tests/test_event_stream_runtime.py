@@ -21,6 +21,11 @@ static bool Emit(MdoSessionEventBridge* B,xwork_event* E){bool Ok=MdoEventsStrea
 void ServiceInit(XS_HostInfo* Host){
  (void)Host;bool Ok=MdoHomeInit();g_MdoSessions.Lock=xrtMutexCreate();MdoSessionsObserve(Watch,NULL);
  MdoSessionEventBridge B={0};strcpy(B.ProjectId,"default");strcpy(B.SessionId,"0123456789abcdef0123456789abcdef");MdoEventsPath(B.Path,B.ProjectId,B.SessionId);B.NextEventId=1;strcpy(B.ModelId,"fixture");B.ContextWindowTokens=1024;
+ MdoSessionInfo Meta={0},Current;Meta.Size=sizeof(Meta);Meta.Revision=1;
+ Meta.CreatedAt=Meta.UpdatedAt=Meta.LastActivatedAt=Meta.LastMessageAt=MdoUtcUs();
+ Meta.Status=Meta.PreviousStatus=MDO_SESSION_ACTIVE;Meta.Protocol=MDO_MODEL_PROTOCOL_OPENAI_RESPONSES;Meta.MaxOutputTokens=1024;
+ strcpy(Meta.ProjectId,B.ProjectId);strcpy(Meta.Id,B.SessionId);strcpy(Meta.AgentId,"mdo.default");strcpy(Meta.ModelId,"fixture");strcpy(Meta.WorkspaceRoot,".");
+ char MetaPath[MDO_SESSION_PATH_CAPACITY];Ok=Ok&&MdoSessionsPath(MetaPath,B.ProjectId,B.SessionId,"meta.json")&&MdoSessionsMetaWrite(MetaPath,&Meta);
  uint64 Next=0;Ok=Ok&&MdoSessionsInternalEventNext(B.ProjectId,B.SessionId,0,&Next)&&Next==1;
  xwork_event E={0};E.uAgentId=1;E.uRunId=1;E.uAgentTurn=1;E.iTextLength=SIZE_MAX;E.eKind=XWORK_EVENT_MODEL_START;E.sText="start";Ok=Ok&&Emit(&B,&E);uint64 Initial=FileSize(&B);
  E.eKind=XWORK_EVENT_MODEL_REASONING_DELTA;E.sText="思";
@@ -30,15 +35,22 @@ void ServiceInit(XS_HostInfo* Host){
  uint64 ReasonDone=FileSize(&B);
  for(unsigned I=0;Ok&&I<9999;++I)Ok=Emit(&B,&E);
  Ok=Ok&&FileSize(&B)==ReasonDone;
+ Ok=Ok&&MdoSessionsMetaRead(B.ProjectId,B.SessionId,&Current)&&Current.LastMessageAt==Meta.LastMessageAt;
  /* A child's start and deltas cannot finish its parent's active reply. */
  E.uAgentId=2;E.uAgentDepth=1;E.eKind=XWORK_EVENT_AGENT_START;E.sText="child";Ok=Ok&&Emit(&B,&E)&&Completed==0;
  E.eKind=XWORK_EVENT_MODEL_TEXT_DELTA;E.sText="child";Ok=Ok&&Emit(&B,&E);
  E.eKind=XWORK_EVENT_MODEL_DONE;E.sText="";Ok=Ok&&Emit(&B,&E)&&Completed==1&&TextBytes==5;
+ Ok=Ok&&MdoSessionsMetaRead(B.ProjectId,B.SessionId,&Current)&&Current.LastMessageAt==Meta.LastMessageAt;
  E.uAgentId=1;E.uAgentDepth=0;E.eKind=XWORK_EVENT_MODEL_DONE;Ok=Ok&&Emit(&B,&E)&&Completed==3&&TextBytes==30005&&ReasonBytes==30000;
+ Ok=Ok&&MdoSessionsMetaRead(B.ProjectId,B.SessionId,&Current)&&Current.LastMessageAt>Meta.LastMessageAt;
+ Meta=Current;
  /* Oversized UTF-8/control text is split after completion without loss. */
  E.uAgentTurn=2;E.eKind=XWORK_EVENT_MODEL_TEXT_DELTA;E.sText="\n";
  for(unsigned I=0;Ok&&I<100000;++I){Ok=Emit(&B,&E);if(!Ok)printf("failed_delta=%u\n",I);}
  uint64 BeforeDone=FileSize(&B);Ok=Ok&&Completed==3;
+ Ok=Ok&&MdoSessionsMetaRead(B.ProjectId,B.SessionId,&Current)&&Current.LastMessageAt==Meta.LastMessageAt;
+ /* Losing the optional sidebar sink cannot cancel a completed model reply. */
+ Ok=Ok&&MdoHomeRemove(MetaPath,false);
  E.eKind=XWORK_EVENT_AGENT_DONE;E.sText="";bool Done=Emit(&B,&E);Ok=Ok&&Done&&TextBytes==130005&&FileSize(&B)>BeforeDone;
  /* Owner loss deliberately discards the current unfinished event. */
  E.eKind=XWORK_EVENT_MODEL_REASONING_DELTA;E.sText="unfinished";Ok=Ok&&Emit(&B,&E);uint64 BeforeDrop=FileSize(&B);MdoEventsStreamDiscard(&B);Ok=Ok&&FileSize(&B)==BeforeDrop&&B.StreamBytes==0;

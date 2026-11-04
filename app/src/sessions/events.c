@@ -1584,6 +1584,9 @@ bool MdoSessionEventBridgeOnEvent(void* Value, const xwork_event* Event)
             Bridge->PendingIds, Count);
     }
     if ( Ok ) Ok = MdoEventsStreamAppend(Bridge, &UserEvent);
+    if ( Ok && Event->eKind == XWORK_EVENT_AGENT_START && !Event->uAgentDepth )
+        (void)MdoSessionRecordActivity(Bridge->ProjectId, Bridge->SessionId,
+            Event->uUserMessageSequence != 0u, MDO_SESSION_OUTCOME_NONE);
     if ( Ok && Event->eKind == XWORK_EVENT_AGENT_START &&
          Event->uAgentDepth == 0u &&
          Bridge->PendingRunId == Event->uRunId ) {

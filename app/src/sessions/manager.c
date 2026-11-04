@@ -378,6 +378,10 @@ char* MdoSessionsInternalMetaJson(const MdoSessionInfo* Info, size_t* Size)
             xrtValueInt(Info->UpdatedAt)) ||
          !MdoSessionsObjectTake(Object, "last_activated_at_us",
             xrtValueInt(Info->LastActivatedAt >= Info->CreatedAt ? Info->LastActivatedAt : Info->CreatedAt)) ||
+         !MdoSessionsObjectTake(Object, "last_message_at_us",
+            xrtValueInt(Info->LastMessageAt >= Info->CreatedAt ? Info->LastMessageAt : Info->UpdatedAt)) ||
+         !MdoSessionsObjectTake(Object, "last_run_at_us", xrtValueInt(Info->LastRunAt)) ||
+         !MdoSessionsObjectTake(Object, "last_run_outcome", xrtValueUInt(Info->LastRunOutcome)) ||
          !MdoSessionsObjectString(Object, "status", Status) ||
          !MdoSessionsObjectString(Object, "previous_status", Previous) ||
          !MdoSessionsObjectTake(Object, "pinned", xrtValueBool(Info->Pinned)) ||
@@ -506,7 +510,10 @@ bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
           (Schema == 2u && xrtValueCount(Root) != 22u) ||
           (Schema == MDO_SESSION_SCHEMA_VERSION &&
            xrtValueCount(Root) != (xrtValueObjectGet(Root, XRT_STR_LITERAL("last_activated_at_us")) ? 24u : 23u) +
-               (xrtValueObjectGet(Root,XRT_STR_LITERAL("title_state"))?1u:0u))) ||
+               (xrtValueObjectGet(Root,XRT_STR_LITERAL("title_state"))?1u:0u) +
+               (xrtValueObjectGet(Root,XRT_STR_LITERAL("last_message_at_us"))?1u:0u) +
+               (xrtValueObjectGet(Root,XRT_STR_LITERAL("last_run_at_us"))?1u:0u) +
+               (xrtValueObjectGet(Root,XRT_STR_LITERAL("last_run_outcome"))?1u:0u))) ||
          !MdoSessionsValueUInt(Root, "revision", &Revision) ||
          Revision == 0u ||
          !MdoSessionsValueString(Root, "id", &Id) ||
@@ -577,6 +584,21 @@ bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
          (!MdoSessionsValueUInt(Root, "last_activated_at_us", &Activated) ||
           Activated > INT64_MAX || Activated < Created) ) goto done;
     Info->LastActivatedAt = (int64)Activated;
+    /* Legacy metadata has no message clock. Seed it once from the old update
+     * time; never scan the potentially enormous event log for sidebar reads. */
+    uint64 MessageAt=Updated, RunAt=0u, Outcome=0u;
+    if ((xrtValueObjectGet(Root,XRT_STR_LITERAL("last_message_at_us")) &&
+         !MdoSessionsValueUInt(Root,"last_message_at_us",&MessageAt)) ||
+        (xrtValueObjectGet(Root,XRT_STR_LITERAL("last_run_at_us")) &&
+         !MdoSessionsValueUInt(Root,"last_run_at_us",&RunAt)) ||
+        (xrtValueObjectGet(Root,XRT_STR_LITERAL("last_run_outcome")) &&
+         !MdoSessionsValueUInt(Root,"last_run_outcome",&Outcome)) ||
+        MessageAt>INT64_MAX || MessageAt<Created || RunAt>INT64_MAX ||
+        (RunAt && RunAt<Created) || Outcome>MDO_SESSION_OUTCOME_CANCELLED ||
+        (Outcome && !RunAt)) goto done;
+    Info->LastMessageAt=(int64)MessageAt;
+    Info->LastRunAt=(int64)RunAt;
+    Info->LastRunOutcome=(MdoSessionOutcome)Outcome;
     Info->Pinned = Pinned;
     uint64 TitleState=0;
     if(xrtValueObjectGet(Root,XRT_STR_LITERAL("title_state")) &&
@@ -1067,6 +1089,7 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     Info.CreatedAt = MdoUtcUs();
     Info.UpdatedAt = Info.CreatedAt;
     Info.LastActivatedAt = Info.CreatedAt;
+    Info.LastMessageAt = Info.CreatedAt;
     Info.Status = MDO_SESSION_ACTIVE;
     Info.PreviousStatus = MDO_SESSION_ACTIVE;
     Info.RuntimeOpen = true;
@@ -1538,6 +1561,7 @@ MdoSession* MdoSessionFork(MdoSession* Source,
     Info.CreatedAt = MdoUtcUs();
     Info.UpdatedAt = Info.CreatedAt;
     Info.LastActivatedAt = Info.CreatedAt;
+    Info.LastMessageAt = Info.CreatedAt;
     Info.Status = MDO_SESSION_ACTIVE;
     Info.PreviousStatus = MDO_SESSION_ACTIVE;
     Info.RuntimeOpen = true;
@@ -1748,14 +1772,20 @@ static bool MdoSessionsCommit(MdoSession* Session,
     const MdoSessionInfo* Candidate, xwork_error* Error)
 {
     MdoSessionInfo Current, Merged = *Candidate;
-    /* Navigation is independent of the optimistic content revision. A live
-     * runtime may still hold the metadata from before another tab activated it. */
+    /* Navigation and execution activity are independent of the optimistic
+     * content revision; a live handle may still hold an older snapshot. */
     if ( !MdoSessionsMetaRead(Candidate->ProjectId, Candidate->Id, &Current) ) {
         MdoSessionsXrtError(Error, XWORK_ERROR_IO, "cannot read current session activity");
         return false;
     }
     if ( Current.LastActivatedAt > Merged.LastActivatedAt )
         Merged.LastActivatedAt = Current.LastActivatedAt;
+    if ( Current.LastMessageAt > Merged.LastMessageAt )
+        Merged.LastMessageAt = Current.LastMessageAt;
+    if ( Current.LastRunAt >= Merged.LastRunAt ) {
+        Merged.LastRunAt = Current.LastRunAt;
+        Merged.LastRunOutcome = Current.LastRunOutcome;
+    }
     if ( !MdoSessionsMetaWrite(Session->MetaPath, &Merged) ) {
         MdoSessionsXrtError(Error, XWORK_ERROR_IO,
             "cannot update session metadata");
@@ -1764,6 +1794,46 @@ static bool MdoSessionsCommit(MdoSession* Session,
     Session->Info = Merged;
     MdoSessionsGenerationAdvance();
     return true;
+}
+
+const char* MdoSessionOutcomeName(MdoSessionOutcome Outcome)
+{
+    switch ( Outcome ) {
+    case MDO_SESSION_OUTCOME_SUCCEEDED: return "succeeded";
+    case MDO_SESSION_OUTCOME_FAILED: return "failed";
+    case MDO_SESSION_OUTCOME_CANCELLED: return "cancelled";
+    default: return "";
+    }
+}
+
+bool MdoSessionRecordActivity(const char* ProjectId, const char* SessionId,
+    bool Message, MdoSessionOutcome Outcome)
+{
+    if ( !g_MdoSessions.Lock || !MdoSessionsIdValid(ProjectId, MDO_PROJECT_ID_CAPACITY) ||
+         !MdoSessionsIdValid(SessionId, MDO_SESSION_ID_CAPACITY) ||
+         Outcome < MDO_SESSION_OUTCOME_NONE || Outcome > MDO_SESSION_OUTCOME_KEEP ) return false;
+    xrtMutexLock(g_MdoSessions.Lock);
+    MdoSessionInfo Current;
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    bool Ok = MdoSessionsMetaRead(ProjectId, SessionId, &Current);
+    if ( Ok ) {
+        int64 Now = MdoUtcUs();
+        if ( Now < Current.CreatedAt ) Now = Current.CreatedAt;
+        if ( Now < Current.LastMessageAt ) Now = Current.LastMessageAt;
+        if ( Now < Current.LastRunAt ) Now = Current.LastRunAt;
+        if ( Message ) Current.LastMessageAt = Now;
+        if ( Outcome != MDO_SESSION_OUTCOME_KEEP ) {
+            Current.LastRunAt = Now;
+            Current.LastRunOutcome = Outcome;
+        }
+        Ok = MdoSessionsPath(Path, ProjectId, SessionId, "meta.json") &&
+            MdoSessionsMetaWrite(Path, &Current);
+        if ( Ok ) MdoSessionsGenerationAdvance();
+    }
+    xrtMutexUnlock(g_MdoSessions.Lock);
+    /* Sidebar persistence must not poison the Agent event sink or its caller. */
+    if ( !Ok ) xrtClearError();
+    return Ok;
 }
 
 bool MdoSessionActivate(MdoSession* Session, xwork_error* Error)
@@ -1807,6 +1877,8 @@ static bool MdoSessionsValidateCurrent(MdoSession* Session,
         MdoSessionInfo Before=Session->Info,After=Current;
         Before.Revision=After.Revision=0;Before.UpdatedAt=After.UpdatedAt=0;
         Before.LastActivatedAt=After.LastActivatedAt=0;Before.RuntimeOpen=After.RuntimeOpen=false;
+        Before.LastMessageAt=After.LastMessageAt=0;Before.LastRunAt=After.LastRunAt=0;
+        Before.LastRunOutcome=After.LastRunOutcome=MDO_SESSION_OUTCOME_NONE;
         Before.TitleState=After.TitleState=0;memset(Before.Title,0,sizeof(Before.Title));memset(After.Title,0,sizeof(After.Title));
         if(!memcmp(&Before,&After,sizeof(Before))){bool Open=Session->Info.RuntimeOpen;Session->Info=Current;Session->Info.RuntimeOpen=Open;return true;}
         MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
@@ -2572,8 +2644,8 @@ static int MdoSessionsCatalogCompare(const void* LeftValue,
     if ( Left->Status != Right->Status )
         return Left->Status < Right->Status ? -1 : 1;
     if ( Left->Pinned != Right->Pinned ) return Left->Pinned ? -1 : 1;
-    if ( Left->LastActivatedAt != Right->LastActivatedAt )
-        return Left->LastActivatedAt > Right->LastActivatedAt ? -1 : 1;
+    if ( Left->LastMessageAt != Right->LastMessageAt )
+        return Left->LastMessageAt > Right->LastMessageAt ? -1 : 1;
     return strcmp(Left->Id, Right->Id);
 }
 

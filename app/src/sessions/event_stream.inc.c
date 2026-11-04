@@ -64,6 +64,8 @@ static bool MdoEventsStreamCommit(MdoSessionEventBridge* Bridge, MdoEventStream*
         }
         xrtFree(Json); if (!Ok) return false;
     }
+    if ( Stream->Size && !Stream->Depth && Stream->Kind==XWORK_EVENT_MODEL_TEXT_DELTA )
+        (void)MdoSessionRecordActivity(Bridge->ProjectId,Bridge->SessionId,true,MDO_SESSION_OUTCOME_KEEP);
     return true;
 }
 

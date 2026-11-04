@@ -13,7 +13,7 @@ test("sidebar layout rejects unknown fields, duplicate identities and invalid de
     { ...value, groups: [{ id: a, name: "\ninvalid" }] }]) assert.equal(Boolean(validSidebarLayout(invalid)), false);
 });
 
-test("group assignments preserve project ownership, pins, filtering and recent activation order", () => {
+test("group assignments preserve project ownership, pins, filtering and recent message order", () => {
   const sessions = [{ id: "one", project_id: "alpha", status: "active", title: "one", updated_at: 3 },
     { id: "two", project_id: "alpha", status: "active", title: "two", updated_at: 2 },
     { id: "pin", project_id: "alpha", status: "active", pinned: true, updated_at: 4 }];
@@ -68,10 +68,10 @@ test("destroy cancels an unresponsive write and never applies its late reply", a
 });
 
 
-test("saved placements never override activation order in tasks, pins or custom groups", () => {
+test("saved placements never override message order in tasks, pins or custom groups", () => {
   const sessions = [
-    { id: "old", project_id: "default", status: "active", updated_at: 500, last_activated_at: 10 },
-    { id: "recent", project_id: "default", status: "active", updated_at: 1, last_activated_at: 20 },
+    { id: "old", project_id: "default", status: "active", updated_at: 500, last_activated_at: 1000, last_message_at: 10 },
+    { id: "recent", project_id: "default", status: "active", updated_at: 1, last_activated_at: 20, last_message_at: 20 },
   ];
   const layout = initial();
   layout.placements = [{ key: "s:default/old", group: "" }, { key: "s:default/recent", group: "" }];

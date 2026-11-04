@@ -90,6 +90,14 @@ typedef struct MdoSessionForkOptions {
     const char* RequestedId;     /* NULL generates an ID; never overwrite one. */
 } MdoSessionForkOptions;
 
+typedef enum MdoSessionOutcome {
+    MDO_SESSION_OUTCOME_NONE = 0,
+    MDO_SESSION_OUTCOME_SUCCEEDED = 1,
+    MDO_SESSION_OUTCOME_FAILED = 2,
+    MDO_SESSION_OUTCOME_CANCELLED = 3,
+    MDO_SESSION_OUTCOME_KEEP = 4 /* Record a message without changing the result. */
+} MdoSessionOutcome;
+
 typedef struct MdoSessionInfo {
     uint32 Size;
     uint64 Revision;
@@ -117,6 +125,9 @@ typedef struct MdoSessionInfo {
     char WorkspaceRoot[MDO_SESSION_WORKSPACE_CAPACITY];
     int64 LastActivatedAt;       /* user navigation, independent of metadata edits. */
     uint32 TitleState;           /* 0 manual/legacy, 1 waiting, 2 pending, 3 model, 4 fallback. */
+    int64 LastMessageAt;         /* User submissions and completed root replies only. */
+    int64 LastRunAt;
+    MdoSessionOutcome LastRunOutcome;
 } MdoSessionInfo;
 
 typedef struct MdoSessionDiagnostic {
@@ -223,6 +234,10 @@ void MdoSessionRelease(MdoSession* Session);
 bool MdoSessionGetInfo(MdoSession* Session, MdoSessionInfo* Info);
 /* Records navigation without changing the content/profile revision. */
 bool MdoSessionActivate(MdoSession* Session, xwork_error* Error);
+/* Best-effort sidebar metadata; never advances the content revision. */
+bool MdoSessionRecordActivity(const char* ProjectId, const char* SessionId,
+    bool Message, MdoSessionOutcome Outcome);
+const char* MdoSessionOutcomeName(MdoSessionOutcome Outcome);
 /* Member execution shares the parent's live permission mode even when the
  * parent's own runtime closes. Each acquire needs the matching release. */
 MdoApprovalScope* MdoSessionPermissionScopeAcquire(const char* ProjectId,const char* SessionId,xwork_error* Error);
