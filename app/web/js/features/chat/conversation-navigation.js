@@ -61,8 +61,12 @@ export function createConversationNavigation({ scroller, container, onReveal, on
       after = after?.nextElementSibling;
     }
   }
-  function hide() {
+  function cancelHide() {
     window.clearTimeout(hideTimer);
+    hideTimer = 0;
+  }
+  function hide() {
+    cancelHide();
     rows.get(previewFor)?.removeAttribute("aria-describedby");
     preview.hidden = true;
     previewFor = 0;
@@ -78,11 +82,10 @@ export function createConversationNavigation({ scroller, container, onReveal, on
     preview.style.top = `${Math.max(bounds.top + 12,
       Math.min(top, bounds.bottom - 12 - preview.offsetHeight)) - origin}px`;
   }
-  function show(button, turn) {
-    if (!turn || rail.hidden) return;
+  function refreshPreview(button, turn) {
+    if (!button || !turn || rail.hidden) return;
     rows.get(previewFor)?.removeAttribute("aria-describedby");
     previewFor = turn.first_event_id;
-    window.clearTimeout(hideTimer);
     emphasize(button);
     preview.replaceChildren(element("strong", { text: turn.question ||
       uiMessage("timeline.emptyPrompt", {}, "附件任务") }), element("p", {
@@ -92,7 +95,15 @@ export function createConversationNavigation({ scroller, container, onReveal, on
     button.setAttribute("aria-describedby", preview.id);
     schedule();
   }
-  function delayHide() { hideTimer = window.setTimeout(hide, 160); }
+  function show(button, turn) {
+    if (!button || !turn || rail.hidden) return;
+    cancelHide();
+    refreshPreview(button, turn);
+  }
+  function delayHide() {
+    cancelHide();
+    hideTimer = window.setTimeout(hide, 160);
+  }
 
   async function jump(button, turn) {
     if (button.disabled || !turn) return;
@@ -205,13 +216,17 @@ export function createConversationNavigation({ scroller, container, onReveal, on
       marks.scrollTop = signature ? scroll + Math.max(0, marks.scrollHeight - oldHeight) : marks.scrollHeight;
       if (focused) marks.querySelector(`[data-turn-id="${focused}"]`)?.focus({ preventScroll: true });
       signature = key;
-      if (previewFor && summaries.has(previewFor)) show(rows.get(previewFor), summaries.get(previewFor));
+      // Reply/index refreshes update content only. Treating them as another
+      // pointer entry cancels dismissal on every streamed reply fragment.
+      if (previewFor && summaries.has(previewFor)) refreshPreview(rows.get(previewFor), summaries.get(previewFor));
       else hide();
     }
     schedule();
   }
-  preview.addEventListener("pointerenter", () => window.clearTimeout(hideTimer));
+  preview.addEventListener("pointerenter", cancelHide);
   preview.addEventListener("pointerleave", delayHide);
+  rail.addEventListener("pointerleave", delayHide);
+  rail.addEventListener("pointercancel", hide);
   marks.addEventListener("scroll", () => {
     hide();
     if (marks.scrollTop <= 20) fillIndex(true);
@@ -222,7 +237,12 @@ export function createConversationNavigation({ scroller, container, onReveal, on
   rail.addEventListener("keydown", event => { if (event.key === "Escape") hide(); });
   scroller.addEventListener("scroll", schedule, { passive: true });
   window.addEventListener("resize", schedule);
-  function resume() { if (!document.hidden) { blockedIndex = ""; schedule(); } }
+  function windowBlur(event) { if (event.target === window) hide(); }
+  window.addEventListener("blur", windowBlur);
+  function resume() {
+    if (document.hidden) hide();
+    else { blockedIndex = ""; schedule(); }
+  }
   window.addEventListener("pageshow", resume);
   document.addEventListener("visibilitychange", resume);
   touchScreen.addEventListener("change", schedule);
@@ -236,9 +256,10 @@ export function createConversationNavigation({ scroller, container, onReveal, on
   });
   return Object.freeze({ update, destroy() {
     disposed = true; ++ownerVersion;
-    locale(); observer?.disconnect(); overlapObserver?.disconnect(); rail.remove(); window.clearTimeout(hideTimer);
+    locale(); observer?.disconnect(); overlapObserver?.disconnect(); rail.remove(); cancelHide();
     scroller.classList.remove("has-history-navigation");
     scroller.removeEventListener("scroll", schedule); window.removeEventListener("resize", schedule);
+    window.removeEventListener("blur", windowBlur);
     window.removeEventListener("pageshow", resume); document.removeEventListener("visibilitychange", resume);
     touchScreen.removeEventListener("change", schedule);
     if (frame) cancelAnimationFrame(frame);

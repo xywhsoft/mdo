@@ -53,6 +53,63 @@ try {
   check(revealed === 1, "an unloaded mark reveals exactly its own event identity");
   buttons()[1].dispatchEvent(new Event("pointerenter"));
   check(!rail().querySelector("[role=tooltip]").hidden && rail().querySelector("strong").textContent === "Question 2", "compact summaries provide hover previews");
+  const popup = () => rail().querySelector("[role=tooltip]");
+  const streamSummaries = async (count = 12) => {
+    for (let i = 0; i < count; ++i) {
+      publish({ ...data, turns: data.turns.map(turn => ({ ...turn, answer: `${turn.answer} next` })) });
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+  };
+  await streamSummaries(2);
+  check(!popup().hidden && popup().querySelector("p").textContent.endsWith("next next"),
+    "streaming summaries refresh an open preview without closing it");
+  buttons()[1].dispatchEvent(new Event("pointerleave"));
+  await streamSummaries();
+  check(popup().hidden && !buttons()[1].hasAttribute("aria-describedby"),
+    "leaving a mark dismisses its preview even while replies keep streaming");
+
+  buttons()[1].dispatchEvent(new Event("pointerenter"));
+  buttons()[1].dispatchEvent(new Event("pointerleave"));
+  buttons()[1].dispatchEvent(new FocusEvent("blur"));
+  popup().dispatchEvent(new Event("pointerenter"));
+  await streamSummaries();
+  check(!popup().hidden, "moving from a mark into its preview keeps the preview available");
+  popup().dispatchEvent(new Event("pointerleave"));
+  await streamSummaries();
+  check(popup().hidden, "leaving the preview dismisses it during continuous updates");
+
+  buttons()[0].dispatchEvent(new Event("pointerenter"));
+  buttons()[0].dispatchEvent(new Event("pointerleave"));
+  buttons()[1].dispatchEvent(new Event("pointerenter"));
+  await streamSummaries();
+  check(!popup().hidden && popup().querySelector("strong").textContent === "Question 2",
+    "a new hovered mark cancels the previous mark's pending dismissal");
+  rail().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+  await streamSummaries(2);
+  check(popup().hidden, "Escape stays dismissed after subsequent reply updates");
+
+  buttons()[0].dispatchEvent(new FocusEvent("focus"));
+  check(!popup().hidden, "keyboard focus opens a preview immediately");
+  await streamSummaries(2);
+  check(!popup().hidden, "keyboard focus opens a preview and keeps its summary current");
+  buttons()[0].dispatchEvent(new FocusEvent("blur"));
+  await streamSummaries();
+  check(popup().hidden, "blur dismisses a keyboard preview during continuous updates");
+  buttons()[0].dispatchEvent(new Event("pointerenter"));
+  window.dispatchEvent(new Event("blur"));
+  await streamSummaries(2);
+  check(popup().hidden, "leaving the application closes its preview without waiting for another pointer event");
+  buttons()[0].dispatchEvent(new Event("pointerenter"));
+  rail().dispatchEvent(new Event("pointercancel"));
+  check(popup().hidden, "a cancelled pointer interaction closes its preview");
+  buttons()[0].dispatchEvent(new Event("pointerenter"));
+  Object.defineProperty(document, "hidden", { configurable: true, value: true });
+  document.dispatchEvent(new Event("visibilitychange"));
+  check(popup().hidden, "backgrounding the page closes its preview immediately");
+  delete document.hidden;
+  document.dispatchEvent(new Event("visibilitychange"));
+  await streamSummaries(2);
+  check(popup().hidden, "returning to the page does not reopen an old preview");
   scroller.style.width = "600px"; await until(() => scroller.getBoundingClientRect().width === 600);
   check(!rail().hidden && getComputedStyle(rail()).display !== "none", "an open sidebar or a narrow desktop conversation does not hide the index");
   check(rail().getBoundingClientRect().right <= container.getBoundingClientRect().left, "narrow conversations reserve room for navigation without covering text");
