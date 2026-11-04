@@ -1,0 +1,471 @@
+{
+  "version_name": "0.9.0",
+  "version_code": "05000900",
+  "published": true,
+  "published_at": "2026-11-04T10:46:22+08:00",
+  "required": true,
+  "catalog_revision": 38,
+  "website_commit": "4f2c874bd0856749803abcc237aa382992e2e3c7",
+  "source_freeze": {
+    "application": "b661965db62b66711d90018d7535d91ea6414bc006bba08e5288d82178b6caaf",
+    "source_head": "11d0bed84d3508734871995ad6109cf42ac6a635",
+    "host_profile": "d765984879c9d3dedc04c523b0713b4e2662c4b8eb1ab91ff6d16d4c22dd79e2",
+    "dependency_lock": "b3be1ba328a6a72b0b8f94a2d85d0e4ef7150a0c26e1d9f016929e413b6fb08a"
+  },
+  "products": [
+    {
+      "filename": "mdo.exe",
+      "platform": "windows-x86_64",
+      "edition": "desktop",
+      "build_id": 70000184,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6865233,
+      "sha256": "c101e05a411d3e3bc22cc2428404182a1734f91c9fb96b17eb84ffa192e283c9",
+      "host_bytes": 4180480,
+      "host_sha256": "12db827b8147ab13955028c03783fe4a76ac4cf13bc68d90b0b0703db53bb37d",
+      "libc": "mingw",
+      "packaged_app_sha256": "ad7f9fce6ec6e115a244a4bca3a21260fc87373368b64d4b03fec139335c3e10",
+      "native_baseline_reused": false
+    },
+    {
+      "filename": "mdo-server.exe",
+      "platform": "windows-x86_64",
+      "edition": "server",
+      "build_id": 70000185,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6604940,
+      "sha256": "0178ee2683d6c58b8a8dbcc4d0917de06452389876d51089259dba7421e5d24b",
+      "host_bytes": 3920384,
+      "host_sha256": "4de9d27e9f6cf6a20efb3eab58870aa91b770e4d1d5fd1b35851c3322342e760",
+      "libc": "mingw",
+      "packaged_app_sha256": "9b67920ddf1e8971831e5660725f2ebb41711a672325c3cf81a43059c234ff13",
+      "native_baseline_reused": false
+    },
+    {
+      "filename": "mdo-linux-x86_64-glibc",
+      "platform": "linux-x86_64-glibc",
+      "edition": "desktop",
+      "build_id": 70000186,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6517403,
+      "sha256": "7daabb82ffbfc250fc95aee4f1652158719045b510ffd84e5136761c1decf4ec",
+      "host_bytes": 3832632,
+      "host_sha256": "ed066e67bd80fe66227ec68938b9b4fed90fca6f1ffda70ffd243d1de79325b1",
+      "libc": "glibc",
+      "packaged_app_sha256": "653dc5d51c258708083a1deaf0c4e297c369c6413f56811f61dc77bfc37e0bff",
+      "static_core": false,
+      "elf_needed": [
+        "libdl.so.2",
+        "libpthread.so.0",
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "glibc_required": "2.28",
+      "glibc_max": "2.28",
+      "native_baseline_reused": false
+    },
+    {
+      "filename": "mdo-server-linux-x86_64-glibc",
+      "platform": "linux-x86_64-glibc",
+      "edition": "server",
+      "build_id": 70000187,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6476181,
+      "sha256": "eb22e58e59b2a67a48de21281a9b405e4aeb795952fc0b2d78009d6cc0446a35",
+      "host_bytes": 3791608,
+      "host_sha256": "ecbe69644a05752b56ebc63789da5faedf953513b6a8c396bdeaa094f239bfa6",
+      "libc": "glibc",
+      "packaged_app_sha256": "83fa40af8357098941fb9a1021e94c8af6c9d3d7701987c659cda08a201f8a4f",
+      "static_core": false,
+      "elf_needed": [
+        "libdl.so.2",
+        "libpthread.so.0",
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "glibc_required": "2.28",
+      "glibc_max": "2.28",
+      "native_baseline_reused": false
+    },
+    {
+      "filename": "mdo-linux-x86_64-musl",
+      "platform": "linux-x86_64-musl",
+      "edition": "desktop",
+      "build_id": 70000188,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 8194938,
+      "sha256": "aa2b58b5caa5a55cb4ce93b1d71c1f88abcb201f7722699453110ab3130a28cc",
+      "host_bytes": 5510168,
+      "host_sha256": "94c8a0b69acbe28211be888e299b6e6b15ead21f88cbf5b68b294a1bbe6a3837",
+      "libc": "musl",
+      "packaged_app_sha256": "f04dcadc0e9de4ffa75c6cfcadd45a8b484be0a47f69613eeac1840c231e529c",
+      "static_core": true,
+      "elf_needed": [],
+      "glibc_required": null,
+      "glibc_max": "2.28",
+      "native_baseline_reused": false
+    },
+    {
+      "filename": "mdo-server-linux-x86_64-musl",
+      "platform": "linux-x86_64-musl",
+      "edition": "server",
+      "build_id": 70000189,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 8157876,
+      "sha256": "bcad26a92262790dd1ec325a2adfd105d10694414e378f7f11d8b515b8a7207d",
+      "host_bytes": 5473304,
+      "host_sha256": "ca69b58596a32e44d59f3a613041afe6b00b53fd53b585ce5bdd8e7963bcf7ce",
+      "libc": "musl",
+      "packaged_app_sha256": "24de87766c9418da49730739a45aca7b38abafb3e57c0d2276a98870d7b91418",
+      "static_core": true,
+      "elf_needed": [],
+      "glibc_required": null,
+      "glibc_max": "2.28",
+      "native_baseline_reused": false
+    },
+    {
+      "filename": "mdo-arm64-v8a.apk",
+      "platform": "android-arm64-v8a",
+      "edition": "lite",
+      "build_id": 70000190,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 6706580,
+      "sha256": "1acf254ab9da16b4e5f884027927390ef565fce9376dc4565b1d0103649243f9",
+      "host_sha256": "10e0dec5caeebd5c0272d265866c438c066cbac6d181aeb176c25c786663ea95",
+      "host_bytes": 3733304,
+      "release_signed": true,
+      "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "native_baseline_reused": false
+    },
+    {
+      "filename": "mdo-full-arm64-v8a.apk",
+      "platform": "android-arm64-v8a",
+      "edition": "full",
+      "build_id": 70000191,
+      "xs_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+      "bytes": 87363209,
+      "sha256": "b55481422986821fb8fa912c08e2570cae082a89d79fe9b9462319ed2267a2f1",
+      "host_sha256": "10e0dec5caeebd5c0272d265866c438c066cbac6d181aeb176c25c786663ea95",
+      "host_bytes": 3733304,
+      "release_signed": true,
+      "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "native_baseline_reused": false
+    }
+  ],
+  "pre_release_verification": {
+    "runtime-final": {
+      "passed": 130,
+      "failed": 0
+    },
+    "final-checks": {
+      "passed": 32,
+      "failed": 0
+    },
+    "final-products-checks": {
+      "passed": 9,
+      "failed": 0
+    },
+    "version": "0.9.0",
+    "version_code": "05000900",
+    "inputs_unchanged": true,
+    "all_8_artifact_hashes_verified": true,
+    "android_device_tested": false,
+    "published": false
+  },
+  "android_manual_acceptance": {
+    "reported_by_user": true,
+    "request": "好的，安卓版我手动测试了，直接发布上线把",
+    "independent_device_run_in_publication_turn": false
+  },
+  "server": {
+    "passed": true,
+    "checked_at": 1793760442,
+    "catalog_revision": 38,
+    "channels": [
+      {
+        "id": "desktop",
+        "build_id": 70000184,
+        "required": true,
+        "old_client_response": true,
+        "legacy_build_response": true,
+        "semantic_code_normalized": true,
+        "blob": {
+          "bytes": 6865233,
+          "sha256": "c101e05a411d3e3bc22cc2428404182a1734f91c9fb96b17eb84ffa192e283c9"
+        },
+        "website": {
+          "bytes": 6865233,
+          "sha256": "c101e05a411d3e3bc22cc2428404182a1734f91c9fb96b17eb84ffa192e283c9"
+        }
+      },
+      {
+        "id": "windows-server",
+        "build_id": 70000185,
+        "required": true,
+        "old_client_response": true,
+        "legacy_build_response": true,
+        "semantic_code_normalized": true,
+        "blob": {
+          "bytes": 6604940,
+          "sha256": "0178ee2683d6c58b8a8dbcc4d0917de06452389876d51089259dba7421e5d24b"
+        },
+        "website": {
+          "bytes": 6604940,
+          "sha256": "0178ee2683d6c58b8a8dbcc4d0917de06452389876d51089259dba7421e5d24b"
+        }
+      },
+      {
+        "id": "linux-glibc-gui",
+        "build_id": 70000186,
+        "required": true,
+        "old_client_response": true,
+        "legacy_build_response": true,
+        "semantic_code_normalized": true,
+        "blob": {
+          "bytes": 6517403,
+          "sha256": "7daabb82ffbfc250fc95aee4f1652158719045b510ffd84e5136761c1decf4ec"
+        },
+        "website": {
+          "bytes": 6517403,
+          "sha256": "7daabb82ffbfc250fc95aee4f1652158719045b510ffd84e5136761c1decf4ec"
+        }
+      },
+      {
+        "id": "linux-glibc-server",
+        "build_id": 70000187,
+        "required": true,
+        "old_client_response": true,
+        "legacy_build_response": true,
+        "semantic_code_normalized": true,
+        "blob": {
+          "bytes": 6476181,
+          "sha256": "eb22e58e59b2a67a48de21281a9b405e4aeb795952fc0b2d78009d6cc0446a35"
+        },
+        "website": {
+          "bytes": 6476181,
+          "sha256": "eb22e58e59b2a67a48de21281a9b405e4aeb795952fc0b2d78009d6cc0446a35"
+        }
+      },
+      {
+        "id": "linux-musl-gui",
+        "build_id": 70000188,
+        "required": true,
+        "old_client_response": true,
+        "legacy_build_response": true,
+        "semantic_code_normalized": true,
+        "blob": {
+          "bytes": 8194938,
+          "sha256": "aa2b58b5caa5a55cb4ce93b1d71c1f88abcb201f7722699453110ab3130a28cc"
+        },
+        "website": {
+          "bytes": 8194938,
+          "sha256": "aa2b58b5caa5a55cb4ce93b1d71c1f88abcb201f7722699453110ab3130a28cc"
+        }
+      },
+      {
+        "id": "linux-musl-server",
+        "build_id": 70000189,
+        "required": true,
+        "old_client_response": true,
+        "legacy_build_response": true,
+        "semantic_code_normalized": true,
+        "blob": {
+          "bytes": 8157876,
+          "sha256": "bcad26a92262790dd1ec325a2adfd105d10694414e378f7f11d8b515b8a7207d"
+        },
+        "website": {
+          "bytes": 8157876,
+          "sha256": "bcad26a92262790dd1ec325a2adfd105d10694414e378f7f11d8b515b8a7207d"
+        }
+      },
+      {
+        "id": "lite",
+        "build_id": 70000190,
+        "required": true,
+        "old_client_response": true,
+        "legacy_build_response": true,
+        "semantic_code_normalized": true,
+        "blob": {
+          "bytes": 6706580,
+          "sha256": "1acf254ab9da16b4e5f884027927390ef565fce9376dc4565b1d0103649243f9"
+        },
+        "website": {
+          "bytes": 6706580,
+          "sha256": "1acf254ab9da16b4e5f884027927390ef565fce9376dc4565b1d0103649243f9"
+        }
+      },
+      {
+        "id": "full",
+        "build_id": 70000191,
+        "required": true,
+        "old_client_response": true,
+        "legacy_build_response": true,
+        "semantic_code_normalized": true,
+        "blob": {
+          "bytes": 87363209,
+          "sha256": "b55481422986821fb8fa912c08e2570cae082a89d79fe9b9462319ed2267a2f1"
+        },
+        "website": {
+          "bytes": 87363209,
+          "sha256": "b55481422986821fb8fa912c08e2570cae082a89d79fe9b9462319ed2267a2f1"
+        }
+      }
+    ],
+    "website_files": 19,
+    "service_active": true,
+    "native_runtime_unchanged": true,
+    "model_catalog_unchanged": true,
+    "website_inode_preserved": true,
+    "original_credentials_unchanged": true
+  },
+  "client": {
+    "passed": true,
+    "channels": [
+      {
+        "id": "desktop",
+        "build_id": 70000184,
+        "required": true,
+        "head_bytes": 6865233,
+        "complete_blob_hash": true
+      },
+      {
+        "id": "windows-server",
+        "build_id": 70000185,
+        "required": true,
+        "head_bytes": 6604940
+      },
+      {
+        "id": "linux-glibc-gui",
+        "build_id": 70000186,
+        "required": true,
+        "head_bytes": 6517403
+      },
+      {
+        "id": "linux-glibc-server",
+        "build_id": 70000187,
+        "required": true,
+        "head_bytes": 6476181
+      },
+      {
+        "id": "linux-musl-gui",
+        "build_id": 70000188,
+        "required": true,
+        "head_bytes": 8194938
+      },
+      {
+        "id": "linux-musl-server",
+        "build_id": 70000189,
+        "required": true,
+        "head_bytes": 8157876
+      },
+      {
+        "id": "lite",
+        "build_id": 70000190,
+        "required": true,
+        "head_bytes": 6706580,
+        "complete_blob_hash": true
+      },
+      {
+        "id": "full",
+        "build_id": 70000191,
+        "required": true,
+        "head_bytes": 87363209
+      }
+    ],
+    "website_version": "0.9.0"
+  },
+  "publication": {
+    "version_name": "0.9.0",
+    "required": true,
+    "website": true,
+    "applications": true,
+    "service_restarted": false,
+    "started_at": 1793760378,
+    "passed": true,
+    "written_files": [
+      "download/files/mdo-arm64-v8a.apk",
+      "download/files/mdo-full-arm64-v8a.apk",
+      "download/files/mdo-linux-x86_64-glibc",
+      "download/files/mdo-linux-x86_64-musl",
+      "download/files/mdo-server-linux-x86_64-glibc",
+      "download/files/mdo-server-linux-x86_64-musl",
+      "download/files/mdo-server.exe",
+      "download/files/mdo.exe",
+      "download/index.html",
+      "download/release-notes-0.9.0.html",
+      "en/download/index.html",
+      "en/guide.html",
+      "en/index.html",
+      "guide.html",
+      "index.html",
+      "ru/download/index.html",
+      "ru/guide.html",
+      "ru/index.html",
+      "site-facts.json"
+    ],
+    "catalog_write_started": true,
+    "catalog_revision": 38,
+    "website_inode_preserved": true,
+    "channels": 8,
+    "required_channels": 8,
+    "account_database_preserved": true,
+    "temporary_credentials_removed": true,
+    "original_admin_credentials_unchanged": true,
+    "finished_at": 1793760382,
+    "final_verified_at": 1793760442
+  },
+  "deployment_attempt": {
+    "remote": "/home/xs/mdo-release-0.9.0-20261104/retry-1",
+    "first_attempt_rolled_back": true,
+    "first_attempt_error": "SSLEOFError",
+    "retries_modify_service": false
+  },
+  "first_attempt": {
+    "version_name": "0.9.0",
+    "required": true,
+    "website": false,
+    "applications": false,
+    "service_restarted": false,
+    "started_at": 1793760264,
+    "passed": false,
+    "written_files": [
+      "download/files/mdo-arm64-v8a.apk",
+      "download/files/mdo-full-arm64-v8a.apk",
+      "download/files/mdo-linux-x86_64-glibc",
+      "download/files/mdo-linux-x86_64-musl",
+      "download/files/mdo-server-linux-x86_64-glibc",
+      "download/files/mdo-server-linux-x86_64-musl",
+      "download/files/mdo-server.exe",
+      "download/files/mdo.exe",
+      "download/index.html",
+      "download/release-notes-0.9.0.html",
+      "en/download/index.html",
+      "en/guide.html",
+      "en/index.html",
+      "guide.html",
+      "index.html",
+      "ru/download/index.html",
+      "ru/guide.html",
+      "ru/index.html",
+      "site-facts.json"
+    ],
+    "catalog_write_started": true,
+    "error_type": "SSLEOFError",
+    "error": "EOF occurred in violation of protocol (_ssl.c:2437)",
+    "temporary_credentials_removed": true,
+    "original_admin_credentials_unchanged": true,
+    "finished_at": 1793760270
+  },
+  "initial_readonly_verification_failure": {
+    "error_type": "SSLEOFError",
+    "step": "remote HTTPS semantic version normalization request",
+    "production_changed": false,
+    "client_independent_validation_passed": true,
+    "recovery": "Add bounded retries for SSLEOFError to the read-only deployment verifier; retain certificate verification."
+  },
+  "limitations": [
+    "Release-time requests verify publication and download paths; they do not validate all live model providers.",
+    "Android manual acceptance was reported by the user; this publication turn did not repeat device tests.",
+    "Ignored local website binary assets were not overwritten; website text source and official remote binaries were updated separately."
+  ]
+}
