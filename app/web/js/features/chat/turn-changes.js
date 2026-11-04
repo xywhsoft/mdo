@@ -21,6 +21,19 @@ export function createTurnChanges({ read = (context, turn, signal) => readOperat
   createApplicationClient(() => ({ project: context.projectId, session: context.sessionId })),
   "changes.list", { scope: "turn", turn }, signal), open, change = fn => fn() } = {}) {
   const entries = new Map();
+  let reading = 0;
+  const waiting = [];
+  // Loading older history can reveal many replies at once. Keep those reads
+  // from exhausting the shared inspection quota used by the right sidebar.
+  async function inspect(entry) {
+    if (reading < 2) reading++; else await new Promise(resolve => waiting.push(resolve));
+    try {
+      if (entry.controller.signal.aborted) throw new DOMException("Inspection cancelled", "AbortError");
+      return await read(entry.context, entry.item.turn, entry.controller.signal);
+    } finally {
+      const next = waiting.shift(); if (next) next(); else reading--;
+    }
+  }
   const keyFor = (item, context) => JSON.stringify([context.projectId, context.sessionId, item.turn]);
   const button = (message, action, className = "turn-changes-button") => {
     const node = element("button", { className, text: message, attrs: { type: "button" } });
@@ -61,11 +74,11 @@ export function createTurnChanges({ read = (context, turn, signal) => readOperat
     setUiAttribute(root, "title", uiMessage("turnChanges.scope", {}, "本轮运行前后的工作区净变化，可能包含同期外部修改。"));
   }
   async function load(entry) {
-    const { root, controller, context, item } = entry;
+    const { root, controller, item } = entry;
     try {
       for (let attempt = 0; ; attempt++) {
         try {
-          const data = await read(context, item.turn, controller.signal);
+          const data = await inspect(entry);
           if (!controller.signal.aborted) change(() => { entry.data = data; render(entry, data); });
           return;
         } catch (error) {

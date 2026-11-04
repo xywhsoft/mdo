@@ -41,18 +41,23 @@
     "themes": [
       "light",
       "dark"
-    ]
+    ],
+    "bounded_history_reads": {
+      "replies": 12,
+      "peak_concurrent_reads": 2,
+      "passed": true
+    }
   },
   "artifacts": {
     "review.png": {
       "local_path": "D:\\GIT\\mdo\\.build\\turn-review-qa\\review.png",
-      "bytes": 58500,
-      "sha256": "e08002f5201bdb374bab6166f252ead0fb05034838f60c78892d4ee4d59fd728"
+      "bytes": 58493,
+      "sha256": "890f24df5445b02a1a70f645f9c9c1031e54b357d2fd07dc5aba2d87e30eb958"
     },
     "review-dark.png": {
       "local_path": "D:\\GIT\\mdo\\.build\\turn-review-qa\\review-dark.png",
-      "bytes": 55752,
-      "sha256": "9f3470e6008527d6a6195c49c0c2424a03d1e1395aeb310a7ce0a5e2910fb35f"
+      "bytes": 55743,
+      "sha256": "618f4e890da49f1ff003e4940f84170095861fc47830afd0827bac5bcf163ff6"
     }
   }
 }

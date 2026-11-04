@@ -29,7 +29,15 @@ const assert=require('node:assert/strict');
   await page.evaluate(()=>document.documentElement.dataset.theme='dark');await page.screenshot({path:process.argv[3]+'/review-dark.png',fullPage:true});
   await page.reload();await page.waitForFunction(()=>Boolean(window.mdo));
   await cards.nth(1).waitFor();assert.equal(await cards.count(),2);
-  assert.deepEqual(errors,[]);console.log('PASS summary expansion, exact-file right diff, panel reuse, continuous review, persisted reload; no page errors');
+  const concurrency=await page.evaluate(async()=>{
+    const {createTurnChanges}=await import('/js/features/chat/turn-changes.js');
+    let reading=0,peak=0,completed=0;
+    const review=createTurnChanges({read:async()=>{peak=Math.max(peak,++reading);await new Promise(resolve=>setTimeout(resolve,5));reading--;completed++;return {files:[]};}});
+    for(let turn=1;turn<=12;turn++)review.node({turn,key:`qa-${turn}`,time:0},{projectId:'qa',sessionId:'load-test'});
+    for(let attempt=0;completed<12&&attempt<100;attempt++)await new Promise(resolve=>setTimeout(resolve,5));
+    review.destroy();return {peak,completed};
+  });assert.deepEqual(concurrency,{peak:2,completed:12});
+  assert.deepEqual(errors,[]);console.log('PASS summary expansion, exact-file right diff, panel reuse, continuous review, persisted reload, bounded history reads; no page errors');
  }catch(error){console.error('API DIAGNOSTIC',await page.evaluate(async()=>{
    try{return await mdo.bind({project:'qa',session:'turn-review'}).call('changes.list',{scope:'turn',turn:1});}catch(e){return {code:e.code,message:e.message};}
  }));console.error((await page.locator('body').innerText()).slice(-4000));await page.screenshot({path:process.argv[3]+'/failure.png',fullPage:true});throw error;}
