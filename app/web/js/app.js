@@ -4,7 +4,7 @@ import { createDeliveryCenters } from "./features/shell/delivery-centers.js";
 import { createSkillAuthoringDraft } from "./features/settings/skill-authoring.js";
 import { liveConnection } from "./api/live.js";
 import { uploadImageWithRecovery } from "./api/image-upload.js";
-import { isTransientReadError } from "./api/read-recovery.js";
+import { isTransientReadError, conversationContinuing } from "./api/read-recovery.js";
 import { isRemoteTarget, targetState, subscribeTarget, setTargetSwitchGuard } from "./api/target.js";
 import { createRemotePanel } from "./features/settings/remote-panel.js";
 import { createDeviceTransferPanel } from "./features/transfers/device-transfer-panel.js";
@@ -740,11 +740,17 @@ export async function boot() {
     previewStore: artifactPreviewStore,
     onChanged: () => void loadRuns(),
   });
+  let promptQueue;
+  function sessionContinuing(projectId, sessionId) {
+    return conversationContinuing(promptQueue?.snapshot(projectId, sessionId),
+      [activeRun, ...(runsStore.get().data?.items ?? [])], projectId, sessionId);
+  }
   const conversationDocks = createConversationDocks({
     container: $("#conversation-docks"), navigation, tasksStore, approvalsStore,
     asksStore, recoveryStore,
     todoStore,
     runsStore,
+    isContinuing: sessionContinuing,
     onOpenTasks: () => taskDialog.open(),
     onChanged: () => Promise.all([loadTasks(), loadRuns(), refreshSelectedAsks()]),
     onDecisionArrived: (card) => {
@@ -766,11 +772,11 @@ export async function boot() {
   let composerProfile;
   let composerAgent;
   let queueEditKey = "";
-  const promptQueue = createPromptQueue({
+  promptQueue = createPromptQueue({
     container: $("#prompt-queue"), navigation, modelsStore,
     isMessagePresented: id => submissionTimeline?.isPresented(id) ?? false,
     isRunFinishing: () => runAwaitingRelease(activeRun, timelineStore.get().data),
-    onUpdated: () => { submissionTimeline?.render(); scheduleRunsRefresh(); },
+    onUpdated: () => { submissionTimeline?.render(); conversationDocks.refresh(); scheduleRunsRefresh(); },
     isRunActive: () => Boolean(activeRun),
     isProfileBusy: () => Boolean(composerProfile?.isBusy() || composerAgent?.isBusy()),
     isSessionRunActive: (key) => {
@@ -1320,10 +1326,11 @@ export async function boot() {
   createRecoveryDock({
     ...conversationDocks.recovery,
     store: recoveryStore,
+    isContinuing: data => sessionContinuing(data?.project_id, data?.session_id),
     canAutoResume: data => !composerProfile.loginBlock() && !purgeRecovery.isPaused() && !localServiceReconnecting &&
       (!isRemoteTarget() || (targetState().connected && !targetState().runtimeChanged &&
         targetState().selected.mode === "control")) && !activeRun && !submittingCurrent() &&
-      recoveryMatchesWorkspace(data, navigation.get()),
+      recoveryMatchesWorkspace(data, navigation.get()) && !sessionContinuing(data.project_id, data.session_id),
     onResume: (run, owner) => {
       const ownsView = recoveryMatchesWorkspace(owner, navigation.get());
       if (ownsView) {

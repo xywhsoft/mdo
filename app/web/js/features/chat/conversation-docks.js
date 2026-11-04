@@ -193,7 +193,8 @@ function askCard(item, projectId, sessionId, deciding, answered, drafts,
 }
 
 export function createConversationDocks({ container, navigation, tasksStore, approvalsStore,
-  asksStore, recoveryStore, todoStore, runsStore, onOpenTasks, onChanged, onDecisionArrived }) {
+  asksStore, recoveryStore, todoStore, runsStore, onOpenTasks, onChanged, onDecisionArrived,
+  isContinuing = () => false }) {
   const composition = createCompositionTracker(container);
   const askDeciding = new Set();
   const askAnswered = new Set();
@@ -422,7 +423,8 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       todo?.sessionId === sessionId ? todo.items : [];
     const recoveryState = recoveryStore?.get();
     const recovery = recoveryState?.data;
-    const needsRecovery = needsRecoveryCard(recoveryState, selected.projectId, sessionId);
+    const needsRecovery = needsRecoveryCard(recoveryState, selected.projectId, sessionId,
+      isContinuing(selected.projectId, sessionId));
     recoveryRoot.hidden = !needsRecovery;
     const readFailures = sessionId ? [
       { kind: "runs", state: runsStore.get(), retry: () => loadRuns({ retry: true }) },
@@ -596,6 +598,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     unsubscribers.forEach((unsubscribe) => unsubscribe());
   }
   return Object.freeze({
+    refresh: render,
     recovery: Object.freeze({ container: recoveryList, summary: recoverySummary }),
     revealRecovery() {
       searching = false;

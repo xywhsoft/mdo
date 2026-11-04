@@ -235,6 +235,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     const header = element("div", { className: "prompt-queue-header" }, [
       toggle, retry ?? element("span", { className: "prompt-queue-waiting",
         text: meta.paused ? uiMessage("queue.paused", {}, "队列已暂停") : uiMessage(!writable ? "queue.restoreToSend" :
+          saved[0]?.priority && !stagedHead ? "submission.steering" :
           entries.length && !reviewHead && saved[0] && isMessagePresented(saved[0].id) ? "queue.waitForRun" : sendingLocally ? "queue.sending" :
           acceptedRun ? "queue.runAccepted" : claimedRun
           ? "queue.runStarting" : reviewPending

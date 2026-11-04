@@ -10,7 +10,8 @@ import { isTransientReadError } from "../../api/read-recovery.js";
 import { createAutomaticRecovery } from "./automatic-recovery.js";
 import { modelErrorMessage } from "../../utils/model-errors.js";
 
-export function createRecoveryDock({ container, summary, store, onResume, onAbandon, canAutoResume }) {
+export function createRecoveryDock({ container, summary, store, onResume, onAbandon, canAutoResume,
+  isContinuing = () => false }) {
   let state = store.get();
   const decisions = createRecoveryDecisions();
   const argumentsOpen = new Map();
@@ -24,6 +25,7 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
   }
 
   async function submitRecovery(data, auto = false) {
+    if (isContinuing(data)) return;
     if (auto && !canAutoResume?.(data)) return;
     const operation = decisions.begin(data);
     if (!operation) return;
@@ -53,6 +55,7 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
   }
 
   async function submitAbandon(data) {
+    if (isContinuing(data)) return;
     const operation = decisions.begin(data);
     if (!operation) return;
     let accepted = false;
@@ -145,6 +148,7 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
     for (const id of argumentsOpen.keys()) if (!activeIds.has(id)) argumentsOpen.delete(id);
     clear(summary);
     clear(container);
+    if (isContinuing(data)) return;
     if (state.status === "error" && isTransientReadError(state.error)) {
       writeUiText(summary, ["model_profile_login_pending", "model_profile_login_unavailable"].includes(state.error?.code)
         ? modelErrorMessage(state.error.code.slice(6), state.error.message)

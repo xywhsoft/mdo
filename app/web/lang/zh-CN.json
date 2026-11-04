@@ -3491,6 +3491,7 @@
   "submission.saving": "正在保存消息…",
   "submission.preparing": "正在准备回复…",
   "submission.queued": "已排队，等待上一条消息结束…",
+  "submission.steering": "正在应用新指令…",
   "submission.images": "附加图片：{count}",
   "file.maxSize": "每个文件最大 8 MiB，请拆分或压缩后添加。",
   "file.unnamed": "文件",

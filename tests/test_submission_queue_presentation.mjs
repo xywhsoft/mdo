@@ -87,6 +87,22 @@ test("new-session draft migration keeps the initial prompt in just one place", a
   assert.deepEqual(f.writes, []);
 });
 
+test("steering preparation describes the new instruction instead of waiting for the old answer", async context => {
+  const f = fixture(context), input = { ...message("a", "New instruction"), priority: true };
+  f.data.items = [input]; await f.load(); f.active(true);
+  assert.equal(f.view.isPresented(input.id), true);
+  assert.equal(f.pending.hidden, true);
+  assert.match(f.conversation.querySelector(".submission-status").textContent, /正在应用新指令/);
+  assert.deepEqual(f.writes, []);
+});
+
+test("the remaining queue describes a steering handoff while cancellation settles", async context => {
+  const f = fixture(context); f.active(true);
+  f.data.items = [{ ...message("a"), priority: true }, message("b")]; await f.load();
+  assert.equal(f.pending.querySelector(".prompt-queue-waiting").textContent, "submission.steering");
+  assert.deepEqual(f.writes, []);
+});
+
 test("later messages stay editable in the queue and move into chat on their own turn", async context => {
   const f = fixture(context); f.data.items = [message("a"), message("b"), message("c")];
   await f.load();

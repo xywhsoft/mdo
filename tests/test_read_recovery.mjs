@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isTransientReadError, needsRecoveryCard } from "../app/web/js/api/read-recovery.js";
+import { isTransientReadError, needsRecoveryCard, conversationContinuing } from "../app/web/js/api/read-recovery.js";
 import { api, setApiNetworkErrorHandler } from "../app/web/js/api/client.js";
 import { createRemoteTransport } from "../app/web/js/api/remote-transport.js";
 
@@ -13,6 +13,26 @@ test("background transport failures never imply an unfinished reply", () => {
   assert.equal(isTransientReadError({ code: "remote_revoked", status: 403 }), false);
   for (const code of ["remote_protocol", "remote_scope", "remote_result_unconfirmed"])
     assert.equal(isTransientReadError({ code }), false);
+});
+
+test("managed steering owns the gap between the cancelled run and its next input", () => {
+  const recovery = { status: "ready", data: { project_id: "qa", session_id: "a", resume_required: true } };
+  const queue = { managed: true, paused: false, items: [{ state: "pending", priority: true }] };
+  for (const state of ["pending", "sending"]) {
+    const continuing = conversationContinuing({ ...queue, items: [{ state }] }, [], "qa", "a");
+    assert.equal(continuing, true);
+    assert.equal(needsRecoveryCard(recovery, "qa", "a", continuing), false);
+  }
+  for (const changed of [{ ...queue, paused: true }, { ...queue, managed: false },
+    { ...queue, items: [] }, { ...queue, items: [{ state: "staged" }] }]) {
+    assert.equal(conversationContinuing(changed, [], "qa", "a"), false);
+    assert.equal(needsRecoveryCard(recovery, "qa", "a"), true);
+  }
+  const run = { project_id: "qa", session_id: "a", terminal: false };
+  assert.equal(conversationContinuing(null, [run], "qa", "a"), true);
+  assert.equal(conversationContinuing(null, [{ ...run, terminal: true }], "qa", "a"), false);
+  assert.equal(conversationContinuing(null, [run], "other", "a"), false);
+  assert.equal(conversationContinuing(null, [run], "qa", "b"), false);
 });
 
 test("an actual remote read deadline is recoverable while an admitted write remains uncertain", async () => {

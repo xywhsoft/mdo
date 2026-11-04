@@ -3491,6 +3491,7 @@
   "submission.saving": "Saving message…",
   "submission.preparing": "Preparing reply…",
   "submission.queued": "Queued, waiting for the previous message to finish…",
+  "submission.steering": "Applying your new instruction…",
   "submission.images": "Attached images: {count}",
   "file.maxSize": "Each file can be up to 8 MiB. Split or compress larger files.",
   "file.unnamed": "File",

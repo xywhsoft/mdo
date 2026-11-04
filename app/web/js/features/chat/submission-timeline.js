@@ -84,6 +84,8 @@ export function createSubmissionTimeline({ container, host, snapshot, scope,
         ? errorMessage({ code: state.error }) : "");
       setUiText(row.status, error || !row.durable
         ? error || uiMessage("submission.saving", {}, "正在保存消息…")
+        : row.priority || row.interrupt
+          ? uiMessage("submission.steering", {}, "正在应用新指令…")
         : row.state === "sending" || index === 0 && !state.active
           ? uiMessage("submission.preparing", {}, "正在准备回复…")
           : uiMessage("submission.queued", {}, "已排队，等待上一条消息结束…"));

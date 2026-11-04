@@ -1,0 +1,34 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/app/web/css/app.css"><div id="cards"></div><output id="result">Preparing</output>
+<script type="module">
+import {createTurnChanges} from '/app/web/js/features/chat/turn-changes.js';
+import {loadLocale} from '/app/web/js/i18n.js';
+const checks={},errors=[];addEventListener('error',e=>errors.push(e.message));
+try{
+ await loadLocale(new URL(location.href).searchParams.get('locale')||'zh-CN');
+ const calls=new Map(),wait=ms=>new Promise(r=>setTimeout(r,ms));
+ const context={projectId:'qa',sessionId:'a'},now=Date.now()*1000;
+ const view=createTurnChanges({read:async(_context,turn)=>{
+   const count=(calls.get(turn)||0)+1;calls.set(turn,count);
+   if(turn===1&&count===1)throw Object.assign(Error('temporary network'),{status:503});
+   if(turn===2&&count===1||turn===5)throw Object.assign(Error('publishing receipt'),{code:'git_turn_missing'});
+   if(turn===3)throw Object.assign(Error('not a Git workspace'),{code:'git_not_repository'});
+   if(turn===4&&count===1)throw Object.assign(Error('specific access failure'),{status:403});
+   return {files:[{path:'main.c',stats_available:true,additions:1,deletions:0}],additions:1,deletions:0};
+ }});
+ const node=turn=>view.node({kind:'changes',turn,time:now},{...context});
+ const roots=[1,2,3,4,5].map(node);document.querySelector('#cards').append(...roots);
+ await wait(50);checks.temporaryFailureQuiet=roots[0].hidden&&calls.get(1)===1;
+ checks.pendingCaptureQuiet=roots[1].hidden&&calls.get(2)===1;
+ checks.nonGitQuiet=roots[2].hidden&&calls.get(3)===1;
+ checks.permanentFailureAccurate=!roots[3].hidden&&roots[3].querySelector('button').title==='specific access failure';
+ roots[3].querySelector('button').click();await wait(20);checks.explicitRetryWorks=Boolean(roots[3].querySelector('.turn-changes-file'));
+ view.retain([1,2,3,4].map(turn=>({kind:'changes',turn})),context);
+ await wait(900);
+ checks.transientReadRecovered=calls.get(1)===2&&Boolean(roots[0].querySelector('.turn-changes-file'));
+ checks.capturePublicationRecovered=calls.get(2)===2&&Boolean(roots[1].querySelector('.turn-changes-file'));
+ checks.disposedReadNotRetried=calls.get(5)===1;
+ view.destroy();checks.noOverflow=document.documentElement.scrollWidth<=innerWidth;
+ document.querySelector('#result').textContent=JSON.stringify({passed:errors.length===0&&Object.values(checks).every(Boolean),checks,errors});
+}catch(error){document.querySelector('#result').textContent=JSON.stringify({passed:false,checks,error:String(error.stack),errors});}
+</script></html>

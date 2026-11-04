@@ -2,6 +2,7 @@ import { element } from "../../utils/dom.js";
 import { setUiText, setUiAttribute, uiMessage, t } from "../../i18n.js";
 import { createApplicationClient } from "../../api/application.js";
 import { readOperation } from "../workbench/read-operation.js";
+import { isTransientReadError } from "../../api/read-recovery.js";
 
 // Stable start-event identity, never a native run ID (which can be reused).
 export function appendTurnChanges(items) {
@@ -83,26 +84,28 @@ export function createTurnChanges({ read = (context, turn, signal) => readOperat
           return;
         } catch (error) {
           if (controller.signal.aborted) return;
-          if (error.code === "git_turn_missing") {
-            // The final stream event can precede manager settlement/capture.
-            if (attempt < 6 && Date.now() - Number(item.time) / 1000 < 30000) {
-              await new Promise(resolve => { const timer = setTimeout(done, 750);
-                function done() { clearTimeout(timer); controller.signal.removeEventListener("abort", done); resolve(); }
-                controller.signal.addEventListener("abort", done, { once: true }); });
-              if (controller.signal.aborted) return;
-              continue;
-            }
-            return; // Older replies have no invented comparison or backfill.
+          const missing = error.code === "git_turn_missing";
+          // A terminal stream event precedes native settlement/capture. A
+          // steering handoff must not flash a failure or permanently lose
+          // the card just because its completed receipt is still publishing.
+          if ((missing && attempt < 40 && Date.now() - Number(item.time) / 1000 < 30000) ||
+              (!missing && attempt < 3 && isTransientReadError(error))) {
+            await new Promise(resolve => { const timer = setTimeout(done, missing ? 750 : Math.min(1500, 250 * 2 ** attempt));
+              function done() { clearTimeout(timer); controller.signal.removeEventListener("abort", done); resolve(); }
+              controller.signal.addEventListener("abort", done, { once: true }); });
+            if (controller.signal.aborted) return;
+            continue;
           }
+          if (missing) return; // Older replies have no invented comparison or backfill.
           if (error.code === "git_not_repository") return;
           throw error;
         }
       }
     } catch (error) {
       if (controller.signal.aborted) return;
-      change(() => { root.hidden = false; root.replaceChildren(button(uiMessage("turnChanges.unavailable", {}, "本轮文件变更暂不可用，点击重试"), () => {
+      change(() => { root.hidden = false; const retry = button(uiMessage("turnChanges.unavailable", {}, "本轮文件变更暂不可用，点击重试"), () => {
         root.hidden = true; return load(entry);
-      })); });
+      }); setUiAttribute(retry, "title", error.message || error.code || ""); root.replaceChildren(retry); });
     }
   }
   return {

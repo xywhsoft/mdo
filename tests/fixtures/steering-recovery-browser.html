@@ -1,0 +1,39 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>body{height:100dvh}main{height:100%;display:flex;flex-direction:column}.conversation{flex:1}#result{font-size:11px;white-space:pre-wrap}</style>
+<main class="workspace"><section class="conversation">Steering handoff</section><section class="composer-region"><div id="docks" class="conversation-docks"></div><form class="composer"><textarea id="prompt"></textarea></form></section><output id="result">Preparing</output></main>
+<script type="module">
+import {createConversationDocks} from '/app/web/js/features/chat/conversation-docks.js';
+import {createRecoveryDock} from '/app/web/js/features/chat/recovery-dock.js';
+import {createResourceStore} from '/app/web/js/state/store.js';
+import {conversationContinuing} from '/app/web/js/api/read-recovery.js';
+import {loadLocale} from '/app/web/js/i18n.js';
+const checks={},errors=[];addEventListener('error',e=>errors.push(e.message));
+try{
+ await loadLocale(new URL(location.href).searchParams.get('locale')||'zh-CN');
+ const recovery=createResourceStore(),runs=createResourceStore({items:[]}),empty=()=>createResourceStore({items:[]});
+ let queue={managed:true,paused:true,items:[{state:'pending',priority:true}]},writes=0;
+ const continuing=()=>conversationContinuing(queue,runs.get().data?.items,'qa','a');
+ const docks=createConversationDocks({container:document.querySelector('#docks'),navigation:{get:()=>({view:'workspace',projectId:'qa',sessionId:'a'}),subscribe:()=>()=>{}},
+ tasksStore:empty(),approvalsStore:empty(),asksStore:empty(),todoStore:empty(),runsStore:runs,recoveryStore:recovery,isContinuing:continuing});
+ createRecoveryDock({...docks.recovery,store:recovery,isContinuing:continuing});
+ const data={project_id:'qa',session_id:'a',resume_required:true,items:[],total:0,revision:1,last_sequence:2,recovery_token:'a'.repeat(64),history_epoch:'b'.repeat(64)};
+ recovery.setData(data);const paint=()=>new Promise(requestAnimationFrame);await paint();
+ const card=docks.recovery.container.closest('.conversation-dock');
+ const staleResume=document.querySelector('.recovery-submit'),staleAbandon=document.querySelector('.recovery-abandon');
+ checks.manualStopVisible=!card.hidden&&Boolean(staleResume)&&!staleResume.disabled;
+ // Even an event already queued against the old button cannot steal a send.
+ globalThis.fetch=async()=>{writes++;throw Error('Unexpected recovery request during steering');};
+ queue={...queue,paused:false};staleResume.click();staleAbandon.click();await paint();
+ checks.staleActionsIgnored=writes===0;
+ docks.refresh();checks.handoffHidden=card.hidden;
+ recovery.setData({...data,inspection_id:2});await paint();checks.lateRecoveryHidden=card.hidden;
+ queue={...queue,items:[]};runs.setData({items:[{project_id:'qa',session_id:'a',terminal:false}]});await paint();
+ checks.nextRunHidden=card.hidden;
+ recovery.setData({...data,resume_required:false});runs.setData({items:[]});await paint();checks.finishedHidden=card.hidden;
+ queue={...queue,paused:true,items:[{state:'pending'}]};recovery.setData(data);docks.refresh();await paint();
+ checks.realStopStillVisible=!card.hidden&&Boolean(document.querySelector('.recovery-submit'));
+ checks.noOverflow=document.documentElement.scrollWidth<=innerWidth;
+ document.querySelector('#result').textContent=JSON.stringify({passed:errors.length===0&&Object.values(checks).every(Boolean),checks,errors});
+}catch(error){document.querySelector('#result').textContent=JSON.stringify({passed:false,checks,error:String(error.stack),errors});}
+</script></html>
