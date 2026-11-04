@@ -1,0 +1,165 @@
+{
+  "version_name": "0.9.2",
+  "version_code": "05000902",
+  "source_head": "713fa6e98e54868b351692f43776beb0d88e4dfd",
+  "application_source_sha256": "da81fa060746fe37492b4adab8fcae65b0d6b3200e44adace2c32194bceefc08",
+  "release_status": "local-test-build-not-published",
+  "products": [
+    {
+      "filename": "mdo.exe",
+      "path": "D:\\GIT\\mdo\\.build\\local-0.9.2-20261104-about\\windows\\mdo.exe",
+      "platform": "windows-x86_64",
+      "edition": "desktop",
+      "build_id": 70000252,
+      "bytes": 6886253,
+      "sha256": "0ac7da7872ac8dbfb050b94cce61c331c776de0e00364559e4cd6159495ef6ec",
+      "delivery_path": "D:\\GIT\\mdo\\dist\\0.9.2-r7\\mdo.exe"
+    },
+    {
+      "filename": "mdo-arm64-v8a.apk",
+      "path": "D:\\GIT\\mdo\\.build\\local-0.9.2-20261104-about\\android\\mdo-arm64-v8a.apk",
+      "platform": "android-arm64-v8a",
+      "edition": "lite",
+      "build_id": 70000258,
+      "bytes": 6727060,
+      "sha256": "6b500388a3fffd203f3588188162e10e0f60fd72e3b02cf80d0815e6753b8564",
+      "certificate_sha256": "94b1947b60f3ce0852b19d9c37a47cc4a084fe9d601692c6a1f6b204c2174e84",
+      "delivery_path": "D:\\GIT\\mdo\\dist\\0.9.2-r7\\mdo-arm64-v8a.apk"
+    }
+  ],
+  "validation": {
+    "passed": true,
+    "windows_gui_subsystem": true,
+    "windows_bootstrap": {
+      "stage": "ready",
+      "ready": true,
+      "version": "0.9.2"
+    },
+    "android": {
+      "edition": "lite",
+      "bytes": 6727060,
+      "native_elf_files": 3,
+      "runtime_paths": 0
+    },
+    "release_certificate_unchanged": true,
+    "android_device_tested": false,
+    "source_unchanged": true,
+    "root_release_snapshots_unchanged": true,
+    "published": false,
+    "frontend_checks": {
+      "locale_tests_passed": 13,
+      "reachable_modules": 265,
+      "packed_about_ui": [
+        {
+          "passed": true,
+          "checks": {
+            "buttonOrder": true,
+            "removedDescription": true,
+            "publicWindow": true,
+            "author": true,
+            "version": true,
+            "websites": true,
+            "nativeLinks": true,
+            "focusRestored": true,
+            "reopens": true,
+            "noErrors": true
+          },
+          "locales": [
+            {
+              "locale": "en-US",
+              "title": true,
+              "description": true,
+              "name": true,
+              "sameWindow": true,
+              "fits": true,
+              "noOverflow": true,
+              "footerVisible": true,
+              "headerFits": true
+            },
+            {
+              "locale": "ru-RU",
+              "title": true,
+              "description": true,
+              "name": true,
+              "sameWindow": true,
+              "fits": true,
+              "noOverflow": true,
+              "footerVisible": true,
+              "headerFits": true
+            },
+            {
+              "locale": "zh-CN",
+              "title": true,
+              "description": true,
+              "name": true,
+              "sameWindow": true,
+              "fits": true,
+              "noOverflow": true,
+              "footerVisible": true,
+              "headerFits": true
+            }
+          ],
+          "errors": []
+        },
+        {
+          "passed": true,
+          "checks": {
+            "buttonOrder": true,
+            "removedDescription": true,
+            "publicWindow": true,
+            "author": true,
+            "version": true,
+            "websites": true,
+            "nativeLinks": true,
+            "focusRestored": true,
+            "reopens": true,
+            "noErrors": true
+          },
+          "locales": [
+            {
+              "locale": "en-US",
+              "title": true,
+              "description": true,
+              "name": true,
+              "sameWindow": true,
+              "fits": true,
+              "noOverflow": true,
+              "footerVisible": true,
+              "headerFits": true
+            },
+            {
+              "locale": "ru-RU",
+              "title": true,
+              "description": true,
+              "name": true,
+              "sameWindow": true,
+              "fits": true,
+              "noOverflow": true,
+              "footerVisible": true,
+              "headerFits": true
+            },
+            {
+              "locale": "zh-CN",
+              "title": true,
+              "description": true,
+              "name": true,
+              "sameWindow": true,
+              "fits": true,
+              "noOverflow": true,
+              "footerVisible": true,
+              "headerFits": true
+            }
+          ],
+          "errors": []
+        }
+      ]
+    }
+  },
+  "changes": [
+    "Remove the settings header save-retry description",
+    "Add About button before View shortcuts using the public window library",
+    "Show localized product name and description, runtime version, author and external website links",
+    "Compact header buttons on phones; preserve fixed dialog footer and live theme/locale updates"
+  ],
+  "evidence_directory": "D:\\GIT\\mdo\\.build\\local-0.9.2-20261104-about"
+}
