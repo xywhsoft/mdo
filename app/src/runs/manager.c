@@ -803,6 +803,7 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
     }
     /* From this call onward a worker may have crossed the execution
      * boundary, including when Start itself reports failure. */
+    MdoApplicationRunRouteCaptureChanges(Route,ImageRunId);
     if ( MayHaveExecuted != NULL ) *MayHaveExecuted = true;
     Entered = true;
     if ( !MdoAgentRunStart(Run, Error) ) {

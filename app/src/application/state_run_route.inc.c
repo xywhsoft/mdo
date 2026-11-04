@@ -45,6 +45,7 @@ struct MdoApplicationRunRoute {
     MdoModuleCatalog* Modules;
     MdoApplicationMemberTurn* Member;
     xvalue* Facts;
+    xvalue* Changes;
     char Project[65],Session[129],Run[49],Workspace[2049];
 };
 void MdoApplicationRunRouteRelease(MdoApplicationRunRoute* Route){
@@ -52,9 +53,13 @@ void MdoApplicationRunRouteRelease(MdoApplicationRunRoute* Route){
     MdoApplicationMemberTurnRelease(Route->Member);
     MdoModuleCatalogRelease(Route->Modules);
     xrtValueRelease(Route->Facts);
+    xrtValueRelease(Route->Changes);
     xrtFree(Route);
 }
 MdoApplicationMemberTurn* MdoApplicationRunRouteMember(MdoApplicationRunRoute* Route){return Route?Route->Member:NULL;}
+void MdoApplicationRunRouteCaptureChanges(MdoApplicationRunRoute* R,uint64 NativeRun){
+    if(R&&!R->Changes)R->Changes=MdoApplicationTurnChangesBegin(&R->Context,NativeRun);
+}
 bool MdoApplicationRunRoutePrepare(const MdoRunStartOptions* O,cstr Id,MdoSession* View,xcancel* Cancel,uint64 Deadline,
     MdoApplicationRunRoute** Out,xwork_error* Error){
     *Out=NULL;MdoSessionInfo Info={0};Info.Size=sizeof(Info);if(!MdoSessionGetInfo(View,&Info))return false;
@@ -72,7 +77,7 @@ bool MdoApplicationRunRoutePrepare(const MdoRunStartOptions* O,cstr Id,MdoSessio
     } else if(Ok)Ok=MdoApplicationHooks(&R->Context,"run.route",&R->Facts,&E);
     if(!Ok)goto failed;
     const xvalue* Route=SdkGet(R->Facts,"route");
-    if(!Route){MdoApplicationRunRouteRelease(R);*Out=NULL;return true;}
+    if(!Route)return true;
     if(O->Resume&&!O->MemberRoute){MdoApplicationError(&E,"sdk_route_recovery","Use the member's explicit recovery decisions before sending another main input","run",409,false);goto failed;}
     cstr Namespace=SdkField(Route,"namespace"),Member=SdkField(Route,"id"),Message=SdkField(Route,"message_id");
     if(!SdkIdValid(Namespace)||strlen(Namespace)>128||!SdkStateKey(Member)||strlen(Member)>64||!SdkStateKey(Message)||strlen(Message)>128){
@@ -100,6 +105,8 @@ bool MdoApplicationRunRouteFinish(MdoApplicationRunRoute* R,xwork_result Status,
     /* Completion must settle durable work even after Stop/deadline. It cannot
      * grant a new user decision; the original provenance is retained. */
     R->Context.Deadline=0;R->Invocation.Cancel=NULL;
+    MdoApplicationTurnChangesFinish(&R->Context,R->Changes,Started);
+    if(!R->Member)return Settled;
     SdkPut(R->Facts,"state",Status==XWORK_RESULT_OK?"succeeded":Status==XWORK_RESULT_CANCELLED?"cancelled":Status==XWORK_RESULT_TIMEOUT?"timed_out":"failed");
     xrtValueObjectSetNew(R->Facts,XRT_STR_LITERAL("started"),xrtValueBool(Started));
     xrtValueObjectSetNew(R->Facts,XRT_STR_LITERAL("settled"),xrtValueBool(Settled));

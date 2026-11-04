@@ -13,6 +13,9 @@ typedef struct MdoApplicationInvocation {
     char WriteToken[64]; /* original HTTP admission generation, never returned */
 } MdoApplicationInvocation;
 typedef struct MdoApplicationMemberTurn MdoApplicationMemberTurn;
+/* Best-effort review receipts never decide whether an Agent may execute. */
+xvalue* MdoApplicationTurnChangesBegin(const mdo_sdk_context_v1*,uint64);
+void MdoApplicationTurnChangesFinish(const mdo_sdk_context_v1*,xvalue*,bool);
 typedef struct MdoAgentSession MdoAgentSession;
 typedef struct MdoSession MdoSession;
 typedef struct MdoSessionInfo MdoSessionInfo;
@@ -27,6 +30,7 @@ xcancel* MdoApplicationMemberTurnCancelRef(MdoApplicationMemberTurn*);
 bool MdoApplicationMemberTurnFinish(MdoApplicationMemberTurn*,xwork_result,const xwork_run_result*,const xwork_error*,xvalue**,mdo_error_v1*);
 void MdoApplicationMemberTurnRelease(MdoApplicationMemberTurn*);
 typedef struct MdoApplicationRunRoute MdoApplicationRunRoute;
+void MdoApplicationRunRouteCaptureChanges(MdoApplicationRunRoute*,uint64);
 typedef struct MdoRunStartOptions MdoRunStartOptions;
 bool MdoApplicationRunRoutePrepare(const MdoRunStartOptions*,cstr,MdoSession*,xcancel*,uint64,MdoApplicationRunRoute**,xwork_error*);
 MdoApplicationMemberTurn* MdoApplicationRunRouteMember(MdoApplicationRunRoute*);

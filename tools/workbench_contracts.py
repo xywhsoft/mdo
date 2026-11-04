@@ -22,7 +22,7 @@ def contracts(add):
         {**identity,'epoch':s},('id','epoch'))
     add('terminal.release','Release an ended terminal after its I/O drains; never release a running child',identity,('id',))
     add('terminal.prune','Explicitly release this extension owner\'s drained records from unregistered or moved projects; retain creation tombstones')
-    comparison={'repository':s,'scope':{'type':'string','enum':['workspace','staged','unstaged','branch','session']},'base':s}
+    comparison={'repository':s,'scope':{'type':'string','enum':['workspace','staged','unstaged','branch','session','turn']},'base':s,'turn':{**u,'minimum':1}}
     add('changes.list','Read structured Git changes without modifying the index; comparison scopes are explicit',comparison)
     add('changes.baseline','Read the original local session baseline capture receipt; never create or rebase it',{'repository':s})
     add('changes.branches','List local and remote comparison refs',{'repository':s},output={'type':'array'})
