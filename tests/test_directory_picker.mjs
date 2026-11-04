@@ -1,94 +1,133 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createDirectoryPicker, directoryChild } from "../app/web/js/features/sessions/directory-picker.js";
+import { createDirectoryNavigation, directoryChild, directoryBreadcrumbs, directoryCompletion, directoryPlaces } from "../app/web/js/features/sessions/directory-navigation.js";
 
-function setup() {
-  const previous = globalThis.document;
-  let focused = "";
-  const node = (name) => Object.assign(new EventTarget(), { value: "", children: [],
-    classList: { toggle() {} }, setAttribute() {},
-    replaceChildren(...children) { this.children = children; },
-    append(child) { this.children.push(child); },
-    querySelector() { return this.children.find((child) => child.tag === "button"); },
-    focus() { focused = name; } });
-  globalThis.document = { createElement(tag) { return Object.assign(node(tag), { tag }); } };
-  const names = ["form", "path", "list", "status", "parent", "choose", "shortcuts", "go", "close", "cancel"];
-  const nodes = Object.fromEntries(names.map((name) => [name, node(name)]));
-  const dialog = node("dialog"); dialog.querySelector = (id) => nodes[id.slice(11)];
-  dialog.showModal = () => { dialog.open = true; };
-  const closed = [];
-  dialog.close = () => { dialog.open = false; closed.push(() => dialog.dispatchEvent(new Event("close"))); };
-  const calls = [], selected = [];
-  const view = createDirectoryPicker({ dialog, read(path, signal) {
-    return new Promise((resolve, reject) => calls.push({ path, signal, resolve, reject }));
-  } });
-  return { view, dialog, nodes, calls, selected, focus: () => focused,
-    open: (path) => view.open(path, (path) => selected.push(path)),
-    click(node) { node.dispatchEvent(new Event("click")); },
-    submit() { nodes.form.dispatchEvent(new Event("submit", { cancelable: true })); },
-    closeEvents() { while (closed.length) closed.shift()(); },
-    finish() { view.destroy(); globalThis.document = previous; } };
-}
-const data = (path, directories = ["nested", "two words", ".hidden"]) => ({ path,
-  separator: "/", parent: "/", directories, shortcuts: [{kind:"home",path:"/user"}], truncated:false });
+const data = (path, directories = ["alpha", "two words", "中文"]) => ({ path,
+  separator: "/", parent: path === "/" ? "" : "/", directories, total: directories.length, has_more: false, next_cursor: "" });
 const tick = async () => { await Promise.resolve(); await Promise.resolve(); };
+function setup() {
+  const calls = [], writes = [], changes = [];
+  const view = createDirectoryNavigation({
+    read(path, signal, query) { return new Promise((resolve, reject) => calls.push({ path, signal, query, resolve, reject })); },
+    create(path, name, signal) { return new Promise((resolve, reject) => writes.push({ path, name, signal, resolve, reject })); },
+    onChange: state => changes.push(state),
+  });
+  return { view, calls, writes, changes, async load(path, value = data(path)) {
+    const result = view.navigate(path); calls.at(-1).resolve(value); await result;
+  } };
+}
 
-test("directory paths retain native roots, UNC prefixes and literal POSIX backslashes", () => {
+test("native paths and breadcrumbs preserve roots, UNC shares and literal POSIX backslashes", () => {
   assert.equal(directoryChild(data("/"), "a"), "/a");
   assert.equal(directoryChild(data("/has\\"), "a"), "/has\\/a");
   assert.equal(directoryChild({path:"D:\\",separator:"\\"}, "two words"), "D:\\two words");
-  assert.equal(directoryChild({path:"\\\\server\\share",separator:"\\"}, "a"), "\\\\server\\share\\a");
+  assert.deepEqual(directoryBreadcrumbs("\\\\server\\share\\one\\two", "\\").map(row => row.path),
+    ["\\\\server\\share\\", "\\\\server\\share\\one", "\\\\server\\share\\one\\two"]);
+  assert.deepEqual(directoryBreadcrumbs("D:\\work\\one", "\\").map(row => row.path), ["D:\\", "D:\\work", "D:\\work\\one"]);
+  assert.deepEqual(directoryBreadcrumbs("/has\\/a", "/").map(row => row.path), ["/", "/has\\", "/has\\/a"]);
+  assert.deepEqual(directoryCompletion("D:\\two w", "\\"), {path:"D:\\",prefix:"two w",limit:20});
+  assert.deepEqual(directoryCompletion("/has\\/a", "/"), {path:"/has\\/",prefix:"a",limit:20});
 });
 
-test("selection is unavailable until the requested directory loads; typed paths need confirmation", async () => {
-  const ctx = setup();
+test("late navigation cannot replace a newer directory or alter its history", async () => {
+  const {view,calls} = setup();
   try {
-    const open = ctx.open("/work"); assert.equal(ctx.nodes.choose.disabled, true);
-    ctx.click(ctx.nodes.choose); assert.deepEqual(ctx.selected, []);
-    ctx.calls[0].resolve(data("/work")); await open;
-    assert.equal(ctx.nodes.choose.disabled, false);
-    ctx.nodes.path.value = "/different"; ctx.nodes.path.dispatchEvent(new Event("input"));
-    assert.equal(ctx.nodes.choose.disabled, true);
-    ctx.click(ctx.nodes.choose); assert.deepEqual(ctx.selected, []);
-    ctx.submit(); assert.equal(ctx.calls[1].path, "/different");
-    ctx.calls[1].resolve(data("/different", [])); await tick();
-    assert.equal(ctx.focus(), "choose"); ctx.click(ctx.nodes.choose);
-    assert.deepEqual(ctx.selected, ["/different"]); assert.equal(ctx.dialog.open, false);
-  } finally { ctx.finish(); }
+    const first = view.navigate("/first"), second = view.navigate("/second");
+    assert.equal(calls[0].signal.aborted, true);
+    calls[1].resolve(data("/second")); await second;
+    calls[0].resolve(data("/first")); await first;
+    assert.equal(view.get().current.path, "/second");
+    assert.deepEqual(view.get().history, ["/second"]);
+  } finally { view.dispose(); }
 });
 
-test("a late response or queued close cannot replace a newly opened directory", async () => {
+test("a failed navigation retains the displayed page, requested path and safe retry", async () => {
   const ctx = setup();
   try {
-    const first = ctx.open("/first");
-    ctx.dialog.close(); const second = ctx.open("/second"); ctx.closeEvents();
-    assert.equal(ctx.calls[0].signal.aborted, true);
-    ctx.calls[1].resolve(data("/second")); await second;
-    ctx.calls[0].resolve(data("/first")); await first;
-    assert.equal(ctx.nodes.path.value, "/second");
-    ctx.click(ctx.nodes.list.children.find((button) => button.children[1].textContent === "two words"));
-    assert.equal(ctx.calls[2].path, "/second/two words");
-    ctx.calls[2].reject(new Error("no access")); await tick();
-    assert.equal(ctx.nodes.choose.disabled, true);
-    assert.equal(ctx.nodes.status.textContent, "no access");
-    assert.equal(ctx.focus(), "path");
-    ctx.click(ctx.nodes.cancel); ctx.closeEvents();
-    assert.equal(ctx.calls[2].signal.aborted, true);
-  } finally { ctx.finish(); }
+    await ctx.load("/work"); const previous = ctx.view.get().current;
+    const next = ctx.view.navigate("/denied");
+    assert.equal(ctx.view.get().current, previous);
+    assert.equal(await ctx.view.confirm(), null);
+    await ctx.view.mkdir("must-not-create-in-old-directory"); assert.equal(ctx.writes.length, 0);
+    ctx.calls.at(-1).reject(new Error("permission denied")); await next;
+    assert.equal(ctx.view.get().requestedPath, "/denied");
+    assert.equal(ctx.view.get().current, previous);
+    assert.equal(await ctx.view.confirm(), null);
+    const retry = ctx.view.retry(); assert.equal(ctx.calls.at(-1).path, "/denied");
+    ctx.calls.at(-1).resolve(data("/denied")); await retry;
+    assert.deepEqual(ctx.view.get().history, ["/work", "/denied"]);
+  } finally { ctx.view.dispose(); }
 });
 
-test("parent and shortcuts navigate without selecting; IME Enter does not submit a partial path", async () => {
+test("back/forward positions commit only after a successful read and a new branch drops forward history", async () => {
   const ctx = setup();
   try {
-    const open = ctx.open("/work"); ctx.calls[0].resolve(data("/work")); await open;
-    const key = new Event("keydown", {cancelable:true});
-    Object.assign(key, {key:"Enter",keyCode:229}); ctx.nodes.path.dispatchEvent(key);
-    assert.equal(key.defaultPrevented, true); assert.equal(ctx.calls.length, 1);
-    ctx.click(ctx.nodes.parent); assert.equal(ctx.calls[1].path, "/");
-    ctx.calls[1].resolve({...data("/"),parent:""}); await tick();
-    assert.equal(ctx.nodes.parent.disabled, true);
-    ctx.click(ctx.nodes.shortcuts.children[0]); assert.equal(ctx.calls[2].path, "/user");
-    ctx.calls[2].resolve({...data("/user"),truncated:true}); await tick();
-    assert.match(ctx.nodes.status.textContent, /完整路径/); assert.deepEqual(ctx.selected, []);
-  } finally { ctx.finish(); }
+    await ctx.load("/a"); await ctx.load("/b"); await ctx.load("/c");
+    let pending = ctx.view.back(); ctx.calls.at(-1).reject(new Error("offline")); await pending;
+    assert.equal(ctx.view.get().index, 2);
+    pending = ctx.view.back(); ctx.calls.at(-1).resolve(data("/b")); await pending;
+    assert.equal(ctx.view.get().index, 1);
+    pending = ctx.view.forward(); ctx.calls.at(-1).resolve(data("/c")); await pending;
+    assert.equal(ctx.view.get().index, 2);
+    pending = ctx.view.back(); ctx.calls.at(-1).resolve(data("/b")); await pending;
+    await ctx.load("/different");
+    assert.deepEqual(ctx.view.get().history, ["/a", "/b", "/different"]);
+  } finally { ctx.view.dispose(); }
+});
+
+test("keyset pages append without dropping selection or reordering server results", async () => {
+  const ctx = setup();
+  try {
+    await ctx.load("/work", {...data("/work", ["node2", "node10"]),has_more:true,next_cursor:"node10",total:4});
+    ctx.view.select("node2"); const more = ctx.view.more();
+    assert.deepEqual(ctx.calls.at(-1).query, {filter:"",after:"node10",limit:128});
+    ctx.calls.at(-1).resolve(data("/work", ["node10", "node20", "node100"])); await more;
+    assert.deepEqual(ctx.view.get().current.directories, ["node2", "node10", "node20", "node100"]);
+    assert.equal(ctx.view.get().selected, "node2");
+    const failed = ctx.view.navigate("/work", {replace:true,filter:"missing"});
+    ctx.calls.at(-1).reject(new Error("offline")); await failed;
+    assert.equal(ctx.view.get().filter, "missing"); assert.equal(ctx.view.get().selected, "");
+  } finally { ctx.view.dispose(); }
+});
+
+test("confirm validates the selected child on the device and never selects a deleted path", async () => {
+  const ctx = setup();
+  try {
+    await ctx.load("/work"); ctx.view.select("two words");
+    let selected = ctx.view.confirm(); assert.equal(ctx.calls.at(-1).path, "/work/two words");
+    ctx.calls.at(-1).reject(new Error("deleted")); assert.equal(await selected, null);
+    await ctx.load("/work"); ctx.view.select("two words"); selected = ctx.view.confirm();
+    ctx.calls.at(-1).resolve(data("/normalized/two words")); assert.equal(await selected, "/normalized/two words");
+    selected = ctx.view.confirm(); const late = ctx.calls.at(-1); ctx.view.dispose();
+    late.resolve(data("/too-late")); assert.equal(await selected, null);
+  } finally { ctx.view.dispose(); }
+});
+
+test("new folders remain exclusive writes; their canonical name is selected only after readback", async () => {
+  const ctx = setup();
+  try {
+    await ctx.load("/work"); const create = ctx.view.mkdir("new folder");
+    assert.equal(ctx.view.get().creating, true);
+    const before = ctx.calls.length; await ctx.view.navigate("/other"); assert.equal(ctx.calls.length, before);
+    assert.deepEqual([ctx.writes[0].path,ctx.writes[0].name], ["/work","new folder"]);
+    ctx.writes[0].resolve({path:"/work/new folder",name:"new folder"}); await tick();
+    assert.equal(ctx.calls.at(-1).query.filter, "new folder");
+    ctx.calls.at(-1).resolve(data("/work", ["new folder"])); await create;
+    assert.equal(ctx.view.get().selected, "new folder");
+    const failed = ctx.view.mkdir("exists"); ctx.writes.at(-1).reject(new Error("already exists")); await failed;
+    assert.equal(ctx.writes.length, 2); assert.equal(ctx.view.get().creating, false);
+  } finally { ctx.view.dispose(); }
+});
+
+test("favorites and confirmed-only recents are bounded and isolated by device", () => {
+  const saved = new Map(), storage = {getItem:key=>saved.get(key),setItem:(key,value)=>saved.set(key,value)};
+  const first = directoryPlaces(storage,"remote:1:device1"), second = directoryPlaces(storage,"remote:1:device2");
+  assert.deepEqual(first.get().recent, []);
+  first.favorite("D:\\work"); first.confirm("D:\\work"); first.confirm("/other"); first.confirm("D:\\work");
+  assert.deepEqual(directoryPlaces(storage,"remote:1:device1").get().recent, ["D:\\work","/other"]);
+  assert.deepEqual(second.get().favorites, []); assert.deepEqual(second.get().recent, []);
+  first.favorite("D:\\work"); assert.deepEqual(first.get().favorites, []);
+  for(let i=0;i<30;i++)first.confirm(`/work/${i}`);
+  assert.equal(first.get().recent.length,16);
+  directoryPlaces({getItem(){throw Error("denied");},setItem(){throw Error("denied");}},"local").confirm("/works-without-storage");
 });

@@ -1,43 +1,127 @@
 <!doctype html>
-<html lang="zh-CN">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>mdo directory picker keyboard probe</title>
-<link rel="stylesheet" href="/app/web/css/app.css">
-<div class="app-shell" id="shell"><main class="workspace"></main></div>
-<pre id="result"></pre>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Directory browser interaction and keyboard acceptance</title>
+<link rel="stylesheet" href="/app/web/css/app.css"><link rel="stylesheet" href="/app/web/css/layers.css">
+<div class="app-shell"><main class="workspace"><button id="opener">Open</button></main></div><output id="result" hidden></output>
 <script type="module">
-import { trackMobileViewport } from "/app/web/js/features/shell/mobile-viewport.js";
 import { createDirectoryPicker } from "/app/web/js/features/sessions/directory-picker.js";
-// Reuse the shipped markup and component, rather than a simplified dialog.
-const markup = await (await fetch("/app/web/index.html")).text();
-const source = new DOMParser().parseFromString(markup, "text/html");
-const dialog = source.querySelector("#directory-dialog").cloneNode(true);
-document.body.append(dialog);
-const viewport = Object.assign(new EventTarget(), {height:innerHeight,offsetTop:0,scale:1});
-const win = Object.assign(new EventTarget(), {innerHeight,visualViewport:viewport});
-trackMobileViewport(document.querySelector("#shell"),
-  Object.assign(new EventTarget(), {matches:true}), win);
-const picker = createDirectoryPicker({ dialog, read:async () => ({path:"/work",parent:"/",
-  separator:"/",directories:["alpha","two words","中文"],truncated:false,
-  shortcuts:[{kind:"cwd",path:"/work"},{kind:"home",path:"/user"}]}) });
-await picker.open("/work", () => {});
-const frame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-const geometry = () => ({top:dialog.getBoundingClientRect().top,
-  bottom:dialog.getBoundingClientRect().bottom,
-  footerBottom:dialog.querySelector("footer").getBoundingClientRect().bottom,
-  width:document.documentElement.scrollWidth,
-  controls:[...dialog.querySelectorAll("footer button")].map(node => node.getBoundingClientRect().height)});
-await frame();
-viewport.height=250; viewport.dispatchEvent(new Event("resize")); await frame();
-const visible=geometry();
-viewport.offsetTop=20; viewport.dispatchEvent(new Event("scroll")); await frame();
-const panned=geometry();
-viewport.offsetTop=0; viewport.height=innerHeight; viewport.dispatchEvent(new Event("resize")); await frame();
-const restored=geometry();
-document.querySelector("#result").textContent=JSON.stringify({visible,panned,restored,
-  passed:visible.top>=0 && visible.bottom<=250 && visible.footerBottom<=250 &&
-    panned.top>=20 && panned.footerBottom<=270 && restored.footerBottom<=innerHeight &&
-    visible.width<=innerWidth && visible.controls.every(height => height>=40)},null,2);
-dialog.close();
-</script>
+import { createProjectDialog } from "/app/web/js/features/sessions/project-dialog.js";
+import { loadLocale, t } from "/app/web/js/i18n.js";
+const checks={}, errors=[], results=[], calls=[], locale=new URL(location.href).searchParams.get('locale')||'zh-CN';
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const wait=async(fn)=>{for(let i=0;i<100;i++){if(fn())return;await pause(15);}throw Error('Timed out: '+globalThis.__qaStage);};
+const assert=(ok,name)=>{checks[name]=Boolean(ok);if(!ok)throw Error(name);};
+const click=node=>{if(!node)throw Error('Missing control: '+globalThis.__qaStage);node.click();};
+const frame=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+const dir=()=>document.querySelector('.directory-window[open]');
+const byLabel=key=>[...dir().querySelectorAll('button')].find(node=>!node.closest('[hidden]')&&node.getAttribute('aria-label')===t('directory.'+key));
+const choose=()=>dir().querySelector('.directory-footer-actions .primary-button');
+const current=path=>dir()?.querySelector('.directory-breadcrumbs button:last-child')?.title===path;
+const row=name=>[...dir().querySelectorAll('[data-directory-name]')].find(node=>node.dataset.directoryName===name);
+const longName='Long directory name 中文 Русский '.repeat(8);
+const tree={'/':[], '/home':[], '/work':['alpha','two words',longName,...Array.from({length:180},(_,i)=>'node'+i)],'/work/alpha':['nested'],'/work/two words':[]};
+let denied=true,slowResolve,liveResolve;
+const read=async(path,signal,query={})=>{
+ path=path.replace(/\/+$/,'')||'/';
+ calls.push({path,...query});
+ if(path==='/slow')return new Promise(resolve=>{slowResolve=resolve;});
+ if(path==='/slow-live')return new Promise(resolve=>{liveResolve=resolve;});
+ await pause(5);
+ if(signal.aborted)throw new DOMException('Cancelled','AbortError');
+ if(path==='/denied'&&denied)throw Object.assign(new Error('denied'),{code:'directory_unavailable'});
+ const all=(tree[path]||[]).filter(name=>(!query.filter||name.toLowerCase().includes(query.filter.toLowerCase()))&&(!query.prefix||name.toLowerCase().startsWith(query.prefix.toLowerCase())));
+ const offset=query.after?all.indexOf(query.after)+1:0,limit=query.limit||128, directories=all.slice(offset,offset+limit),more=offset+limit<all.length;
+ return {path,parent:path==='/'?'':'/',separator:'/',directories,total:all.length,has_more:more,next_cursor:more?directories.at(-1):'',truncated:false};
+};
+const picker=createDirectoryPicker({read,locations:async()=>({platform:'posix',locations:[{kind:'home',path:'/home'},{kind:'cwd',path:'/work'},{kind:'root',path:'/'}]}),
+ create:async(path,name)=>{tree[path].push(name);tree[path+'/'+name]=[];return {path:path+'/'+name,name};},scope:()=>`fixture-${locale}-${innerWidth}`});
+const open=async(path='/work')=>{await picker.open(path,value=>results.push(value));await wait(()=>current(path)&&!choose().disabled);};
+const navigate=async(path)=>{
+ click(dir().querySelector('.directory-breadcrumbs'));
+ const input=dir().querySelector('.directory-path-form input');input.value=path;input.dispatchEvent(new Event('input',{bubbles:true}));
+ dir().querySelector('.directory-path-form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+ await wait(()=>!dir()?.querySelector('.directory-toolbar .is-loading'));
+};
+let viewportDescriptor;
+try {
+ await loadLocale(locale);document.documentElement.dataset.theme=innerWidth<600?'dark':'light';document.querySelector('#opener').focus();
+ globalThis.__qaStage='open and page';await open();
+ assert(document.querySelectorAll('dialog[open]').length===1,'oneWindow');
+ assert(dir().querySelectorAll('[role=option]').length===128,'firstPage');
+ click(byLabel('more'));await wait(()=>dir().querySelectorAll('[data-directory-name]').length===183);
+ assert(calls.at(-1).after&&row(longName),'pageContinuation');
+ globalThis.__qaStage='enter and history';click(row('alpha'));
+ if(innerWidth>600){assert(!choose().disabled&&current('/work'),'desktopSelectsBeforeEntering');row('alpha').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));}
+ await wait(()=>current('/work/alpha'));
+ click(byLabel('back'));await wait(()=>current('/work'));
+ click(byLabel('forward'));await wait(()=>current('/work/alpha'));
+ click(byLabel('parent'));await wait(()=>current('/'));
+ assert(true,'historyAndParent');
+ globalThis.__qaStage='editable path and failure';await navigate('/work');
+ const oldRows=dir().querySelectorAll('[data-directory-name]').length;await navigate('/denied');
+ assert(choose().disabled&&dir().querySelectorAll('[data-directory-name]').length===oldRows,'failedNavigationRetainsRows');
+ assert(dir().querySelector('.directory-path-form input').value==='/denied','failedPathRetained');
+ denied=false;click(byLabel('retry'));await wait(()=>current('/denied')&&!choose().disabled);assert(true,'retryUsesRequestedPath');
+ globalThis.__qaStage='unsubmitted address survives a pending read';
+ click(dir().querySelector('.directory-breadcrumbs'));let pendingInput=dir().querySelector('.directory-path-form input');
+ pendingInput.value='/slow-live';pendingInput.dispatchEvent(new Event('input',{bubbles:true}));
+ dir().querySelector('.directory-path-form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+ await wait(()=>Boolean(liveResolve));pendingInput.value='/unfinished';pendingInput.dispatchEvent(new Event('input',{bubbles:true}));
+ liveResolve({path:'/slow-live',parent:'/',separator:'/',directories:[],total:0});await wait(()=>current('/slow-live'));await pause(20);
+ assert(pendingInput.value==='/unfinished'&&choose().disabled&&byLabel('newFolder').disabled,'lateReadPreservesUnsubmittedAddress');
+ globalThis.__qaStage='completion';await navigate('/work');
+ click(dir().querySelector('.directory-breadcrumbs'));
+ let input=dir().querySelector('.directory-path-form input');input.value='/work/t';input.dispatchEvent(new Event('input',{bubbles:true}));
+ await wait(()=>!dir().querySelector('.directory-suggestions').hidden);
+ click([...dir().querySelectorAll('.directory-suggestions button')].find(node=>node.textContent==='two words'));
+ await wait(()=>current('/work/two words'));assert(true,'completionNavigates');
+ globalThis.__qaStage='filter and create';await navigate('/work');
+ let filter=dir().querySelector('input[type=search]');filter.value='node179';filter.dispatchEvent(new Event('input',{bubbles:true}));
+ await wait(()=>dir().querySelectorAll('[data-directory-name]').length===1&&row('node179'));assert(true,'serverFilter');
+ filter.value='';filter.dispatchEvent(new Event('input',{bubbles:true}));await wait(()=>Boolean(row('alpha')));
+ click(byLabel('favorite'));
+ click(byLabel('newFolder'));const createForm=dir().querySelector('.directory-create');createForm.querySelector('input').value='new folder';
+ createForm.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+ await wait(()=>row('new folder')?.getAttribute('aria-selected')==='true'&&!choose().disabled);
+ click(choose());await wait(()=>!dir());assert(results.at(-1)==='/work/new folder','newFolderSelected');
+ const store=JSON.parse(localStorage.getItem(`mdo.directory-places.v1:fixture-${locale}-${innerWidth}`));
+ assert(store.recent.length===1&&store.recent[0]==='/work/new folder'&&store.favorites.includes('/work'),'confirmedOnlyPlaces');
+ globalThis.__qaStage='late request';const slow=picker.open('/slow',value=>results.push(value));await wait(()=>Boolean(slowResolve));picker.close();
+ await open();slowResolve({path:'/slow',parent:'/',separator:'/',directories:[],total:0});await slow;
+ assert(current('/work'),'lateReplyCannotReplaceNewWindow');picker.close();
+ globalThis.__qaStage='project step';
+ const markup=await(await fetch('/app/web/index.html')).text();const source=new DOMParser().parseFromString(markup,'text/html');
+ const project=source.querySelector('#project-dialog').cloneNode(true);document.body.append(project);
+ const form=project.querySelector('form'),browse=project.querySelector('#project-browse');
+ const view=createProjectDialog({dialog:project,form,error:project.querySelector('#project-error'),submit:project.querySelector('[type=submit]'),
+  modelsStore:{get:()=>({data:{models:[{id:'fixture',name:'Fixture'}]}}),subscribe(){}},directoryPicker:picker,browse,onCreated(){}});
+ await view.open();form.elements.name.value='Retain this name';form.elements.name.dispatchEvent(new Event('input'));
+ form.elements.id.value='retain-id';form.elements.id.dispatchEvent(new Event('input'));form.elements.default_model_id.value='fixture';form.elements.workspace_root.value='/work';
+ click(browse);await wait(()=>Boolean(dir())&&current('/work'));assert(!project.open&&document.querySelectorAll('dialog[open]').length===1,'projectUsesSingleWindowStep');
+ click(byLabel('cancel'));await wait(()=>project.open&&!dir());
+ assert(form.elements.name.value==='Retain this name'&&form.elements.id.value==='retain-id'&&form.elements.default_model_id.value==='fixture','projectFormRetainedOnBack');
+ click(browse);await wait(()=>Boolean(dir())&&current('/work'));click(choose());await wait(()=>project.open&&!dir());
+ assert(form.elements.workspace_root.value==='/work'&&form.elements.name.value==='Retain this name','projectSelectionRestoresForm');project.close();await pause(20);
+ globalThis.__qaStage='viewport';
+ const viewport=Object.assign(new EventTarget(),{width:innerWidth,height:innerHeight,offsetTop:0,offsetLeft:0,scale:1});
+ viewportDescriptor=Object.getOwnPropertyDescriptor(window,'visualViewport');Object.defineProperty(window,'visualViewport',{configurable:true,get:()=>viewport});
+ await open();dir().dispatchEvent(new KeyboardEvent('keydown',{ctrlKey:true,key:'l',bubbles:true,cancelable:true}));
+ assert(document.activeElement===dir().querySelector('.directory-path-form input'),'ctrlLEditsPath');
+ viewport.height=250;viewport.dispatchEvent(new Event('resize'));await frame();
+ await wait(()=>dir()&&dir().getBoundingClientRect().bottom<=251);
+ let rect=dir().getBoundingClientRect(),footer=dir().querySelector('footer').getBoundingClientRect();
+ globalThis.__qaGeometry={top:rect.top,bottom:rect.bottom,footerBottom:footer.bottom,viewport:viewport.height,
+  activeViewport:window.visualViewport.height,ownViewport:window.visualViewport===viewport,
+  heightStyle:dir().style.getPropertyValue('--layer-viewport-height'),classes:dir().className};
+ assert(rect.top>=-1&&rect.bottom<=251&&footer.bottom<=251,'keyboardKeepsFooterVisible');
+ viewport.offsetTop=20;viewport.dispatchEvent(new Event('scroll'));await frame();
+ await wait(()=>dir().getBoundingClientRect().top>=19&&dir().querySelector('footer').getBoundingClientRect().bottom<=271);
+ assert(dir().getBoundingClientRect().top>=19&&dir().querySelector('footer').getBoundingClientRect().bottom<=271,'viewportPanning');
+ viewport.height=innerHeight;viewport.offsetTop=0;viewport.dispatchEvent(new Event('resize'));await frame();
+ dir().querySelector('.directory-path-form input').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await frame();
+ assert(document.documentElement.scrollWidth<=innerWidth&&dir().scrollWidth<=dir().clientWidth,'noHorizontalOverflow');
+ assert(dir().querySelector('.mdo-layer-title').textContent===t('directory.title'),'localizedWindow');
+ assert(true,'passed');
+} catch(error){errors.push(String(error.stack||error));checks.exception=false;}
+document.querySelector('#result').textContent=JSON.stringify({passed:!errors.length&&Object.values(checks).every(Boolean),checks,errors,stage:globalThis.__qaStage,geometry:globalThis.__qaGeometry});
+</script></html>

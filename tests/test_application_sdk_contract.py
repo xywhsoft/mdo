@@ -11,6 +11,16 @@ import application_sdk
 import application_contracts
 
 class ApplicationSdkContractTests(unittest.TestCase):
+    def test_workspace_directory_services_cover_paging_locations_and_creation(self):
+        rows={row['id']:row for row in application_sdk.services(ROOT)}
+        listing,_=application_contracts.contract(rows['workspace.directories.list'])
+        self.assertEqual(set(listing['properties']['query']['properties']),{'path','filter','prefix','after','limit'})
+        creation,_=application_contracts.contract(rows['workspace.directories.create'])
+        self.assertEqual(creation['$defs']['DirectoryCreateInput']['required'],['path','name'])
+        self.assertEqual(creation['properties']['query']['properties'],{})
+        _,locations=application_contracts.contract(rows['workspace.locations'])
+        self.assertIn('DirectoryLocations',locations['$defs'])
+
     def test_markdown_editor_contract_and_native_memory_capabilities(self):
         rows={row['id']:row for row in application_sdk.services(ROOT)}
         routes=[row for row in rows.values()

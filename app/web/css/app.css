@@ -1250,23 +1250,80 @@ select:focus-visible,
   .project-options-fields { grid-template-columns: minmax(0, 1fr); }
   .project-folder-zone { padding: 16px; }
 }
-.directory-dialog { max-height: calc(100dvh - 32px); overflow: hidden; }
-.directory-dialog .dialog-card { display: flex; flex-direction: column; min-height: 0; max-height: calc(100dvh - 32px); }
-.directory-dialog .dialog-card > :is(header, footer) { flex: 0 0 auto; }
-.directory-body { display: flex; flex-direction: column; gap: 12px; min-height: 0; padding: 16px 20px; }
-.directory-path-form { display: grid; gap: 6px; flex: 0 0 auto; }
-.directory-path-form label { color: var(--muted); font-size: 11px; }
-.directory-path-form input { width: 100%; padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg); color: var(--ink); }
-.directory-navigation, #directory-shortcuts { display: flex; gap: 6px; flex-wrap: wrap; }
-.directory-navigation { flex: 0 0 auto; }
-#directory-status { margin: 0; font-size: 12px; color: var(--muted); }
-#directory-status:empty { display: none; }
-#directory-status.dialog-error-text { color: var(--danger); }
-.directory-list { min-height: 0; max-height: 300px; overflow-y: auto; overscroll-behavior: contain; }
-.directory-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 8px 10px; text-align: start; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--ink); }
-.directory-item:hover, .directory-item:focus-visible { background: var(--surface-hover); }
-.directory-item span:last-child { min-width: 0; overflow-wrap: anywhere; }
-.directory-dialog :is(.secondary-button, .primary-button, .icon-button) { min-height: 40px; }
+.mdo-layer.directory-window .mdo-layer-body, .mdo-layer.directory-window.is-mobile .mdo-layer-body { display: flex; padding: 0; overflow: hidden; }
+.directory-browser { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; font-size: 13px; }
+.directory-device { flex: none; margin: 0; padding: 12px 18px 4px; color: var(--muted); font-size: 12px; }
+.directory-toolbar { display: flex; flex: none; align-items: center; gap: 5px; padding: 8px 14px; }
+.directory-toolbar > .icon-button { flex: none; width: 36px; height: 40px; }
+.directory-toolbar .is-loading .icon { animation: directory-spin 1s linear infinite; }
+@keyframes directory-spin { to { transform: rotate(360deg); } }
+.directory-address { position: relative; flex: 1; min-width: 0; }
+.directory-breadcrumbs { display: flex; align-items: center; gap: 2px; min-height: 40px; padding: 0 6px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); cursor: text; scrollbar-width: thin; }
+.directory-breadcrumbs button { flex: none; min-height: 36px; padding: 0 7px; border: 0; border-radius: 4px; background: none; color: var(--ink); font: inherit; cursor: pointer; }
+.directory-breadcrumbs button:hover { background: var(--surface-hover); }
+.directory-breadcrumbs .icon { flex: none; width: 12px; height: 12px; color: var(--muted); }
+.directory-path-form { display: flex; gap: 6px; min-width: 0; }
+.directory-window input { box-sizing: border-box; min-width: 0; min-height: 40px; padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg); color: var(--ink); font: inherit; }
+.directory-path-form input { flex: 1; width: 0; }
+.directory-suggestions { position: absolute; z-index: 4; top: calc(100% + 4px); inset-inline: 0; max-height: 14rem; overflow: auto; padding: 4px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-raised); box-shadow: var(--shadow-dialog); }
+.directory-suggestions button { display: block; width: 100%; min-height: 36px; padding: 7px 10px; border: 0; text-align: start; color: var(--ink); background: none; font: inherit; overflow-wrap: anywhere; }
+.directory-suggestions button:hover, .directory-suggestions [aria-selected=true] { background: var(--surface-active); }
+.directory-tools { display: flex; flex: none; gap: 8px; padding: 0 14px 8px; }
+.directory-tools input { flex: 1; width: 0; }
+.directory-tools button, .directory-create button { display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 6px; min-height: 40px; }
+.directory-tools [aria-pressed=true] { color: var(--accent); background: var(--surface-active); }
+.directory-tools .directory-locations-toggle { display: none; }
+.directory-create { display: flex; flex: none; gap: 8px; padding: 0 14px 8px; }
+.directory-create input { flex: 1; width: 0; }
+.directory-progress { display: flex; flex: none; align-items: center; gap: 10px; min-height: 28px; padding: 0 18px 6px; }
+.directory-status { flex: 1; min-width: 0; max-height: 4.5rem; margin: 0; overflow: auto; color: var(--muted); font-size: 12px; }
+.directory-progress.has-error .directory-status { color: var(--danger); }
+.directory-main { display: flex; position: relative; flex: 1; min-height: 0; border-top: 1px solid var(--border); }
+.directory-places { box-sizing: border-box; width: 14rem; flex: none; padding: 10px 8px; overflow-y: auto; overscroll-behavior: contain; border-inline-end: 1px solid var(--border); background: var(--surface); }
+.directory-places h3 { margin: 12px 10px 5px; color: var(--muted); font: inherit; font-size: 11px; }
+.directory-places h3:first-child { margin-top: 2px; }
+.directory-place { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 38px; padding: 7px 10px; border: 0; border-radius: 5px; background: none; color: var(--ink); text-align: start; font: inherit; cursor: pointer; }
+.directory-place .icon { flex: none; width: 16px; height: 16px; color: var(--muted); }
+.directory-place span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.directory-place:hover { background: var(--surface-hover); }
+.directory-location-error { margin: 8px; color: var(--muted); font-size: 12px; }
+.directory-results { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; padding: 6px; }
+.directory-list { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.directory-item { display: flex; align-items: center; gap: 5px; min-width: 0; border-radius: 5px; }
+.directory-item:hover { background: var(--surface-hover); }
+.directory-item-name { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; min-height: 40px; padding: 8px 10px; border: 0; border-radius: 5px; background: none; color: var(--ink); text-align: start; font: inherit; cursor: pointer; }
+.directory-item-name > .icon { flex: none; color: var(--muted); }
+.directory-item-name > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.directory-item-name[aria-selected=true] { background: var(--surface-active); }
+.directory-enter { flex: none; width: 36px; height: 40px; }
+.directory-more { flex: none; align-self: center; min-height: 36px; margin: 5px; }
+.directory-window .directory-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.directory-selected-path { margin: 0; min-width: 0; max-height: 3.6em; overflow: auto; overflow-wrap: anywhere; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.directory-footer-actions { display: flex; justify-content: flex-end; gap: 8px; min-width: 0; }
+.directory-footer-actions button { min-height: 40px; max-width: 18rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 600px) {
+  .directory-device { padding: 8px 12px 0; }
+  .directory-toolbar { padding: 6px 8px; gap: 2px; }
+  .directory-toolbar > .icon-button { width: 32px; }
+  .directory-edit-path { display: none; }
+  .directory-browser[data-editing-path] .directory-toolbar > .icon-button { display: none; }
+  .directory-tools { padding: 0 10px 6px; gap: 6px; }
+  .directory-tools .directory-locations-toggle { display: inline-flex; }
+  .directory-tools > button { width: 40px; padding: 0; }
+  .directory-tools > button > span:not(.icon) { display: none; }
+  .directory-places { display: none; width: min(18rem,100%); }
+  .show-locations .directory-places { display: block; position: absolute; z-index: 3; inset: 0 auto 0 0; box-shadow: 8px 0 24px rgb(0 0 0 / 20%); }
+  .directory-progress { padding: 0 12px 4px; }
+  .directory-window .directory-footer { grid-template-columns: minmax(0,1fr); gap: 8px; }
+  .directory-footer-actions button { max-width: calc(100% - 5rem); }
+}
+@media (max-height: 360px) {
+  .directory-device, .directory-progress { display: none; }
+  .directory-tools, .directory-create { padding-bottom: 4px; }
+  .directory-window .directory-footer { gap: 4px; padding-top: 6px; padding-bottom: 6px; }
+  .directory-selected-path { max-height: 1.6em; }
+}
+@media (prefers-reduced-motion: reduce) { .directory-toolbar .is-loading .icon { animation: none; } }
 .backup-export-dialog { max-height: calc(100dvh - 24px); overflow: hidden; }
 .backup-export-dialog .dialog-card { display: flex; max-height: calc(100dvh - 24px); flex-direction: column; }
 .backup-export-dialog .dialog-card > header, .backup-export-dialog .dialog-card > footer { flex: 0 0 auto; }
@@ -1940,7 +1997,7 @@ select:focus-visible,
     min-height: 80px;
   }
   :root[data-visual-viewport-reduced]
-    :is(#session-action-dialog, #message-edit-dialog, #project-dialog, #directory-dialog, #shortcuts-dialog, #image-preview, #session-search-dialog) {
+    :is(#session-action-dialog, #message-edit-dialog, #project-dialog, #shortcuts-dialog, #image-preview, #session-search-dialog) {
     position: fixed;
     top: calc(var(--app-visual-top) + 8px);
     bottom: auto;
@@ -1949,7 +2006,7 @@ select:focus-visible,
   }
   :root[data-visual-viewport-reduced] .session-search-card { max-height: calc(var(--app-visual-height) - 18px); }
   :root[data-visual-viewport-reduced]
-    :is(#session-action-dialog, #message-edit-dialog, #project-dialog, #directory-dialog, #shortcuts-dialog)
+    :is(#session-action-dialog, #message-edit-dialog, #project-dialog, #shortcuts-dialog)
     .dialog-card { max-height: calc(var(--app-visual-height) - 16px); }
   :root[data-visual-viewport-reduced] #image-preview img {
     max-height: max(1px, calc(var(--app-visual-height) - 106px));
@@ -2045,12 +2102,6 @@ select:focus-visible,
 }
 
 @media (max-width: 720px) {
-  .directory-body { padding: 10px 16px; gap: 8px; }
-  .directory-dialog .dialog-card > :is(header, footer) { padding: 10px 16px; }
-  .directory-dialog .dialog-card > header p { line-height: 1.5; }
-  :root[data-visual-viewport-reduced] .directory-dialog .dialog-card > header p { display: none; }
-  :root[data-visual-viewport-reduced] .directory-dialog .dialog-card > :is(header, footer) { padding: 4px 12px; }
-  :root[data-visual-viewport-reduced] .directory-body { padding: 4px 12px; gap: 4px; }
   :root[data-visual-viewport-reduced] .directory-path-form label { display: none; }
 }
 

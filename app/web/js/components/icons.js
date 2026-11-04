@@ -1,6 +1,7 @@
 const ICONS = Object.freeze({
   plus: '<path d="M12 4v16M4 12h16"/>',
   "chevron-down": '<path d="m7 10 5 5 5-5"/>',
+  "chevron-right": '<path d="m9 6 6 6-6 6"/>',
   shield: '<path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/>',
   "shield-check": '<path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/>',
   "shield-alert": '<path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="M12 8v5m0 3h.01"/>',

@@ -29,6 +29,7 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
   let returnFocusKey = "";
   let dropController = null;
   let selecting = false;
+  let browsing = false;
   const title = dialog.querySelector("#project-dialog-title");
   const description = dialog.querySelector("#project-dialog-description");
 
@@ -41,10 +42,22 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
   workspace.addEventListener("input", suggestIdentity);
   browse?.addEventListener("click", () => {
     const owner = generation;
+    browsing = true;
+    // Keep the filled form, but only one modal is visible during this step.
+    dialog.close();
+    const restore = () => {
+      if (owner !== generation || !browsing) return false;
+      browsing = false;
+      if (!dialog.open) dialog.showModal();
+      return true;
+    };
     void directoryPicker.open(workspace.value, (path) => {
-      if (owner !== generation || !dialog.open) return;
+      if (!restore()) return;
       workspace.value = path; suggestIdentity(); name.focus();
-    });
+    }, { onClosed(result) {
+      if (["cancel", "button", "escape", "native"].includes(result.reason) && restore()) browse.focus();
+      else if (owner === generation && browsing) browsing = false;
+    } });
   });
   name.addEventListener("input", () => {
     nameEdited = true;
@@ -180,11 +193,13 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
     }
   });
   dialog.addEventListener("close", () => {
-    if (dialog.open) return;
+    if (dialog.open || browsing) return;
     ++generation; loading = false; error.hidden = true;
     dropController?.abort(); selecting = false;
     folderUI.zone?.classList.remove("is-dragging");
-    directoryPicker?.close(); renderState();
+    // The picker is its own step. A queued native close from this form must
+    // not dispose a newer picker opened by another caller.
+    renderState();
     // Saving can refresh the catalog and replace the original sidebar button.
     // Restore its current counterpart rather than a detached DOM node.
     const origin = returnFocus?.isConnected ? returnFocus : returnFocusKey
@@ -197,6 +212,7 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
   return Object.freeze({
     async open(project = null, origin = document.activeElement) {
       const version = ++generation;
+      browsing = false;
       returnFocus = origin;
       returnFocusKey = returnFocus?.dataset?.sidebarFocus || "";
       directoryPicker?.close();

@@ -1,109 +1,71 @@
-import { setUiText as writeUiText, uiMessage, subscribeLocale } from "../../i18n.js";
-
 import { api } from "../../api/client.js";
-import { element, errorMessage, isImeKey } from "../../utils/dom.js";
+import { targetState, subscribeTarget } from "../../api/target.js";
+import { uiMessage } from "../../i18n.js";
+import { openLayer } from "../../components/layers.js";
+import { createDirectoryBrowser } from "./directory-browser.js";
+import { directoryPlaces } from "./directory-navigation.js";
+export { directoryChild } from "./directory-navigation.js";
 
-export function directoryChild(data, name) {
-  return `${data.path}${data.path.endsWith(data.separator) ? "" : data.separator}${name}`;
+export function directoryDeviceScope() {
+  const selected = targetState().selected;
+  return selected ? `remote:${selected.owner}:${selected.id}` : "local";
 }
 
-export function createDirectoryPicker({ dialog,
-  read = (path, signal) => api.get(`/workspace/directories?path=${encodeURIComponent(path)}`,
-    { signal }).then((result) => result.data) }) {
-  const find = (id) => dialog.querySelector(`#directory-${id}`);
-  const form = find("form"), path = find("path"), list = find("list");
-  const status = find("status"), parent = find("parent"), choose = find("choose");
-  const shortcuts = find("shortcuts");
-  let generation = 0, controller = null, current = null, select = null;
-  let locations = [{ kind: "cwd", path: "" }];
-  let loading = false, failure = "";
-
-  function renderStatus() {
-    writeUiText(status, failure || (loading ? uiMessage("directory.loading", {}, "正在读取目录…") :
-      current?.truncated ? uiMessage("directory.truncated", {}, "部分目录未列出，可输入完整路径进入。") :
-        current && !current.directories.length ? uiMessage("directory.empty", {}, "此目录没有子目录。") : ""));
-    status.classList.toggle("dialog-error-text", Boolean(failure));
-    list.setAttribute("aria-busy", String(loading));
-    choose.disabled = loading || !current || path.value !== current.path;
-    parent.disabled = loading || !current?.parent;
-  }
-
-  function renderList() {
-    shortcuts.replaceChildren(...locations.map((item) => {
-      const button = element("button", { className: "secondary-button", attrs: { type: "button",
-        title: item.path }, text: item.kind === "home" ? uiMessage("directory.home", {}, "用户目录") :
-        uiMessage("directory.cwd", {}, "启动目录") });
-      button.addEventListener("click", () => { void load(item.path, true); });
-      return button;
-    }));
-    list.replaceChildren(...(current?.directories ?? []).slice().sort((a, b) =>
-      a.localeCompare(b, undefined, { numeric: true })).map((name) => {
-      const button = element("button", { className: "directory-item", attrs: { type: "button" } }, [
-        element("span", { text: "▸", attrs: { "aria-hidden": "true" } }),
-        element("span", { text: name }),
-      ]);
-      button.addEventListener("click", () => { void load(directoryChild(current, name), true); });
-      return button;
-    }));
-    list.scrollTop = 0;
-  }
-
-  async function load(next, focusList = false) {
-    const version = ++generation;
-    controller?.abort();
-    controller = new AbortController();
-    path.value = next;
-    current = null; loading = true; failure = "";
-    renderList(); renderStatus();
+export function createDirectoryPicker({
+  read = (path, signal, query = {}) => api.get(`/workspace/directories?${Object.entries({ path, ...query })
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join("&")}`, { signal }).then(result => result.data),
+  locations = signal => api.get("/workspace/locations", { signal }).then(result => result.data),
+  create = (path, name, signal) => api.post("/workspace/directories", { path, name }, { signal }).then(result => result.data),
+  scope = directoryDeviceScope, windowFactory = openLayer,
+} = {}) {
+  let active = null;
+  const current = own => active === own && !own.layer.signal.aborted && own.scope === scope();
+  async function loadLocations(own) {
+    const controller = new AbortController(), abort = () => controller.abort();
+    own.layer.signal.addEventListener("abort", abort, { once: true });
+    const timer = setTimeout(abort, 8000);
     try {
-      const data = await read(next, controller.signal);
-      if (version !== generation || !dialog.open) return;
-      current = data; locations = data.shortcuts; path.value = data.path; loading = false;
-      renderList(); renderStatus();
-      if (focusList) (list.querySelector("button") ?? choose).focus();
-    } catch (cause) {
-      if (version !== generation || !dialog.open) return;
-      loading = false; failure = errorMessage(cause); renderStatus();
-      path.focus();
-    }
+      const value = await locations(controller.signal);
+      if (current(own)) own.browser.setLocations(value);
+      return value;
+    } catch {
+      if (current(own)) own.browser.setLocations(null, true);
+      return null;
+    } finally { clearTimeout(timer); own.layer.signal.removeEventListener("abort", abort); }
   }
-
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    void load(path.value, true);
-  });
-  path.addEventListener("input", renderStatus);
-  path.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && isImeKey(event)) event.preventDefault();
-  });
-  parent.addEventListener("click", () => { if (current?.parent) void load(current.parent, true); });
-  choose.addEventListener("click", () => {
-    if (loading || !current || path.value !== current.path) return;
-    const selected = current.path, callback = select;
-    dialog.close();
-    callback?.(selected);
-  });
-  for (const id of ["close", "cancel"]) find(id).addEventListener("click", () => dialog.close());
-  dialog.addEventListener("close", () => {
-    // Native close events can be queued behind a fresh open().
-    if (dialog.open) return;
-    ++generation; controller?.abort(); current = null; select = null;
-  });
-  const unsubscribe = subscribeLocale(() => {
-    if (dialog.open) { renderList(); renderStatus(); }
-  });
-
-  return Object.freeze({
-    open(initialPath, onSelect) {
-      select = onSelect; path.value = initialPath ?? "";
-      if (!dialog.open) dialog.showModal();
-      path.focus();
-      return load(path.value);
+  const unsubscribe = subscribeTarget(() => { if (active && active.scope !== scope()) active.layer.dispose(); });
+  return {
+    open(initialPath, onSelect, options = {}) {
+      active?.layer.dispose();
+      const selected = targetState().selected;
+      let storage; try { storage = globalThis.localStorage; } catch { /* Optional. */ }
+      const own = { scope: scope(), places: directoryPlaces(storage, scope()), chosen: "", layer: null, browser: null };
+      own.layer = windowFactory({ title: uiMessage("directory.title"), icon: "folder", width: "64rem", height: "42rem",
+        mobile: "fullscreen", beforeClose: () => !own.browser?.busy(),
+        onClosed(result) {
+          if (active === own) active = null;
+          if (result.reason === "select" && own.chosen && own.scope === scope()) {
+            own.places.confirm(own.chosen); onSelect?.(own.chosen);
+          }
+          options.onClosed?.(result);
+        } });
+      active = own; own.layer.element.classList.add("directory-window");
+      own.browser = createDirectoryBrowser({ layer: own.layer, read, create, places: own.places,
+        onReloadLocations: () => { void loadLocations(own); },
+        device: selected?.name || uiMessage("directory.local"), writable: selected?.mode !== "view",
+        storageAccess: !selected && typeof globalThis.XsPlatform?.requestStorageAccess === "function"
+          ? () => globalThis.XsPlatform.requestStorageAccess() : null,
+        onConfirm(path) { if (current(own)) { own.chosen = path; void own.layer.close("select"); } },
+        onCancel() { void own.layer.close("cancel"); } });
+      const metadata = loadLocations(own);
+      own.ready = (async () => {
+        let path = initialPath || own.places.get().recent[0];
+        if (!path) path = (await metadata)?.locations?.find(row => row.kind === "home")?.path || "";
+        if (current(own)) await own.browser.navigate(path);
+      })();
+      return own.ready;
     },
-    close() {
-      ++generation; controller?.abort(); select = null;
-      if (dialog.open) dialog.close();
-    },
+    close() { active?.layer.dispose(); },
     destroy() { this.close(); unsubscribe(); },
-  });
+  };
 }

@@ -321,7 +321,7 @@ export async function boot() {
       newTaskController?.isBusy() || newTaskController?.isPreparing() || newTaskController?.isMigrating();
   }
 
-  const directoryPicker = createDirectoryPicker({ dialog: $("#directory-dialog") });
+  const directoryPicker = createDirectoryPicker();
   const projectDialog = createProjectDialog({
     dialog: $("#project-dialog"), form: $("#project-form"),
     error: $("#project-error"), submit: $("#create-project"), modelsStore,

@@ -69,6 +69,7 @@ def probe(port: int, workspace: Path) -> None:
         assert create(name)[0] == 400, repr(name)
     if os.name == 'nt':
         for name in ('CON','nul.txt','lpt1','bad:name','trailing.','trailing '): assert create(name)[0] == 400, name
+        assert create('汉'*100)[0] == 201
     assert create('one')[0] == 409
     assert create('file.txt')[0] == 409
     assert create('must-not-create', extra=True)[0] == 400

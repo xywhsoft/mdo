@@ -136,7 +136,7 @@ static bool MdoDirectoryCreate(MdoApiContext* Context)
         xrtValueGetString(xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("path")), &Parent) &&
         xrtValueGetString(xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("name")), &Name) &&
         Parent.Size && Name.Size && MdoDirectoryText(Parent, MDO_DIRECTORY_PATH_MAX) &&
-        MdoDirectoryText(Name, 255u) && !memchr(Name.Data, '/', Name.Size) &&
+        MdoDirectoryText(Name, MDO_DIRECTORY_NAME_MAX) && !memchr(Name.Data, '/', Name.Size) &&
         !xrtStrEqual(Name, XRT_STR_LITERAL(".")) && !xrtStrEqual(Name, XRT_STR_LITERAL(".."));
 #if defined(_WIN32)
     if (Valid) {
@@ -148,6 +148,8 @@ static bool MdoDirectoryCreate(MdoApiContext* Context)
             ((!strncmp(Base, "com", 3) || !strncmp(Base, "lpt", 3)) && Base[3] >= '1' && Base[3] <= '9' &&
                 (Name.Size == 4 || Name.Data[4] == '.'))) Valid = false;
     }
+#else
+    Valid = Valid && Name.Size <= 255u;
 #endif
     char *ParentText = Valid ? xrtStrDupView(Parent) : NULL, *NameText = Valid ? xrtStrDupView(Name) : NULL;
     MdoApiJsonBodyUnit(&Body);

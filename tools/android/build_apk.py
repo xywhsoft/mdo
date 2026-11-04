@@ -129,10 +129,13 @@ def build(sdk: Path, java: Path, library: Path, pack: Path, output: Path,
  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+ <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+ <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+ <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
  {'<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />' if package_install else ''}
  <application android:label="{escape(label, {chr(34): '&quot;'})}" android:theme="@android:style/Theme.Material.NoActionBar"
   android:allowBackup="false" android:usesCleartextTraffic="true" android:extractNativeLibs="true"
-  android:debuggable="{'true' if debuggable else 'false'}" android:supportsRtl="true" {icon_attributes}>
+  android:debuggable="{'true' if debuggable else 'false'}" android:supportsRtl="true" android:requestLegacyExternalStorage="true" {icon_attributes}>
   <meta-data android:name="org.xserver.android.HOME" android:value="{home_name}" />
   <meta-data android:name="org.xserver.android.APP_LINKS" android:value="{links_metadata}" />
   <activity android:name="org.xserver.android.XsActivity" android:exported="true" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize">

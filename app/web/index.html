@@ -679,26 +679,6 @@
     </form>
   </dialog>
 
-  <dialog class="app-dialog directory-dialog" id="directory-dialog" aria-labelledby="directory-title">
-    <div class="dialog-card">
-      <header>
-        <div><h2 id="directory-title" data-i18n="directory.title">选择工作区目录</h2>
-          <p data-i18n="directory.description">浏览运行 mdo 的电脑上的目录；手机连接时也是选择该电脑的目录。</p></div>
-        <button class="icon-button" type="button" id="directory-close" aria-label="关闭" data-i18n-aria-label="layers.close" data-i18n-aria-label="project.close"><span class="icon" data-icon="close" aria-hidden="true"></span></button>
-      </header>
-      <div class="directory-body">
-        <form id="directory-form" class="directory-path-form">
-          <label for="directory-path" data-i18n="directory.path">目录路径</label>
-          <div class="project-directory-input"><input id="directory-path" maxlength="2048" autocomplete="off" spellcheck="false"><button class="secondary-button" type="submit" id="directory-go" data-i18n="directory.go">前往</button></div>
-        </form>
-        <div class="directory-navigation"><button class="secondary-button" type="button" id="directory-parent" data-i18n="directory.parent">上一级</button><div id="directory-shortcuts"></div></div>
-        <p id="directory-status" role="status"></p>
-        <div class="directory-list" id="directory-list" aria-label="子目录" data-i18n-aria-label="directory.children"></div>
-      </div>
-      <footer><button class="secondary-button" type="button" id="directory-cancel" data-i18n="project.cancel">取消</button><button class="primary-button" type="button" id="directory-choose" data-i18n="directory.choose">使用此目录</button></footer>
-    </div>
-  </dialog>
-
   <dialog class="project-preview-dialog" id="project-purge-recovery-dialog" aria-labelledby="project-purge-recovery-title">
     <button class="secondary-button" id="project-purge-recovery-close" type="button" data-i18n="project.close">关闭</button>
   <section id="project-purge-recovery" class="resource-card project-purge-recovery" aria-labelledby="project-purge-recovery-title" hidden>
