@@ -773,7 +773,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
     const details = element("details", { className: "conversation-process", attrs: {
       "data-timeline-key": item.key, "data-state": item.state } });
     details.open = openState ?? false;
-    const { count, failed, names, retry } = conversationProcessSummary(item);
+    const { count, names, retry } = conversationProcessSummary(item);
     const label = count ? t("timeline.toolGroup.title", {}, "工具调用") : t("timeline.toolGroup.thinking", {}, "思考与执行");
     const summary = element("summary", {}, [actionIcon("chevron-down"),
       element("span", { text: label }), count ? element("span", {
@@ -782,7 +782,6 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
         names.slice(0, 3).join(" · ") + (names.length > 3 ? t("timeline.toolGroup.more", { count: names.length - 3 }, ` 等 ${names.length - 3} 种`) : ""),
         attrs: { title: names.join(" · ") } }) : null,
       item.state === "running" ? element("span", { className: "conversation-process-status", text: t("timeline.toolGroup.running", {}, "进行中") }) : null,
-      failed ? element("span", { className: "conversation-process-failed", text: t("timeline.toolGroup.failed", { count: failed }, `${failed} 次失败`) }) : null,
       retry ? modelRetryInlineNode(retry) : null]);
     details.append(summary);
     function expand() {

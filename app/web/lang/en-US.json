@@ -70,7 +70,6 @@
   "timeline.toolGroup.count": "{count} calls",
   "timeline.toolGroup.more": " +{count} types",
   "timeline.toolGroup.running": "Running",
-  "timeline.toolGroup.failed": "{count} failed",
   "timeline.processRunning": "Execution progress",
   "timeline.processComplete": "View reasoning and execution",
   "timeline.processTools": "{count} tool calls",

@@ -70,7 +70,6 @@
   "timeline.toolGroup.count": "{count} 次",
   "timeline.toolGroup.more": " 等 {count} 种",
   "timeline.toolGroup.running": "进行中",
-  "timeline.toolGroup.failed": "{count} 次失败",
   "timeline.processRunning": "执行过程",
   "timeline.processComplete": "查看思考与执行过程",
   "timeline.processTools": "{count} 次工具调用",

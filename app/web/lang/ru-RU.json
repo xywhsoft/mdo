@@ -85,7 +85,6 @@
   "timeline.toolGroup.count": "Вызовов: {count}",
   "timeline.toolGroup.more": " +{count} типов",
   "timeline.toolGroup.running": "Выполняется",
-  "timeline.toolGroup.failed": "Ошибок: {count}",
   "timeline.processRunning": "Ход выполнения",
   "timeline.processComplete": "Показать рассуждения и выполнение",
   "timeline.processTools": "Вызовов инструментов: {count}",
