@@ -19,6 +19,8 @@
 typedef struct MdoSession MdoSession;
 typedef struct MdoSessionCatalog MdoSessionCatalog;
 typedef struct MdoSessionEventSnapshot MdoSessionEventSnapshot;
+#define MDO_SESSION_RUNTIME_BUSY_ERROR "session already has an active runtime"
+#define MDO_SESSION_RUNTIME_CLAIMED_ERROR "session changed or acquired another runtime while opening"
 typedef struct MdoSessionEventSource {
     char Namespace[129],Member[65],Agent[129];
 } MdoSessionEventSource;

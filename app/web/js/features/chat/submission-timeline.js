@@ -65,7 +65,7 @@ export function createSubmissionTimeline({ container, host, snapshot, scope,
       // A message enters the conversation when dispatch can begin. Later
       // messages stay in the editable queue until their own turn starts.
       // Once shown, retain it through preparation, errors and lost replies.
-      if (row.error || row.state === "sending" || row.start_claimed || row.run_id ||
+      if (row.edit || row.error || row.state === "sending" || row.start_claimed || row.run_id ||
           row.id === head && !state.active &&
             !current.some(other => other.id !== row.id && other.entered)) row.entered = true;
     }
@@ -82,7 +82,8 @@ export function createSubmissionTimeline({ container, host, snapshot, scope,
       }
       const error = row.error || (row.id === head && state.paused && state.error
         ? errorMessage({ code: state.error }) : "");
-      setUiText(row.status, error || !row.durable
+      const editPhase = row.edit && !row.durable && !row.error ? row.phase : "";
+      setUiText(row.status, editPhase ? uiMessage(`messageEdit.${editPhase}`) : error || !row.durable
         ? error || uiMessage("submission.saving", {}, "正在保存消息…")
         : row.priority || row.interrupt
           ? uiMessage("submission.steering", {}, "正在应用新指令…")
@@ -91,6 +92,11 @@ export function createSubmissionTimeline({ container, host, snapshot, scope,
           : uiMessage("submission.queued", {}, "已排队，等待上一条消息结束…"));
       row.reply.dataset.state = error ? "error" : "preparing";
       row.status.hidden = errorBinding?.id === row.id;
+      if(row.cancelEdit&&!row.cancelButton){
+        row.cancelButton=element("button",{className:"submission-edit-cancel secondary-button",text:uiMessage("messageEdit.cancelPending"),attrs:{type:"button"}});
+        row.cancelButton.onclick=()=>row.cancelEdit();row.reply.append(row.cancelButton);
+      }
+      if(row.cancelButton)row.cancelButton.hidden=!["waiting","preparing"].includes(editPhase);
       nodes.push(row.user, row.reply);
     }
     if (errorBinding) {
@@ -119,7 +125,8 @@ export function createSubmissionTimeline({ container, host, snapshot, scope,
     begin(value) {
       checkScope();
       const pending = [...rows.values()].find(row => !row.durable && row.projectId === value.projectId &&
-        row.sessionId === value.sessionId && row.text === value.text &&
+        row.sessionId === value.sessionId && Boolean(row.edit) === Boolean(value.edit) &&
+        row.editSourceEventId === value.editSourceEventId && row.text === value.text &&
         JSON.stringify(row.attachments) === JSON.stringify(value.attachments));
       if (pending && !pending.error) return false;
       // Retrying a failed provisional bubble retains its identity. Admission
@@ -132,6 +139,7 @@ export function createSubmissionTimeline({ container, host, snapshot, scope,
       return intent.id;
     },
     accepted(id) { const row = rows.get(id); if (row) { row.durable = true; row.error = ""; } render(); },
+    progress(id,phase) { const row=rows.get(id);if(row){row.phase=phase;render();} },
     bindProject(projectId, sessionId) {
       if (!sessionId) return;
       for (const row of rows.values()) if (row.projectId === projectId && !row.sessionId) row.sessionId = sessionId;

@@ -3574,5 +3574,12 @@
   "modelSetup.emptyDescription": "Add a provider and configure its API key, then choose a model to start chatting.",
   "modelSetup.providerEmptyTitle": "This provider has no models yet",
   "modelSetup.providerEmptyDescription": "Add models by fetching the available list or entering model IDs manually.",
-  "modelSetup.noDefaultModel": "No default model selected"
+  "modelSetup.noDefaultModel": "No default model selected",
+  "messageEdit.waiting": "Waiting for the previous run to finish…",
+  "messageEdit.preparing": "Preparing to resend…",
+  "messageEdit.updating": "Updating this message…",
+  "messageEdit.sending": "Saving and submitting the message…",
+  "messageEdit.cancelPending": "Cancel resend",
+  "error.sessionRuntimeBusy": "The session is finishing another operation. Try again shortly; your edit is retained.",
+  "error.sessionHistoryChanged": "The conversation changed during editing. Your input is retained. Review it before editing again, or create a branch."
 }

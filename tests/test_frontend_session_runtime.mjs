@@ -4,6 +4,7 @@ import test from "node:test";
 import { withSessionRuntime } from "../app/web/js/state/session-runtime.js";
 import { selectRecovery, loadRecovery, readRecovery } from "../app/web/js/state/recovery.js";
 import { startRun } from "../app/web/js/state/runs.js";
+import { loadSessionHistory, truncateSession } from "../app/web/js/state/sessions.js";
 import { createRequestRecovery } from "../app/web/js/api/request-recovery.js";
 
 function deferred() {
@@ -11,6 +12,26 @@ function deferred() {
   const promise = new Promise((done) => { resolve = done; });
   return { promise, resolve };
 }
+
+test("editing history and guarded cuts wait behind the same recovery inspection", async () => {
+  const gate=deferred(),entered=deferred(),calls=[],original=globalThis.fetch;
+  globalThis.fetch=async(path,options)=>{
+    calls.push([path,options.method]);
+    if(path.endsWith('/recovery')){entered.resolve();await gate.promise;return Response.json({ok:true,data:inspectionData('edited')});}
+    if(path.endsWith('/history'))return Response.json({ok:true,data:{project_id:'default',session_id:'edited',revision:1,last_sequence:3,history_token:'a'.repeat(64)}},{headers:{ETag:'"mdo-session-edited-1"'}});
+    if(path.endsWith('/truncate'))return Response.json({ok:true,data:{project_id:'default',id:'edited',revision:2}},{headers:{ETag:'"mdo-session-edited-2"'}});
+    if(path.endsWith('/sessions'))return Response.json({ok:true,data:{items:[]}});
+    throw Error(path);
+  };
+  try{
+    const inspecting=readRecovery('default','edited');await entered.promise;
+    const history=loadSessionHistory({project_id:'default',id:'edited'},{signal:new AbortController().signal});
+    const cut=truncateSession({project_id:'default',id:'edited',revision:1},0,1,{editId:'b'.repeat(32),historyToken:'a'.repeat(64)});
+    await new Promise(resolve=>setImmediate(resolve));assert.equal(calls.length,1);
+    gate.resolve();const [,snapshot]=await Promise.all([inspecting,history,cut]);
+    assert.equal(snapshot.history_token,'a'.repeat(64));assert.deepEqual(calls.slice(0,3).map(([path])=>path.split('/').at(-1)),['recovery','history','truncate']);
+  }finally{gate.resolve();globalThis.fetch=original;}
+});
 
 test("a new run waits for navigation's recovery inspection", async () => {
   const inspection = deferred();

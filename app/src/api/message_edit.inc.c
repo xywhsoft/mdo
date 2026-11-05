@@ -3,7 +3,8 @@
  * existing session mutex serializes keyed edits and reply publication. Only
  * completed replies are retained, for longer than the client's retry budget. */
 static bool MdoApiSessionEditOnce(MdoApiContext* Context,
-    uint64 ThroughSequence, uint64 SourceEventId, const char* EditId)
+    uint64 ThroughSequence, uint64 SourceEventId, const char* EditId,
+    const char* HistoryToken)
 {
     char Project[MDO_PROJECT_ID_CAPACITY];
     char SessionId[MDO_SESSION_ID_CAPACITY];
@@ -21,6 +22,8 @@ static bool MdoApiSessionEditOnce(MdoApiContext* Context,
     size_t Index;
     bool MatchesSession = false, ActiveFailure = false, LoadFailure = false;
     bool MutationFailure = false;
+    char CurrentToken[65] = { 0 };
+    uint64 Last = 0;
 
     if ( !MdoApiSessionPath(Context, Project, SessionId) )
         return MdoApiReplyError(Context, 400u, "invalid_session_path",
@@ -58,19 +61,31 @@ static bool MdoApiSessionEditOnce(MdoApiContext* Context,
     }
     if ( Reply != NULL ) {
         if ( Reply->BaseRevision != ExpectedRevision ||
+             strcmp(Reply->HistoryToken, HistoryToken) ||
              Reply->ThroughSequence != ThroughSequence ||
              Reply->SourceEventId != SourceEventId ) {
             Status = 409u; Code = "session_edit_conflict";
             Message = "The same edit ID was used for a different history edit";
             goto done;
         }
-        /* Metadata-only replay never opens an Agent or trims files again.
-         * Later changes and a recreated session invalidate this old reply. */
-        Session = MdoSessionLoad(Project, SessionId, &Error);
-        if ( Session == NULL ) { LoadFailure = true; goto done; }
+        /* Legacy receipts use metadata only. History-fenced receipts verify
+         * the resulting ledger in an idle runtime; neither path trims again. */
+        Session = HistoryToken[0] ? MdoSessionOpen(Project, SessionId, NULL, &Error)
+            : MdoSessionLoad(Project, SessionId, &Error);
+        if ( Session == NULL ) {
+            if ( HistoryToken[0] ) ActiveFailure = true;
+            else LoadFailure = true;
+            goto done;
+        }
         if ( !MdoSessionGetInfo(Session, &Info) ) goto unavailable;
-        if ( Info.CreatedAt != Reply->CreatedAt ||
-             Info.Revision != Reply->Revision || Info.Status != MDO_SESSION_ACTIVE )
+        if ( HistoryToken[0] ) {
+            if ( !MdoApiSessionHistoryToken(Session, &Info, CurrentToken, &Last, &Error) )
+                goto unavailable;
+            if ( Info.CreatedAt != Reply->CreatedAt ||
+                 strcmp(CurrentToken, Reply->ResultHistoryToken) ||
+                 Info.Status != MDO_SESSION_ACTIVE ) goto history_changed;
+        } else if ( Info.CreatedAt != Reply->CreatedAt ||
+                    Info.Revision != Reply->Revision || Info.Status != MDO_SESSION_ACTIVE )
             goto changed;
         goto done;
     }
@@ -87,7 +102,11 @@ static bool MdoApiSessionEditOnce(MdoApiContext* Context,
     Session = MdoSessionOpen(Project, SessionId, NULL, &Error);
     if ( Session == NULL ) { ActiveFailure = true; goto done; }
     if ( !MdoSessionGetInfo(Session, &Info) ) goto unavailable;
-    if ( Info.Revision != ExpectedRevision ) goto changed;
+    if ( HistoryToken[0] ) {
+        if ( !MdoApiSessionHistoryToken(Session, &Info, CurrentToken, &Last, &Error) )
+            goto unavailable;
+        if ( strcmp(CurrentToken, HistoryToken) ) goto history_changed;
+    } else if ( Info.Revision != ExpectedRevision ) goto changed;
     {
         MdoSessionMessageMutationResult Result = MdoSessionTruncateMessage(
             Session, ThroughSequence, SourceEventId, &Error);
@@ -99,6 +118,9 @@ static bool MdoApiSessionEditOnce(MdoApiContext* Context,
         if ( Result != MDO_SESSION_MESSAGE_OK ) { MutationFailure = true; goto done; }
     }
     if ( !MdoSessionGetInfo(Session, &Info) ) goto unavailable;
+    if ( HistoryToken[0] &&
+         !MdoApiSessionHistoryToken(Session, &Info, CurrentToken, &Last, &Error) )
+        goto unavailable;
     memset(Free, 0, sizeof(*Free));
     snprintf(Free->Project, sizeof(Free->Project), "%s", Project);
     snprintf(Free->Session, sizeof(Free->Session), "%s", SessionId);
@@ -109,7 +131,13 @@ static bool MdoApiSessionEditOnce(MdoApiContext* Context,
     Free->CreatedAt = Info.CreatedAt;
     Free->ThroughSequence = ThroughSequence;
     Free->SourceEventId = SourceEventId;
+    snprintf(Free->HistoryToken, sizeof(Free->HistoryToken), "%s", HistoryToken);
+    snprintf(Free->ResultHistoryToken, sizeof(Free->ResultHistoryToken), "%s", CurrentToken);
     Free->ExpiresAt = MdoMonotonicUs() + MDO_API_EDIT_REPLY_TTL_US;
+    goto done;
+history_changed:
+    Status = 409u; Code = "session_history_changed";
+    Message = "Conversation history changed while this edit was prepared; the edited input is retained";
     goto done;
 changed:
     Status = 412u; Code = "revision_conflict";

@@ -3574,5 +3574,12 @@
   "modelSetup.emptyDescription": "添加供应商并配置 API Key，选择模型后即可开始对话。",
   "modelSetup.providerEmptyTitle": "此供应商还没有模型",
   "modelSetup.providerEmptyDescription": "添加模型，可自动获取模型列表，也可以手动填写模型 ID。",
-  "modelSetup.noDefaultModel": "尚未设置默认模型"
+  "modelSetup.noDefaultModel": "尚未设置默认模型",
+  "messageEdit.waiting": "正在等待上一轮结束…",
+  "messageEdit.preparing": "正在准备重新发送…",
+  "messageEdit.updating": "正在更新本条消息…",
+  "messageEdit.sending": "正在保存并提交消息…",
+  "messageEdit.cancelPending": "取消重发",
+  "error.sessionRuntimeBusy": "会话仍在处理上一项操作，请稍候重试；编辑内容已保留。",
+  "error.sessionHistoryChanged": "编辑期间对话出现了新变化，内容已保留。请核对后重新编辑，或创建会话分支。"
 }

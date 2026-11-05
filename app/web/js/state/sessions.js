@@ -7,6 +7,7 @@ import { isTransientReadError } from "../api/read-recovery.js";
 import { createRequestRecovery } from "../api/request-recovery.js";
 import { runSessionFork } from "./session-fork.js";
 import { runSessionProfileUpdate, runSessionPermissionUpdate } from "./session-profile.js";
+import { withSessionRuntime } from "./session-runtime.js";
 
 const readRecovery = { recoverRead: isTransientReadError,
   retainDataOnError: isTransientReadError };
@@ -127,7 +128,7 @@ export async function loadSessionHistory(session, { signal,
   const project = resourceId(session.project_id, "project"), id = resourceId(session.id, "session");
   const path = `${endpoint({ project_id: project, id })}/history`;
   const read = async signal => {
-    const response = await api.get(path, { signal });
+    const response = await withSessionRuntime(project, id, () => api.get(path, { signal }), { signal });
     const data = response.data;
     if (data?.project_id !== project || data?.session_id !== id ||
         !Number.isSafeInteger(data.revision) || data.revision < 1 ||
@@ -174,9 +175,11 @@ export async function truncateSession(session, throughSequence, sourceEventId, o
     if (!/^[0-9a-f]{32}$/.test(options.editId) || !body.source_event_id)
       throw new TypeError(uiErrorText("error.detail.guardedEditIdentityIsInvalid", {}, "Guarded edit identity is invalid"));
     body.client_edit_id = options.editId;
+    if (options.historyToken) body.history_token = options.historyToken;
   }
-  const response = await api.post(`${endpoint(session)}/truncate`, body,
-    { ifMatch: etag(session), signal: options.signal });
+  const response = await withSessionRuntime(session.project_id, session.id,
+    () => api.post(`${endpoint(session)}/truncate`, body,
+      { ifMatch: etag(session), signal: options.signal }), { signal: options.signal });
   // The acknowledged cut is enough to continue. A sidebar refresh must not
   // delay the next run or convert a successful history edit into a timeout.
   void loadSessions({ retry: true });

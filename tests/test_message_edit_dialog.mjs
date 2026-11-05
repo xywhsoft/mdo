@@ -257,3 +257,24 @@ test("closing an editor whose opener was removed returns focus through its owner
   assert.equal(await second, null);
   assert.equal(context.state.focus, "input");
 });
+
+test("cancelling a pending resend keeps the editor's content available without an error", async () => {
+  const context = setup();
+  let calls = 0;
+  const result = context.editor.open("original", ["a".repeat(32)], context.opener, { onCommit: async () => {
+    if (++calls === 1) throw new DOMException("cancelled pending resend", "AbortError");
+  } });
+  context.input.value = "keep this pending edit";
+  context.key();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(context.dialog.open, true);
+  assert.equal(context.input.value, "keep this pending edit");
+  assert.equal(context.input.required, false);
+  assert.equal(context.input.readOnly, false);
+  assert.equal(context.submit.disabled, false);
+  assert.equal(context.error.hidden, true);
+  assert.equal(context.state.focus, "input");
+  context.key();
+  assert.equal(await result, "keep this pending edit");
+  assert.equal(calls, 2);
+});

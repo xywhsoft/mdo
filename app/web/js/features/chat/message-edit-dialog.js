@@ -20,12 +20,14 @@ export function createMessageEditDialog({ dialog, form, input, cancel, submit, e
     leaveRequested = false;
     observer?.disconnect(); observer = null;
     if (host) {
+      host.hidden = false;
       form.classList.remove("message-inline-editor");
       dialog.append(form); delete host.dataset.inlineEditing;
       for (const [node, hidden] of hiddenNodes) node.hidden = hidden;
       host = null; hiddenNodes = [];
     }
     onDraft = beforeLeave = null;
+    form.hidden = false;
     commit = null;
     setCommitting(false);
     const returnFocus = opener;
@@ -75,6 +77,7 @@ export function createMessageEditDialog({ dialog, form, input, cancel, submit, e
       finish(value);
     } catch (failure) {
       if (request !== pending) return;
+      if(failure?.name==="AbortError"){if(error)error.hidden=true;input.focus();return;}
       // A conflict must keep the user's edit available. Never close and then
       // try to reconstruct it from a message another client already replaced.
       if (error) {
@@ -118,9 +121,11 @@ export function createMessageEditDialog({ dialog, form, input, cancel, submit, e
   });
 
   return Object.freeze({
+    showPending(value) { if(pending&&host){host.hidden=Boolean(value);form.hidden=Boolean(value);} },
     open(text, attachments = [], source = null, options = {}) {
       if (pending) return Promise.reject(new Error(t("messageEdit.alreadyOpen", {}, "已有消息正在编辑")));
       hasAttachments = attachments.length > 0;
+      form.hidden = false;
       leaveRequested = false;
       opener = source;
       commit = options.onCommit ?? null;

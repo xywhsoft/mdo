@@ -11,12 +11,18 @@ export async function runMessageReplacement({ session, sequence, sourceEventId, 
   isCurrent, loadHistory, validateBeforeTruncate = () => {}, truncate, startRun,
   preserveInput = () => true, confirmInput = () => true,
   onPreserveFailure = () => {}, onTruncated, onStartFailure,
-  onAccepted = () => {}, onStarted, recoveryOptions, editId = messageEditId() }) {
+  onAccepted = () => {}, onStarted, waitForIdle = async () => {}, onPhase = () => {}, signal, recoveryOptions, editId = messageEditId() }) {
   if (!Number.isSafeInteger(sourceEventId) || sourceEventId < 1)
     throw new Error(t("messageAction.historyChanged", {}, "消息已不在当前会话历史中，请刷新会话"));
   const recovery = createMessageEditRecovery(recoveryOptions);
+  const cancel = () => recovery.dispose();
+  signal?.addEventListener("abort",cancel,{once:true});
+  if(signal?.aborted)cancel();
   let preserving = false, starting = false;
   try {
+    onPhase("waiting");
+    await recovery.request(signal => waitForIdle({ signal }));
+    onPhase("preparing");
     const history = await recovery.request(signal => loadHistory(session, { signal }));
     if (!isCurrent()) throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
     if (sequence > history.last_sequence)
@@ -44,8 +50,11 @@ export async function runMessageReplacement({ session, sequence, sourceEventId, 
 
     let updated;
     try {
+      onPhase("updating");
       updated = await recovery.request(signal => truncate({ ...session, etag: history.etag,
-        revision: history.revision }, sequence - 1, sourceEventId, { editId, signal }), { mutation: true });
+        revision: history.revision }, sequence - 1, sourceEventId, { editId, historyToken: history.history_token, signal }), {
+          mutation: true, retryable: error => isTransientReadError(error) ||
+            Boolean(history.history_token && error?.code === "revision_conflict") });
     } catch (error) {
       if (isTransientReadError(error) ||
           ["remote_result_unconfirmed", "invalid_response"].includes(error?.code)) {
@@ -59,6 +68,7 @@ export async function runMessageReplacement({ session, sequence, sourceEventId, 
     if (isCurrent()) onTruncated(updated);
     recovery.assertActive();
     starting = true;
+    onPhase("sending");
     let run;
     try { run = await startRun(updated.project_id, updated.id,
       text.trim(), attachments); }
@@ -73,5 +83,5 @@ export async function runMessageReplacement({ session, sequence, sourceEventId, 
     if (preserving && !starting)
       onPreserveFailure(error, error?.name !== "AbortError" && isCurrent());
     throw error;
-  } finally { recovery.dispose(); }
+  } finally { signal?.removeEventListener("abort",cancel);recovery.dispose(); }
 }

@@ -18,6 +18,7 @@ static xmutex* g_MdoApiSessionCreateLock;
 #define MDO_API_EDIT_REPLIES 64u
 #define MDO_API_EDIT_REPLY_TTL_US 180000000u
 typedef struct MdoApiEditReply {
+    char HistoryToken[65], ResultHistoryToken[65];
     char Project[MDO_PROJECT_ID_CAPACITY];
     char Session[MDO_SESSION_ID_CAPACITY];
     char Id[33];
@@ -351,6 +352,11 @@ static bool MdoApiSessionReply(MdoApiContext* Context, uint16 Status,
 static bool MdoApiSessionActiveFailure(MdoApiContext* Context,
     const xwork_error* Error)
 {
+    if ( Error && Error->eCode == XWORK_ERROR_CONTEXT &&
+         (!strcmp(Error->sMessage, MDO_SESSION_RUNTIME_BUSY_ERROR) ||
+          !strcmp(Error->sMessage, MDO_SESSION_RUNTIME_CLAIMED_ERROR)) )
+        return MdoApiReplyError(Context, 409u, "session_runtime_busy",
+            "The session runtime is temporarily busy; wait and retry", NULL);
     bool Reply=false;if(MdoApiReplyAgentFailure(Context,Error,&Reply))return Reply;
     if (Error && !strcmp(Error->sMessage,MDO_SESSION_EXTERNAL_STATE_ERROR))
         return MdoApiReplyError(Context,409u,"session_external_state",MDO_SESSION_EXTERNAL_STATE_ERROR,NULL);
@@ -1029,6 +1035,32 @@ bool MdoApiSessionPurgeRoute(MdoApiContext* Context)
     return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 }
 
+/* A history precondition ignores unrelated title/profile metadata, but fences
+ * both appended events and replaced journals, even if sequences are reused. */
+static bool MdoApiSessionHistoryToken(MdoSession* Session,
+    const MdoSessionInfo* Info, char Token[65], uint64* Last, xwork_error* Error)
+{
+    if ( !MdoSessionLastSequence(Session, Last, Error) ) return false;
+    MdoSessionEventSnapshot* Events = MdoSessionEventReplay(
+        Info->ProjectId, Info->Id, 0, 1, Error);
+    if ( Events == NULL ) return false;
+    char Text[192];
+    snprintf(Text, sizeof(Text), "history-v1/%s/%llu/%llu/%lld",
+        MdoSessionEventSnapshotEpoch(Events),
+        (unsigned long long)MdoSessionEventSnapshotLatestId(Events),
+        (unsigned long long)*Last, (long long)Info->CreatedAt);
+    unsigned char Hash[32];
+    bool Ok = xrtSha256(Text, strlen(Text), Hash);
+    MdoSessionEventSnapshotRelease(Events);
+    if ( Ok )
+        for ( size_t Index = 0; Index < 32; ++Index )
+            snprintf(Token + Index * 2, 3, "%02x", Hash[Index]);
+    return Ok;
+}
+static bool MdoApiHistoryTokenValid(const char* Token)
+{
+    return strlen(Token) == 64 && strspn(Token, "0123456789abcdef") == 64;
+}
 bool MdoApiSessionHistoryRoute(MdoApiContext* Context)
 {
     MdoSessionInfo Info;
@@ -1037,13 +1069,14 @@ bool MdoApiSessionHistoryRoute(MdoApiContext* Context)
     xvalue* Data;
     uint64 ExpectedRevision;
     uint64 LastSequence = 0u;
+    char HistoryToken[65];
     bool ReplyResult;
 
     Session = MdoApiSessionOpenActive(Context, false, &Info,
         &ExpectedRevision, &ReplyResult);
     if ( Session == NULL ) return ReplyResult;
     memset(&Error, 0, sizeof(Error));
-    if ( !MdoSessionLastSequence(Session, &LastSequence, &Error) ) {
+    if ( !MdoApiSessionHistoryToken(Session,&Info,HistoryToken,&LastSequence,&Error) ) {
         MdoSessionRelease(Session);
         return MdoApiSessionActiveFailure(Context, &Error);
     }
@@ -1052,7 +1085,8 @@ bool MdoApiSessionHistoryRoute(MdoApiContext* Context)
          !MdoApiValueSetString(Data, "project_id", Info.ProjectId) ||
          !MdoApiValueSetString(Data, "session_id", Info.Id) ||
          !MdoApiValueSetUInt(Data, "revision", Info.Revision) ||
-         !MdoApiValueSetUInt(Data, "last_sequence", LastSequence) ) {
+         !MdoApiValueSetUInt(Data, "last_sequence", LastSequence) ||
+         !MdoApiValueSetString(Data,"history_token",HistoryToken) ) {
         xrtValueRelease(Data);
         MdoSessionRelease(Session);
         return MdoApiReplyError(Context, 500u,
@@ -1175,6 +1209,7 @@ static bool MdoApiSessionLedgerMutation(MdoApiContext* Context,
     bool ReplyResult;
     bool Ok;
     char EditId[33] = { 0 };
+    char HistoryToken[65] = { 0 };
 
     if ( !Clear ) {
         BodyStatus = MdoApiJsonBodyRead(Context, &Body);
@@ -1192,6 +1227,8 @@ static bool MdoApiSessionLedgerMutation(MdoApiContext* Context,
                 sizeof(EditId), false, &Present) &&
             (EditId[0] == '\0' || (SourceEventId != 0u &&
                 MdoApiClientSessionIdValid(EditId))) &&
+            MdoApiSessionString(Body.Value,"history_token",HistoryToken,sizeof(HistoryToken),false,&Present) &&
+            (!HistoryToken[0]||(EditId[0]&&MdoApiHistoryTokenValid(HistoryToken))) &&
             Present == xrtValueCount(Body.Value);
         MdoApiJsonBodyUnit(&Body);
         if ( !Ok ) {
@@ -1202,7 +1239,7 @@ static bool MdoApiSessionLedgerMutation(MdoApiContext* Context,
         }
         if ( EditId[0] != '\0' )
             return MdoApiSessionEditOnce(Context, ThroughSequence,
-                SourceEventId, EditId);
+                SourceEventId, EditId, HistoryToken);
     }
     if (!Clear && SourceEventId &&
         MdoApiSessionMessageObsolete(Context, ThroughSequence, SourceEventId))

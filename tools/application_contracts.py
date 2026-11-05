@@ -80,7 +80,7 @@ INPUTS={
  'Resume':document('recovery_token:s client_resume_id:s decisions:a resume:b automatic:b'),
  'Abandon':document('recovery_token:s'),
  'Fork':document('through_sequence:u title:s client_session_id:s'),
- 'Truncate':document('through_sequence:u source_event_id:u client_edit_id:s',('through_sequence',),True),
+ 'Truncate':document('through_sequence:u source_event_id:u client_edit_id:s history_token:s',('through_sequence',),True),
  'Schedule':deepcopy(DEFS['Schedule']),
  'Enabled':document('enabled:b',('enabled',),True),
  'Ask':document('answer:s',('answer',),True),

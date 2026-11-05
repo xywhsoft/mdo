@@ -13,6 +13,20 @@ function fixture() {
     value: (id = "a") => ({ id, text: "A new message", projectId: "default", sessionId: "", attachments: [] }) };
 }
 
+test("edited resend is visible while the old run is finishing and hands off by submission ID",()=>{
+  const f=fixture();f.state.sessionId='editing';f.state.active=true;let cancelled=0;
+  try{
+    const value={...f.value('edited'),sessionId:'editing',edit:true,phase:'waiting',cancelEdit:()=>cancelled++};
+    f.view.begin(value);assert.equal(f.container.children.length,2);
+    assert.equal(f.container.children[1].children.at(-1).hidden,false);
+    f.container.children[1].children.at(-1).onclick();assert.equal(cancelled,1);
+    f.view.progress('edited','updating');assert.equal(f.container.children[1].children.at(-1).hidden,true);
+    f.state.entries=[{id:'edited',text:value.text,state:'prepared',attachments:[]}];f.view.accepted('edited');
+    assert.equal(f.container.children.length,2);
+    f.state.events=[{kind:'agent_start',queue_item_id:'edited'}];f.view.render();assert.equal(f.container.children.length,0);
+  }finally{f.view.destroy();}
+});
+
 test("a click is visible before storage and the same ID is replaced by authoritative history", () => {
   const f = fixture();
   try {
@@ -45,6 +59,20 @@ test("a failed provisional message can be retried with its original admission id
     assert.equal(f.container.children.length, 2, "retry reuses the visible message");
     assert.equal(f.container.children[1].dataset.state, "preparing");
     assert.equal(f.view.begin(f.value("double-click")), false, "a running retry still suppresses double clicks");
+  } finally { f.view.destroy(); }
+});
+
+test("an edit retry retains its identity without adopting an identical ordinary send or another source", () => {
+  const f = fixture();
+  try {
+    f.view.begin(f.value("ordinary"));
+    f.view.fail("ordinary", new Error("ordinary draft save failed"));
+    const edit = { ...f.value("edit"), edit: true, editSourceEventId: 17, phase: "waiting" };
+    assert.equal(f.view.begin(edit), "edit");
+    f.view.fail("edit", new Error("edit submission failed"));
+    assert.equal(f.view.begin({ ...edit, id: "retry" }), "edit");
+    assert.equal(f.view.begin({ ...edit, id: "different-source", editSourceEventId: 18 }), "different-source");
+    assert.equal(f.container.children.length, 6);
   } finally { f.view.destroy(); }
 });
 

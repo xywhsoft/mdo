@@ -251,3 +251,55 @@ test("a failed model start is never replayed by edit recovery", async () => {
   assert.equal(starts, 1);
   assert.deepEqual(probe.events.map(([kind]) => kind), ["truncate", "visible-truncate", "draft"]);
 });
+
+test("waiting for Stop can be cancelled without reading or cutting history", async () => {
+  const controller = new AbortController(), phases = [];
+  let waiting = false, reads = 0;
+  const probe = harness({ signal: controller.signal, onPhase: phase => phases.push(phase),
+    waitForIdle: ({ signal }) => new Promise((_, reject) => {
+      waiting = true;
+      signal.addEventListener("abort", () => reject(new DOMException("cancelled", "AbortError")), { once: true });
+    }),
+    loadHistory: async () => { ++reads; throw new Error("must not read"); },
+  });
+  const action = runMessageReplacement(probe.args);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(waiting, true);
+  controller.abort();
+  await assert.rejects(action, { name: "AbortError" });
+  assert.deepEqual(phases, ["waiting"]);
+  assert.equal(reads, 0);
+  assert.deepEqual(probe.events, []);
+});
+
+test("temporary runtime occupancy retries the same history fence and edit identity", async () => {
+  const requests = [], phases = [], historyToken = "a".repeat(64), editId = "c".repeat(32);
+  const probe = harness({ recoveryOptions: quickRecovery, editId,
+    onPhase: phase => phases.push(phase),
+    loadHistory: async () => ({ last_sequence: 6, etag: '"source-v4"', revision: 4, history_token: historyToken }),
+    truncate: async (value, through, source, options) => {
+      requests.push([value.etag, through, source, options.historyToken, options.editId]);
+      if (requests.length === 1)
+        throw Object.assign(new Error("runtime inspection still finishing"), { code: "session_runtime_busy", status: 409 });
+      return updated;
+    },
+  });
+  await runMessageReplacement(probe.args);
+  assert.deepEqual(requests, Array(2).fill(['"source-v4"', 2, 17, historyToken, editId]));
+  assert.deepEqual(phases, ["waiting", "preparing", "updating", "sending"]);
+  assert.equal(probe.events.filter(([kind]) => kind === "start").length, 1);
+});
+
+test("a genuine history change is never retried or followed by a new run", async () => {
+  let cuts = 0;
+  const probe = harness({ recoveryOptions: quickRecovery,
+    loadHistory: async () => ({ last_sequence: 6, etag: '"source-v4"', revision: 4, history_token: "b".repeat(64) }),
+    truncate: async () => {
+      ++cuts;
+      throw Object.assign(new Error("another window appended a message"), { code: "session_history_changed", status: 409 });
+    },
+  });
+  await assert.rejects(runMessageReplacement(probe.args), { code: "session_history_changed" });
+  assert.equal(cuts, 1);
+  assert.deepEqual(probe.events, []);
+});

@@ -287,6 +287,8 @@ const API_ERROR_COPY = Object.freeze({
   session_external_state: ["error.sessionExternalState", "此会话的成员上下文或扩展状态保存在会话目录之外，当前备份和设备传输尚不能完整携带。请保留完整的 mdo 数据目录，避免丢失协作数据。"],
   session_state_conflict: ["error.sessionStateConflict",
     "会话状态已变化，请刷新后重试。"],
+  session_runtime_busy: ["error.sessionRuntimeBusy", "会话仍在处理上一项操作，请稍候重试；编辑内容已保留。"],
+  session_history_changed: ["error.sessionHistoryChanged", "编辑期间对话出现了新变化，内容已保留。请核对后重新编辑，或创建会话分支。"],
   session_purge_busy: ["error.sessionPurgeBusy",
     "请等待项目中的运行、备份和数据操作结束，再彻底删除会话。"],
   session_purge_requires_trash: ["error.sessionPurgeRequiresTrash",

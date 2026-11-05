@@ -3574,5 +3574,12 @@
   "modelSetup.emptyDescription": "Добавьте провайдера и настройте API-ключ, затем выберите модель, чтобы начать диалог.",
   "modelSetup.providerEmptyTitle": "У этого провайдера пока нет моделей",
   "modelSetup.providerEmptyDescription": "Добавьте модели: получите список автоматически или введите их идентификаторы вручную.",
-  "modelSetup.noDefaultModel": "Модель по умолчанию не выбрана"
+  "modelSetup.noDefaultModel": "Модель по умолчанию не выбрана",
+  "messageEdit.waiting": "Ожидание завершения предыдущего запуска…",
+  "messageEdit.preparing": "Подготовка к повторной отправке…",
+  "messageEdit.updating": "Обновление сообщения…",
+  "messageEdit.sending": "Сохранение и отправка сообщения…",
+  "messageEdit.cancelPending": "Отменить отправку",
+  "error.sessionRuntimeBusy": "Сеанс завершает другую операцию. Повторите позже; правки сохранены.",
+  "error.sessionHistoryChanged": "Во время редактирования переписка изменилась. Текст сохранён. Проверьте его перед новой правкой или создайте ветку."
 }

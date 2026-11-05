@@ -1235,7 +1235,7 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
     if ( MdoSessionsActiveFind(ProjectId, SessionId) != SIZE_MAX ) {
         xrtMutexUnlock(g_MdoSessions.Lock);
         MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
-            "session already has an active runtime");
+            MDO_SESSION_RUNTIME_BUSY_ERROR);
         goto done;
     }
     xrtMutexUnlock(g_MdoSessions.Lock);
@@ -1266,7 +1266,7 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
          MdoSessionsActiveFind(ProjectId, SessionId) != SIZE_MAX ) {
         xrtMutexUnlock(g_MdoSessions.Lock);
         MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
-            "session changed or acquired another runtime while opening");
+            MDO_SESSION_RUNTIME_CLAIMED_ERROR);
         goto done;
     }
     if ( !MdoSessionsActiveAdd(ProjectId, SessionId) ) {

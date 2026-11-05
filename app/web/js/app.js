@@ -479,7 +479,8 @@ export async function boot() {
 
   function assertReplacementIdle(selected) {
     const key = `${selected.projectId}/${selected.sessionId}`;
-    if (activeRun || submittingCurrent() || composerImages?.isUploading() || composerFileImports?.isBusy())
+    if ((activeRun && !(activeRun.cancel_requested || runStops.has(activeRun.id))) ||
+        submittingCurrent() || composerImages?.isUploading() || composerFileImports?.isBusy())
       throw new Error(t("messageAction.waitForRun", {}, "请在当前运行结束后操作消息"));
     if (!draftStore.isLoaded(key))
       throw new Error(t("composer.hintLoadingDraft", {}, "正在读取草稿，请稍候"));
@@ -507,18 +508,35 @@ export async function boot() {
     return { session, selected };
   }
 
-  async function replaceAndRunMessage(sequence, text, attachments, action, sourceEventId) {
+  async function replaceAndRunMessage(sequence, text, attachments, action, sourceEventId, editHistory) {
     const { session, selected } = assertMessageReplacementReady(sequence, text, attachments);
     const targetKey = `${selected.projectId}/${selected.sessionId}`;
     const originVersion = routeVersion;
+    const editController = new AbortController(), profile = { ...composerProfile.selection() };
+    let historyChanged = false;
     const stillSelected = () => routeVersion === originVersion &&
       selectedKey === targetKey &&
       navigation.get().projectId === selected.projectId &&
       navigation.get().sessionId === selected.sessionId;
+    const editId = submissionTimeline.begin({ id: promptQueue.newId(),
+      projectId: selected.projectId, sessionId: selected.sessionId, text, attachments: [...attachments],
+      edit: true, editSourceEventId: sourceEventId, phase: "waiting", cancelEdit: () => editController.abort() });
+    if (!editId) throw new Error(t("messageAction.waitForRun", {}, "请在当前运行结束后操作消息"));
     messageActionBusy = true;
+    if (action === "edit") messageEditDialog.showPending(true);
     setRun(activeRun);
     try {
       const result = await runMessageReplacement({ session, sequence, sourceEventId, text,
+        editId,signal:editController.signal,
+        onPhase:phase=>submissionTimeline.progress(editId,phase),
+        waitForIdle: async ({signal})=>{
+          const running=activeRun;
+          if(!running||running.project_id!==session.project_id||running.session_id!==session.id)return;
+          if(!running.cancel_requested&&!runStops.has(running.id))throw new Error(t("messageAction.waitForRun"));
+          const current=await readRun(running.id,{signal});
+          if(stillSelected()&&activeRun?.id===current.id)setRun(current);
+          if(!current.terminal)throw new ApiError(t("messageEdit.waiting"),{code:"session_runtime_busy",status:409});
+        },
         attachments, isCurrent: stillSelected,
         validateBeforeTruncate: async ({ signal }) => {
           if (!await draftStore.refreshSessionSubmissions(targetKey, { signal }))
@@ -528,7 +546,14 @@ export async function boot() {
           assertReplacementProfile(attachments);
           assertReplacementIdle(selected);
         },
-        loadHistory: loadSessionHistory, truncate: truncateSession, startRun,
+        loadHistory: editHistory ? () => editHistory : loadSessionHistory, truncate: truncateSession,
+        startRun: async (projectId,sessionId,content,images)=>{
+          const key=`${projectId}/${sessionId}`;
+          const accepted=await submissionController.submit(key,content,images,false,profile,editId);
+          if(!accepted&&!draftStore.submissions(key).some(item=>item.id===editId))
+            throw new ApiError(t("error.sessionEditDraftUnsaved"),{code:"session_edit_draft_unsaved"});
+          return {queued:true,accepted};
+        },
         async preserveInput() {
           draftStore.edit(targetKey, text, attachments, true);
           return draftStore.flush(targetKey);
@@ -547,6 +572,7 @@ export async function boot() {
           tokenMeter.refresh();
         },
         onTruncated(updated) {
+          historyChanged=true;
           // A committed edit/retry starts a new turn. An old history filter
           // must not hide its messages; cancelled or rejected edits keep it.
           conversationSearch.close();
@@ -572,18 +598,23 @@ export async function boot() {
           setRun(activeRun);
           prompt.focus();
         },
-        onAccepted() { clearSubmittedComposer(targetKey, { text, attachments }); },
-        onStarted(run) { monitorRun(run); },
+        onAccepted(run) { if(run.accepted)clearSubmittedComposer(targetKey, { text, attachments }); },
+        onStarted() { void loadRuns(); },
       });
       void Promise.allSettled([...(stillSelected() ? [refreshSelectedTimeline()] : []),
         loadTasks(), loadRuns(), loadRecovery()]);
-      if (stillSelected()) {
+      if (stillSelected() && (!result.run?.queued || result.run.accepted)) {
         toast(action === "retry"
           ? t("messageAction.retried", {}, "已在当前会话重试")
           : t("messageAction.edited", {}, "已在当前会话发送编辑后的消息"));
       } else if (!result.current)
         toast(t("messageAction.backgroundRun", {}, "原会话已在后台重新运行"));
+    } catch(error) {
+      if(!historyChanged)submissionTimeline.forget(editId);
+      else submissionTimeline.fail(editId,error);
+      throw error;
     } finally {
+      if(action==="edit")messageEditDialog.showPending(false);
       messageActionBusy = false;
       setRun(activeRun);
       // setRun releases the editor's disabled state. Restore focus only
@@ -673,6 +704,9 @@ export async function boot() {
       const key = `${owner.projectId}/${owner.sessionId}`, origin = promptQueue.stamp();
       let detached = false, attempted = false;
       messageEditingKey = key; syncSendDisabled();
+      const historyRecovery=createRequestRecovery(),editingSession=sessionDetailStore.get().data;
+      const editHistory=historyRecovery.request(signal=>loadSessionHistory(editingSession,{signal}));
+      void editHistory.catch(()=>{});
       editCommandResults.clear();
       try {
         const result = await messageEditDialog.open(completeText, attachments, opener, {
@@ -686,13 +720,14 @@ export async function boot() {
             if (!isCurrentMessageOwner(owner, version))
               throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
             attempted = true;
-            await replaceAndRunMessage(sequence, edited, attachments, "edit", sourceEventId);
+            await replaceAndRunMessage(sequence, edited, attachments, "edit", sourceEventId,editHistory);
           },
           fallbackFocus: () => isCurrentMessageOwner(owner, version) ? prompt : null,
         });
         if (result === null && !detached && !attempted && promptQueue.stamp() === origin)
           draftStore.clearIfMatches(key, messageEditDialog.text(), attachments);
       } finally {
+        historyRecovery.dispose();
         messageEditingKey = ""; syncSendDisabled(); inlineFiles.hide(); inlineSessions.hide(); inlineSlash.hide();
         if (selectedKey === key && promptQueue.stamp() === origin) {
           const saved = draftStore.snapshot(key); restoreComposerText(saved.text);
