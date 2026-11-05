@@ -160,6 +160,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/projects/{project}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD |
       XHTTP_METHOD_PUT | XHTTP_METHOD_DELETE,
       "GET, HEAD, PUT, DELETE, OPTIONS", MdoApiProjectRoute, true },
+    { "/api/v1/projects/{project}/open-directory", XHTTP_METHOD_POST,
+      "POST, OPTIONS", MdoApiProjectOpenDirectoryRoute, true },
     { "/api/v1/projects/{project}/purge-preview",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiProjectPurgePreviewRoute, true },

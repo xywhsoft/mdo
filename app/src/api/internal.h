@@ -185,6 +185,7 @@ bool MdoApiToolsRoute(MdoApiContext* pContext);
 bool MdoApiMcpRoute(MdoApiContext* pContext);
 bool MdoApiProjectsRoute(MdoApiContext* pContext);
 bool MdoApiProjectRoute(MdoApiContext* pContext);
+bool MdoApiProjectOpenDirectoryRoute(MdoApiContext* pContext);
 bool MdoApiDirectoriesRoute(MdoApiContext* pContext);
 bool MdoApiDirectoryLocationsRoute(MdoApiContext* pContext);
 bool MdoApiProjectPurgePreviewRoute(MdoApiContext* pContext);

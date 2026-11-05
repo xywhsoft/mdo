@@ -95,7 +95,7 @@ import { recoveryMatchesWorkspace } from "./features/approvals/recovery-decision
 import { createSettingsView } from "./features/settings/settings-view.js";
 import { openAboutWindow } from "./features/settings/about-window.js";
 import { createSchedulePanel } from "./features/schedules/schedule-panel.js";
-import { createProjectManagement } from "./features/projects/project-management.js";
+import { createProjectManagement, openProjectDirectory } from "./features/projects/project-management.js";
 import { createMemoryManagement } from "./features/settings/memory-management.js";
 import { openMemoryPanel, openMemoryDirectory } from "./features/settings/memory-panel.js";
 import { createProjectPurgeConfirmation } from "./features/settings/project-purge-confirmation.js";
@@ -368,6 +368,7 @@ export async function boot() {
     onRefreshProjects: loadProjects,
     onRetrySessions: () => loadSessions({ retry: true }),
     onProjectAction(action, projectId, origin) {
+      if (action === "open_directory") return openProjectDirectory(projectId);
       if (action === "send_device") return deviceTransfers.openProject({ id: projectId,
         name: projectsStore.get().data?.items?.find(item => item.id === projectId)?.name }, origin);
       if (action === "edit") return projectDialog.open({ id: projectId }, origin);

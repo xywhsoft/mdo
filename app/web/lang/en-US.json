@@ -3567,5 +3567,8 @@
   "directory.exists": "A file or folder with this name already exists. Use another name.",
   "directory.createFailed": "Could not create the folder. Check its parent directory and write access.",
   "directory.createUncertain": "The creation result is unconfirmed. Refresh and check before trying again.",
-  "directory.scanLimit": "The directory exceeds the scan time or entry limit. Retry or enter the full path of a subdirectory."
+  "directory.scanLimit": "The directory exceeds the scan time or entry limit. Retry or enter the full path of a subdirectory.",
+  "project.openDirectory": "Open in file manager",
+  "project.directoryOpened": "Opened the project folder on the device running mdo",
+  "error.desktopUnavailable": "Could not open the file manager. Check that the target device supports this action."
 }

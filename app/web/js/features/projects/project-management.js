@@ -3,8 +3,20 @@ import { setUiText as writeUiText, uiMessage, subscribeLocale, t } from "../../i
 import { readProject, readProjectPurgePreview,
   unregisterProject } from "../../state/catalogs.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
+import { api, resourceId } from "../../api/client.js";
+import { targetState } from "../../api/target.js";
 
 import { reviewedPurgeIntent, purgeBindingsMatch } from "../settings/project-purge-contract.js";
+
+export async function openProjectDirectory(projectId) {
+  const target = targetState().selected;
+  try {
+    await api.post(`/projects/${resourceId(projectId, "project")}/open-directory`, {});
+    if (target === targetState().selected) toast(t("project.directoryOpened", {}, "已在运行 mdo 的设备上打开项目目录"));
+  } catch (cause) {
+    if (target === targetState().selected) toast(errorMessage(cause), "error");
+  }
+}
 
 // Project operations belong to the workspace sidebar, independent of Settings.
 export function createProjectManagement({ projectsStore, purgeRecovery, purgeConfirmation, focusProject }) {

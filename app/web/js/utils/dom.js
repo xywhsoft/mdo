@@ -96,6 +96,7 @@ const API_ERROR_COPY = Object.freeze({
   target_switch_busy: ["error.targetSwitchBusy", "请等待操作完成，保存或复制未保存草稿后切换设备。"],
   invalid_directory_path: ["error.invalidDirectoryPath", "请输入有效的目录路径（不超过 2048 字节）。"],
   directory_unavailable: ["error.directoryUnavailable", "无法打开此目录，请检查路径和访问权限。"],
+  desktop_unavailable: ["error.desktopUnavailable", "无法打开文件管理器，请确认目标设备支持此操作。"],
   directory_name_invalid: ["directory.invalidName", "请输入有效的文件夹名称，不能包含路径分隔符或系统保留名称。"],
   directory_exists: ["directory.exists", "已有同名文件或文件夹，请使用其他名称。"],
   directory_create_failed: ["directory.createFailed", "无法创建文件夹，请检查目录是否存在及写入权限。"],

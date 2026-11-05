@@ -8,6 +8,7 @@ ALIASES = {
     'project.list':('GET','/api/v1/projects'), 'project.create':('POST','/api/v1/projects'),
     'project.get':('GET','/api/v1/projects/{project}'), 'project.update':('PUT','/api/v1/projects/{project}'),
     'project.remove':('DELETE','/api/v1/projects/{project}'),
+    'project.open_directory':('POST','/api/v1/projects/{project}/open-directory'),
     'session.list':('GET','/api/v1/sessions'), 'session.create':('POST','/api/v1/sessions'),
     'session.get':('GET','/api/v1/projects/{project}/sessions/{session}'),
     'session.update':('PATCH','/api/v1/projects/{project}/sessions/{session}'),

@@ -162,6 +162,7 @@ BODY['CommandProjectRoute']='Enabled'
 BODY['SkillProjectRoute']='Enabled'
 BODY['ExtensionsRoute']='ExtensionDirectory'
 BODY['DirectoriesRoute']='DirectoryCreate'
+BODY['ProjectOpenDirectoryRoute']='Empty'
 NO_BODY=set('''NativeDownloadsRoute CommandsRoute DistributionRoute CliToolsRoute LiveRoute DirectRoute UpdateExitRoute BootstrapRoute SettingsRoute
 ModelsRoute ModelConfigRoute ModelProvidersRoute AgentsRoute BackupUploadRoute BackupUploadSealRoute BackupPreviewsRoute BackupPreviewRoute UpdateDownloadRoute UpdateInstallRoute
 BackupRestoreApplyRoute BackupRestoresRoute BackupRestoreRoute BackupPreviewStartRoute ModulesRoute ToolsRoute SkillsRoute McpRoute DirectoriesRoute DirectoryLocationsRoute

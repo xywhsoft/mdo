@@ -29,11 +29,13 @@ function fixture(items) {
   const store = { get: () => state,
     subscribe(listener) { publish = listener; listener(state); return () => {}; } };
   const runsStore = { get: () => runs, subscribe(listener) { publishRuns = listener; listener(runs); return () => {}; } };
+  const projectActions = [];
   const view = createSessionList({ container, count: root.querySelector("span"), filter, store, runsStore,
     projectsStore: { get: () => ({ data: { items: [] } }), subscribe: () => () => {} },
     navigation: { get: () => ({ projectId: items[0]?.project_id, sessionId: items[0]?.id }),
-      subscribe: () => () => {} }, onSelect() {}, onAction() {}, onNewInProject() {} });
-  return { container, filter, view,
+      subscribe: () => () => {} }, onSelect() {}, onAction() {}, onNewInProject() {},
+    onProjectAction(action, id) { projectActions.push({ action, id }); } });
+  return { container, filter, view, projectActions,
     item(id) { return [...container.querySelectorAll(".session-item")]
       .find(node => node.dataset.sessionKey.endsWith("/" + id)); },
     update(next) { state = { ...state, data: { items: next } }; publish(state); },
@@ -49,6 +51,18 @@ async function check(name, items, run) {
 }
 
 try {
+  await check("project_directory_menu", [session("entry", "workspace")], async f => {
+    const trigger = f.container.querySelector('[data-sidebar-focus="menu:project:workspace"]');
+    trigger.click();
+    await painted(() => document.querySelector('[role="menuitem"]'), "project menu must open");
+    const open = [...document.querySelectorAll('[role="menuitem"]')]
+      .find(item => item.textContent.includes("在资源管理器中打开"));
+    assert(open, "project menu must offer opening its workspace directory");
+    open.click();
+    assert(JSON.stringify(f.projectActions) === JSON.stringify([{ action: "open_directory", id: "workspace" }]),
+      "the menu must pass the owning project identity, not the selected session or a browser path");
+    assert(!document.querySelector('[role="menuitem"]') && f.focusValid(), "opening a directory must close the menu and retain sidebar focus");
+  });
   const one = session("one"), two = session("two");
   await check("persistent_completion_indicators_without_remount", [one, two], async f => {
     const original = f.item("one"); original.focus();

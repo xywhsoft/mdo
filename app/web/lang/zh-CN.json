@@ -3567,5 +3567,8 @@
   "directory.exists": "已有同名文件或文件夹，请使用其他名称。",
   "directory.createFailed": "无法创建文件夹，请检查目录是否存在及写入权限。",
   "directory.createUncertain": "创建结果尚未确认，请刷新目录后核对，避免重复创建。",
-  "directory.scanLimit": "此目录的读取超过时间或数量限制，请重试，或直接输入目标子目录的完整路径。"
+  "directory.scanLimit": "此目录的读取超过时间或数量限制，请重试，或直接输入目标子目录的完整路径。",
+  "project.openDirectory": "在资源管理器中打开",
+  "project.directoryOpened": "已在运行 mdo 的设备上打开项目目录",
+  "error.desktopUnavailable": "无法打开文件管理器，请确认目标设备支持此操作。"
 }

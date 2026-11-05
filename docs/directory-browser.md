@@ -36,6 +36,10 @@ Ctrl+L 编辑地址，Enter 前往，Alt+左右切换历史，Alt+上箭头返�
   不递归创建、不覆盖同名文件或目录；遵循普通写入令牌和远程控制权限。
 - SDK 同时提供 `workspace.locations`、`workspace.directories.list` 和
   `workspace.directories.create`，使用相同业务实现和契约。
+- 项目菜单的“在资源管理器中打开”调用 `POST /api/v1/projects/{project}/open-directory`
+  （SDK：`project.open_directory`）。请求体为 `{}`，服务端解析该项目绑定的工作区，
+  默认项目使用 Home 下的 `workspace`；通过系统目录打开能力启动目标设备的文件管理器。
+  请求遵循项目生命周期锁和远程控制权限，不接收浏览器指定的原生路径或命令。
 
 分页只保留当前页加一个名称，内存不随目录总量增长。扫描最多一百万项/约五秒，
 超限返回明确错误，绝不把截断结果当成完整列表。目录变化期间的分页是名称游标语义，

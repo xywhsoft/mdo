@@ -350,6 +350,46 @@ static bool MdoApiProjectReadFailure(MdoApiContext* Context,
         "The project definition could not be read", NULL);
 }
 
+/* Resolve only a registered project binding (or the built-in workspace),
+ * never a browser-supplied native path or a command line. The router holds
+ * the project's shared lifecycle lease while the directory is inspected. */
+bool MdoApiProjectOpenDirectoryRoute(MdoApiContext* Context)
+{
+    char Id[MDO_PROJECT_ID_CAPACITY] = {0};
+    if (Context->ParamCount != 1u || !Context->Params[0].Size ||
+        Context->Params[0].Size >= sizeof(Id) ||
+        memchr(Context->Params[0].Data, 0, Context->Params[0].Size))
+        return MdoApiReplyError(Context, 400u, "invalid_project_path", "The project ID is invalid", NULL);
+    memcpy(Id, Context->Params[0].Data, Context->Params[0].Size);
+    MdoApiJsonBody Body = {0};
+    MdoApiBodyStatus Status = MdoApiJsonBodyRead(Context, &Body);
+    if (Status != MDO_API_BODY_OK) return MdoApiReplyBodyError(Context, Status);
+    bool Valid = !Context->Target.Query.Size && xrtValueType(Body.Value) == XVALUE_OBJECT && !xrtValueCount(Body.Value);
+    MdoApiJsonBodyUnit(&Body);
+    if (!Valid) return MdoApiReplyError(Context, 400u, "invalid_request", "An empty JSON object is required", NULL);
+
+    char* Path = NULL;
+    if (!strcmp(Id, "default")) Path = MdoHomeDefaultWorkspacePath(true);
+    else {
+        MdoProjectInfo Info = {0}; Info.Size = sizeof(Info);
+        xwork_error Error; bool Found = false;
+        if (!MdoProjectGet(Id, &Info, &Found, &Error)) return MdoApiProjectReadFailure(Context, &Error);
+        if (!Found) return MdoApiReplyError(Context, 404u, "project_not_found", "The project definition was not found", NULL);
+        Path = MdoPathResolve(Info.WorkspaceRoot);
+    }
+    xfileinfo Info = {0};
+    if (!Path || !xrtPathStat(Path, true, &Info) || Info.Type != XFILE_TYPE_DIRECTORY) {
+        xrtFree(Path);
+        return MdoApiReplyError(Context, 422u, "directory_unavailable", "The project workspace directory is unavailable", NULL);
+    }
+    xvalue* Data = xrtValueObject();
+    bool Ok = Data && MdoApiValueSetString(Data, "project_id", Id) && MdoApiValueSetBool(Data, "opened", true);
+    if (!Ok) { xrtFree(Path); xrtValueRelease(Data); return MdoApiReplyError(Context, 503u, "state_unavailable", "Cannot prepare directory response", NULL); }
+    bool Opened = xrtProcessOpen(Path); xrtFree(Path);
+    if (!Opened) { xrtValueRelease(Data); return MdoApiReplyError(Context, 503u, "desktop_unavailable", "Could not open the directory on this device", NULL); }
+    return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
+}
+
 bool MdoApiProjectRoute(MdoApiContext* Context)
 {
     char Id[MDO_PROJECT_ID_CAPACITY] = { 0 };

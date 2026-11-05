@@ -508,6 +508,8 @@ export function createSessionList({ container, count, filter, searchButton, stor
         `menu:${key}`, () => [
           option(t("project.newTask", {}, "新任务"), `menu:${key}`, () => onNewInProject(group.id)),
           option(t("sidebar.moveToGroup"), `menu:${key}`, () => organizer.move(`p:${group.id}`), { disabled: !layoutStore.writable() }),
+          ...(onProjectAction ? [option(t("project.openDirectory", {}, "在资源管理器中打开"), `menu:${key}`,
+            () => onProjectAction("open_directory", group.id))] : []),
           ...(onProjectAction ? [option(t("transfer.sendProject", {}, "发送完整项目到设备"), `menu:${key}`,
             (origin) => onProjectAction("send_device", group.id, origin))] : []),
           ...(group.project?.managed && onProjectAction ? [

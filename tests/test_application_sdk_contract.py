@@ -11,6 +11,14 @@ import application_sdk
 import application_contracts
 
 class ApplicationSdkContractTests(unittest.TestCase):
+    def test_project_open_directory_accepts_an_identity_and_empty_body_only(self):
+        rows={row['id']:row for row in application_sdk.services(ROOT)}
+        schema,_=application_contracts.contract(rows['project.open_directory'])
+        self.assertEqual(schema['$defs']['EmptyInput']['properties'],{})
+        self.assertFalse(schema['$defs']['EmptyInput']['additionalProperties'])
+        self.assertEqual(schema['properties']['query']['properties'],{})
+        self.assertEqual(set(schema['properties']['path']['properties']),{'project'})
+
     def test_workspace_directory_services_cover_paging_locations_and_creation(self):
         rows={row['id']:row for row in application_sdk.services(ROOT)}
         listing,_=application_contracts.contract(rows['workspace.directories.list'])
