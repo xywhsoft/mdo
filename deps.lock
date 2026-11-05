@@ -10,7 +10,7 @@
     ]
   },
   "xserver": {
-    "commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+    "commit": "94eb06ab94d7ea276922d8d09461d4ae032f1e37",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
@@ -40,27 +40,27 @@
       }
     },
     "source_bundle": {
-      "path": "tools/dependencies/xs-regex-acceptance.bundle",
-      "sha256": "33a994a476cdf631b92877db13767e2be27c234de10048ab8355c4f997ca8684",
-      "ref": "refs/heads/master"
+      "path": "tools/dependencies/xs-agent-mainline.bundle",
+      "sha256": "dda7239c16eca0c31a66d7e5122a5b63732d93ab62550156b9accac816276be4",
+      "ref": "refs/heads/codex/mdo-sdk-snapshot"
     }
   },
   "libraries": {
     "xllm": {
-      "version": "3.1.0",
-      "source_commit": "5d16ece2b049fd73eee1d8e79551d6d70c6be216",
-      "production_tree_sha256": "319d7ccc6a5cd901e521e59eeaf8a8d5d93cbe6368709dfc060d76a7d056a9c4"
+      "version": "3.2.0",
+      "source_commit": "88bfa0de2230a1656a1b52e4b3968f3dfa995259",
+      "production_tree_sha256": "c6432b4cf9cb001bf4ce23553ba45244c5b0fd5852e66bb37fbdd393371cfc32"
     },
     "xllm-session": {
       "version": "3.0.0-dev",
-      "source_commit": "54676d1d5623e536829fb7370f51455923abd215",
-      "production_tree_sha256": "67278680c129312219876250cf2419658008c70ae80de420f18969998ceb4f17",
+      "source_commit": "88bfa0de2230a1656a1b52e4b3968f3dfa995259",
+      "production_tree_sha256": "b15f24962301eeb5be1cb77fb2d12c223ab566bd6932a60ad19652135f4dba23",
       "persistence_schema_version": 4
     },
     "xwork": {
       "version": "3.11.0",
-      "source_commit": "0dc70638b0faa00b89a6cdb4e73eac35ad2213e3",
-      "production_tree_sha256": "f10d1b633d87e9857de4621a6f1391b281c2a0dc396634f91e9826227f563e89",
+      "source_commit": "88bfa0de2230a1656a1b52e4b3968f3dfa995259",
+      "production_tree_sha256": "2066157b406a32cb0c4f9d4bab0e5999bee57c8fd96e1e0b68bc91f224b285df",
       "abi_version": 9,
       "event_schema_version": 3
     }
@@ -76,9 +76,9 @@
   },
   "sdk_overlay": {
     "path": "tools/dependencies/xwork-mcp.patch",
-    "sha256": "76b8ef683e418c271c4eb22e7eda7dd2add5c085fa6d4a7bac53f7eea36b56c9",
-    "base_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
-    "purpose": "MCP and platform compatibility, native browser panels, atomic file replacement and symmetric role runtime hooks; paired external process ownership and PID-safe tree cleanup; retained dynamic tool catalogs, bounded typed results and complete MCP/Responses images; UTF-8-safe MCP discovery truncation; consistent zero-as-unlimited turn ceilings for delegated Agents; automatic browser fallback after native frontend initialization failure",
+    "sha256": "f387b1b5a03bbee7e3b50fbec7b0281015fe53de1257e9e92f83dc4cdad65918",
+    "base_commit": "94eb06ab94d7ea276922d8d09461d4ae032f1e37",
+    "purpose": "Native host compatibility only: browser panels/window state/fallback, platform credentials and system proxy, rooted replacement, process ownership and PID-safe cleanup, and host-owned SDK bridges; canonical agent-library bodies are exported in the bundled base snapshot",
     "xrt_single_header_sha256": "99bead7f87b4e6601cbb555b0d1ba30bb0030bf42c731c7c21f8bd29c1f04453"
   }
 }

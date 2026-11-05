@@ -69,7 +69,7 @@ def run(host: Path, website_host: Path, scenario=None) -> dict:
         output = invoke(host,origin+'/api/v1/search',[(json.dumps({'query':query,'count':2}),success)],token,external=True)
         assert marker in output,output
         assert 'test-bocha-secret' not in output and 'test-zai-secret' not in output,output
-        assert output.count('execute_web_search=') == 1,output
+        assert len(re.findall(r'execute_(?:web_)?search=', output)) == 1,output
         posts=int(re.search(r'case_fetches=0:(\d+)',output).group(1))
         assert posts >= minimum_posts,output
         dispatches=state()['calls']-before

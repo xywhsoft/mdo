@@ -209,8 +209,12 @@ def prepare_sdk_overlay(source: Path, lock: dict) -> Path:
             contents.extractall(extracted, filter="data")
         if record.get("xrt_single_header_sha256") and source_file_sha256(extracted / "lib/xrt.h") != lock["xrt"]["single_header_sha256"]:
             raise BuildError("SDK patch base xrt header differs from the locked upstream header")
+        # This archive lives below the application's Git checkout. Discovery
+        # of that parent repository makes git apply silently skip SDK paths.
+        patch_env = os.environ.copy()
+        patch_env["GIT_CEILING_DIRECTORIES"] = str(stage)
         subprocess.run(["git", "apply", "--whitespace=nowarn",
-                        str(patch)], cwd=extracted, check=True)
+                        str(patch)], cwd=extracted, env=patch_env, check=True)
         verify_dependencies(extracted, lock)
         (extracted / ".mdo-sdk-overlay.json").write_text(
             json.dumps(record, indent=2) + "\n", encoding="utf-8")

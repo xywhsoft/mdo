@@ -108,7 +108,7 @@ def scenario(ctx):
             assert posts==len(actual)==expected_posts,(mode,posts,actual,output)
             dispatches=(Handler.restarted_dispatches if mode=='restart' else 0)+state()['calls']-before
             assert dispatches==expected_dispatches and used()==quota+expected_dispatches,(mode,dispatches,used(),quota,output)
-            assert output.count('execute_web_search=')==1,output
+            assert len(re.findall(r'execute_(?:web_)?search=', output))==1,output
             assert f'summary=permissions:1 completed:{int(success)} failed:{int(not success)}' in output,output
             assert 'test-bocha-secret' not in output and 'test-zai-secret' not in output,output
             if mode=='legacy_disconnect':

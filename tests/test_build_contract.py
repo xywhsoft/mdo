@@ -42,6 +42,40 @@ class BuildContractTests(unittest.TestCase):
     def setUp(self) -> None:
         self.lock = json.loads((ROOT / "deps.lock").read_text(encoding="utf-8"))
 
+    def test_fresh_sdk_patch_applies_inside_another_git_checkout(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw).resolve()
+            source = project / "source"
+            source.mkdir()
+            def git(directory, *args):
+                return subprocess.check_output(["git", "-C", str(directory), *args],
+                    stderr=subprocess.DEVNULL, text=True).strip()
+            git(project, "init")
+            (project / "target.txt").write_text("outer\n", encoding="utf-8")
+            git(source, "init")
+            (source / "target.txt").write_text("before\n", encoding="utf-8")
+            git(source, "add", "target.txt")
+            git(source, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                "commit", "-m", "fixture")
+            revision = git(source, "rev-parse", "HEAD")
+            patch_file = project / "compat.patch"
+            patch_file.write_text("diff --git a/target.txt b/target.txt\n"
+                "--- a/target.txt\n+++ b/target.txt\n@@ -1 +1 @@\n-before\n+after\n",
+                encoding="utf-8", newline="\n")
+            record = {"base_commit": revision, "path": "compat.patch",
+                      "sha256": hashlib.sha256(patch_file.read_bytes()).hexdigest()}
+            lock = {**self.lock, "xserver": {**self.lock["xserver"], "commit": revision},
+                    "sdk_overlay": record}
+            def verify(sdk, _lock):
+                self.assertEqual((sdk / "target.txt").read_text(encoding="utf-8"), "after\n")
+            with patch.object(BUILD, "ROOT", project), \
+                 patch.dict(os.environ, {"MDO_SDK_OVERLAY_CACHE": str(project / ".build/sdk-overlays")}), \
+                 patch.object(BUILD, "verify_dependencies", side_effect=verify) as verified:
+                sdk = BUILD.prepare_sdk_overlay(source, lock)
+                verified.assert_called_once()
+                self.assertEqual((sdk / "target.txt").read_text(encoding="utf-8"), "after\n")
+                self.assertEqual((project / "target.txt").read_text(encoding="utf-8"), "outer\n")
+
     def test_explicit_sdk_export_does_not_require_git_or_the_original_cache(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()

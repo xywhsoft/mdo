@@ -21,6 +21,7 @@ import time
 from test_search_xadmin_integration import run, web, WEBSITE_HOST
 from test_api_runtime import free_port
 from test_interrupt_runtime import stop_host
+from runtime_sources import seed_personal_defaults
 
 
 def scenario(ctx, baseline=False):
@@ -69,6 +70,7 @@ def scenario(ctx, baseline=False):
         with tempfile.TemporaryDirectory(prefix='mdo-search-restart-') as raw:
             base=Path(raw);site=base/'site';workspace=base/'project';workspace.mkdir()
             shutil.copytree(web.ROOT/'app',site)
+            seed_personal_defaults(site)
             if baseline:
                 old=subprocess.check_output(['git','show','66d65df5e8eb94a6ef616161eb75bc14fc8eab5f:app/src/web/search_api.inc.c'],cwd=web.ROOT)
                 (site/'src/web/search_api.inc.c').write_bytes(old)

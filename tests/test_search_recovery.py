@@ -144,7 +144,7 @@ def run(host):
                 assert actual[i]-actual[i-1] >= min(.5*2**(i-1),8)-.03,(name,actual)
         assert Handler.calls['retry_header'][1]-Handler.calls['retry_header'][0]>=1.98
         assert found['cancel']['elapsed_ms']<800 and found['short']['elapsed_ms']<500
-        assert output.count('execute_web_search=')==len(CASES),output
+        assert len(re.findall(r'execute_(?:web_)?search=', output))==len(CASES),output
         assert f'summary=permissions:{len(CASES)} completed:5 failed:{len(CASES)-5}' in output,output
         for marker in ('daily search quota is exhausted','rejected the service credentials',
                        'required wait exceeds', 'Automatic recovery limits were reached',

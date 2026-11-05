@@ -1,12 +1,27 @@
 # Locked xs host source
 
+The current lock uses `xs-agent-mainline.bundle`. The xllm, xllm-session and
+xwork sources are mechanically exported from one committed XRT mainline
+revision, recorded in each `UPSTREAM.txt` and in `deps.lock.libraries`.
+`tools/export_agent_libraries.py --check` and the XS vendoring verifier check
+the export. Production-tree hashes also cover the host-owned bridge headers.
+xllm is 3.2.0; rebuild all consumers for the changed public request layout.
+Session schema 4 and xwork ABI 9/event schema 3 retain the product contract.
+See `docs/build-records/2026-11-05-xrt-agent-mainline.md`.
+
+`xwork-mcp.patch` now contains only native host/core compatibility and host-owned
+bridge changes. The agent-library implementations live in the bundled XS
+snapshot. Keeping this real overlay preserves the native patch maintenance
+workflow and its verified build receipts; it does not retain a dependency on
+the deleted mdo branches. The existing core pin and regex backport stay in place.
+
 mdo 的 native overlay 另包含浏览器面板与窗口位置记忆。窗口状态文件由
 `window.state_file` 按与 `profile_dir` 相同的 Home 选择规则解析，保存在 Home 的
 `data/ui`，与浏览器缓存分开。原生头文件在 `tools/native/`；更新后执行
 `python tools/native/update_browser_patch.py` 再构建宿主。构建盘空间不足时，
 可将 `MDO_SDK_OVERLAY_CACHE` 指向另一个磁盘的 SDK 缓存目录；仍校验锁定提交和补丁摘要。
 
-The current lock uses `xs-regex-acceptance.bundle` on `refs/heads/master`.
+The preceding lock used `xs-regex-acceptance.bundle` on `refs/heads/master`.
 It retains XRT `3d55ec41` with the upstream DFA acceptance fix from
 `xrt@a539c579` and records that backport in `deps.lock.xrt.upstream_fixes`.
 The native host must be rebuilt: changing application sources alone does not
@@ -81,9 +96,10 @@ on another revision, `build_mdo.py` imports the bundle and creates a detached
 checkout under `.build/locked-xs`. The caller's branch and local files stay in
 place. Explicit `--xserver` paths still require the exact locked revision.
 
-After mdo moves to the latest xrt wait API, remove this compatibility bundle and
-lock the regular upstream xs revision. Until then, the bundle lets another
-machine reproduce the build without an unpublished local branch.
+The current product source bundle continues to pin the compatible native host
+while its agent libraries track the consolidated XRT source. Another machine
+can reproduce the build without the historical mdo branch names. Moving the
+whole native host to regular XS mainline remains a separate core/SDK migration.
 
 The locked fetch request also supports a v3 final-response-header callback.
 The response layout is unchanged; genuine v1/v2 request prefixes remain valid.
