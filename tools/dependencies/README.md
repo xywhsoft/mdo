@@ -1,19 +1,36 @@
 # Locked xs host source
 
-The current lock uses `xs-agent-mainline.bundle`. The xllm, xllm-session and
+The current lock uses `xs-xrt-mainline.bundle`. Both the native XRT core and
+the xllm, xllm-session and
 xwork sources are mechanically exported from one committed XRT mainline
 revision, recorded in each `UPSTREAM.txt` and in `deps.lock.libraries`.
 `tools/export_agent_libraries.py --check` and the XS vendoring verifier check
 the export. Production-tree hashes also cover the host-owned bridge headers.
 xllm is 3.2.0; rebuild all consumers for the changed public request layout.
 Session schema 4 and xwork ABI 9/event schema 3 retain the product contract.
-See `docs/build-records/2026-11-05-xrt-agent-mainline.md`.
+The core implementation and declaration headers are pinned together. Existing
+process-tree/ConPTY compatibility fixes stay in the reviewed native overlay;
+the regex fix is already in mainline and needs no separate backport.
+See `docs/build-records/2026-11-05-xrt-core-mainline.md` and the preceding
+`docs/build-records/2026-11-05-xrt-agent-mainline.md`.
 
 `xwork-mcp.patch` now contains only native host/core compatibility and host-owned
 bridge changes. The agent-library implementations live in the bundled XS
 snapshot. Keeping this real overlay preserves the native patch maintenance
 workflow and its verified build receipts; it does not retain a dependency on
-the deleted mdo branches. The existing core pin and regex backport stay in place.
+the deleted mdo branches. The preceding `xs-agent-mainline.bundle` retains the
+earlier agent-only integration as historical source evidence.
+
+## 上游维护约定
+
+- XRT 的通用改动优先直接提交 `master`。确实需要临时分支时，按小阶段验证并尽快
+  合并回主线，不长期保留 mdo 专用分支。
+- 先把产品所需行为和回归纳入 XRT 的规范源码，再同步宿主；不要用旧快照覆盖上游
+  新实现，也不要以仅修改版本号或空合并代替实际接线。
+- mdo 使用完整主线提交、源码哈希和实际宿主收据锁定依赖。更换核心时，实现头、
+  声明头、native 宿主和 TCC SDK 必须同步，并验证进程、模型与会话恢复。
+- 宿主快照使用固定标签和可验证 bundle，不新增维护分支。已有完整且验证通过的 SDK
+  缓存直接复用，避免为每次构建再创建 checkout；全新构建仍可从 bundle 重建。
 
 mdo 的 native overlay 另包含浏览器面板与窗口位置记忆。窗口状态文件由
 `window.state_file` 按与 `profile_dir` 相同的 Home 选择规则解析，保存在 Home 的

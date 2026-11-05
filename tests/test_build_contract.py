@@ -111,6 +111,27 @@ class BuildContractTests(unittest.TestCase):
             with self.assertRaises(BUILD.BuildError):
                 ANDROID_BUILD.edition_outputs(args, release)
 
+    def test_verified_cached_sdk_needs_no_additional_checkout(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            compat = root / "compat.patch"; compat.write_bytes(b"locked patch")
+            record = {**self.lock["sdk_overlay"], "path": "compat.patch",
+                      "sha256": hashlib.sha256(compat.read_bytes()).hexdigest()}
+            sdk = root / ".build/sdk-overlays" / record["sha256"]
+            sdk.mkdir(parents=True)
+            (sdk / ".mdo-sdk-overlay.json").write_text(json.dumps(record), encoding="utf-8")
+            lock = {**self.lock, "sdk_overlay": record}
+            with patch.object(BUILD, "ROOT", root), \
+                 patch.dict(os.environ, {"MDO_SDK_OVERLAY_CACHE": str(root / ".build/sdk-overlays")}), \
+                 patch.object(BUILD, "verify_dependencies") as verify, \
+                 patch.object(BUILD, "git_head", side_effect=AssertionError("must reuse the SDK export")), \
+                 patch.object(BUILD, "restore_bundled_xserver", side_effect=AssertionError("must not create a checkout")):
+                self.assertEqual(BUILD.find_xserver(None, lock), sdk)
+                verify.assert_called_once_with(sdk, lock)
+                compat.write_bytes(b"damaged patch")
+                with self.assertRaisesRegex(BUILD.BuildError, "patch hash mismatch"):
+                    BUILD.find_xserver(None, lock)
+
     def test_unified_build_runs_both_editions_and_reuses_desktop_host(self) -> None:
         toolchain = ["--sdk", "/sdk", "--java-home", "/java", "--wsl"]
         with patch.object(ALL_BUILD, "android_toolchain", return_value=toolchain), \

@@ -22,7 +22,7 @@
  * SOFTWARE.
  */
 
-/* Generated public SDK bridge. Source: xs 216f5445163ca30c815ad7d5d2da3b71cb2f6401.
+/* Generated public SDK bridge. Source: xs e9a3551a5a533de34e2ca4291a8def71612fbf35.
  * Regenerate with tools/model_http_sdk.py; contains no implementation. */
 #ifndef MDO_MODEL_HTTP_SDK_H
 #define MDO_MODEL_HTTP_SDK_H

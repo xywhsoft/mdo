@@ -238,10 +238,9 @@ index f6c00f3baf80e6f0589491aeed4ed4c1e1c6c7c1..da7df6834042fe2aefa8ebd7c292b85f
  #include "src/xoauth2_flow.c"
  #include "src/xoauth2_http.c"
 diff --git a/lib/xrt.h b/lib/xrt.h
-index b4973e2b927128129b205240e16bffe083ecaf51..66864ed33b99ba11f390fa2e3f4ce1c3817689b7 100644
 --- a/lib/xrt.h
 +++ b/lib/xrt.h
-@@ -62383,6 +62383,7 @@ struct xprocess {
+@@ -64911,6 +64911,7 @@
  		DWORD Id;
  	#else
  		pid_t Id;
@@ -249,7 +248,7 @@ index b4973e2b927128129b205240e16bffe083ecaf51..66864ed33b99ba11f390fa2e3f4ce1c3
  		int Stdin;
  		int Stdout;
  		int Stderr;
-@@ -312246,7 +312247,7 @@ static bool __xrtProcessStop(
+@@ -326044,7 +326045,7 @@
  		return false;
  	}
  	(void)xrtMutexLock(&pProcess->Lock);
@@ -258,7 +257,7 @@ index b4973e2b927128129b205240e16bffe083ecaf51..66864ed33b99ba11f390fa2e3f4ce1c3
  		(void)xrtMutexUnlock(&pProcess->Lock);
  		return true;
  	}
-@@ -313500,7 +313501,8 @@ bool __xrtProcessTerminalSpawnWindows(
+@@ -327298,7 +327299,8 @@
  			);
  			goto cleanup;
  		}
@@ -268,7 +267,7 @@ index b4973e2b927128129b205240e16bffe083ecaf51..66864ed33b99ba11f390fa2e3f4ce1c3
  	}
  	if ( !CreateProcessW(
  		sProgram,
-@@ -315406,12 +315408,20 @@ bool __xrtProcessPlatformWait(
+@@ -329204,12 +329206,20 @@
  	xprocessstatus* pStatus
  )
  {
@@ -293,7 +292,7 @@ index b4973e2b927128129b205240e16bffe083ecaf51..66864ed33b99ba11f390fa2e3f4ce1c3
  	if ( iResult < 0 ) {
  		int iError = errno;
  
-@@ -315601,6 +315611,12 @@ bool __xrtProcessPlatformClose(
+@@ -329399,6 +329409,12 @@
  /* 释放全部 POSIX 父端 fd。 */
  void __xrtProcessPlatformUnit(xprocess* pProcess)
  {
@@ -306,7 +305,7 @@ index b4973e2b927128129b205240e16bffe083ecaf51..66864ed33b99ba11f390fa2e3f4ce1c3
  	__xrtProcessFdClose(&pProcess->Stdin);
  	__xrtProcessFdClose(&pProcess->Stdout);
  	__xrtProcessFdClose(&pProcess->Stderr);
-@@ -316360,6 +316376,10 @@ XRT_API bool xrtProcessRun(
+@@ -330158,6 +330174,10 @@
  			__xrtProcessRunFail(&State, xrtTakeError());
  		}
  	}

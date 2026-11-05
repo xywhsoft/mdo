@@ -1,0 +1,209 @@
+{
+  "date": "2026-11-05",
+  "published": false,
+  "dependency_lock": {
+    "schema_version": 1,
+    "hash_algorithm": "sha256-path-nul-lf-normalized-content-nul-v1",
+    "xrt": {
+      "commit": "f49b186de53221d67babe29591fc71e2e0672e13",
+      "version": "2.0.0-dev",
+      "single_header_sha256": "14afd7c681efe005d055c0f435995e17843377aaca1fbcb52ba5c48b4f562369",
+      "upstream_fixes": [],
+      "declarations_sha256": "33587f175ebad3b27861284137f38b25dfe76cf2047c7719f6be584e83a861c9"
+    },
+    "xserver": {
+      "commit": "e9a3551a5a533de34e2ca4291a8def71612fbf35",
+      "version": "1.0.0",
+      "required_extensions": [
+        "xwork",
+        "webview",
+        "image",
+        "xrudp",
+        "xoauth2",
+        "md4c"
+      ],
+      "native_extensions": {
+        "image": {
+          "abi_version": 1,
+          "tree_sha256": "2c454f809f8da1cc08bf9765deb2a2fa7e33c630abd0b1687c19dee2f5da90ee"
+        },
+        "xrudp": {
+          "source_commit": "0c46aca7519c5513c51b15de61d73d90ebca79b6",
+          "snapshot_manifest_sha256": "ca0ef1981d95cac0dca089f5389ebf517fbc0e70dd917f4de323b9a6106aa394"
+        },
+        "xoauth2": {
+          "version": "2.0.0",
+          "source_commit": "609a67436cfd6d77dde7d89f63cac36238f92b69",
+          "tree_sha256": "1b65822a21a7ebd086aa301bc864fe16dfb5052f4209035e0b9ea27bd80afae3"
+        },
+        "md4c": {
+          "source_commit": "216f5445163ca30c815ad7d5d2da3b71cb2f6401",
+          "tree_sha256": "e513d13c547601c56d32280b4143c715634507ea6c4844fe8e7515d2660907c3"
+        }
+      },
+      "source_bundle": {
+        "path": "tools/dependencies/xs-xrt-mainline.bundle",
+        "sha256": "b1eb49b9b68bd9750d7e337f00bcc12086242f2eb9d58ec5fce7e1c6184c3c59",
+        "ref": "refs/tags/mdo-xrt-mainline-20261105"
+      }
+    },
+    "libraries": {
+      "xllm": {
+        "version": "3.2.0",
+        "source_commit": "f49b186de53221d67babe29591fc71e2e0672e13",
+        "production_tree_sha256": "c6432b4cf9cb001bf4ce23553ba45244c5b0fd5852e66bb37fbdd393371cfc32"
+      },
+      "xllm-session": {
+        "version": "3.0.0-dev",
+        "source_commit": "f49b186de53221d67babe29591fc71e2e0672e13",
+        "production_tree_sha256": "b15f24962301eeb5be1cb77fb2d12c223ab566bd6932a60ad19652135f4dba23",
+        "persistence_schema_version": 4
+      },
+      "xwork": {
+        "version": "3.11.0",
+        "source_commit": "f49b186de53221d67babe29591fc71e2e0672e13",
+        "production_tree_sha256": "2066157b406a32cb0c4f9d4bab0e5999bee57c8fd96e1e0b68bc91f224b285df",
+        "abi_version": 9,
+        "event_schema_version": 3
+      }
+    },
+    "pack": {
+      "format": "XRTPACK",
+      "version": 1
+    },
+    "mdo": {
+      "module_abi_version": 1,
+      "session_schema_version": 3,
+      "config_schema_version": 1
+    },
+    "sdk_overlay": {
+      "path": "tools/dependencies/xwork-mcp.patch",
+      "sha256": "dd8b39e4d0d4387e6e74b977fcc2cde4d9e9ce85c576b545976aa2a5ebb3b665",
+      "base_commit": "e9a3551a5a533de34e2ca4291a8def71612fbf35",
+      "purpose": "Native host compatibility only: browser panels/window state/fallback, platform credentials and system proxy, rooted replacement, process ownership and PID-safe cleanup, and host-owned SDK bridges; canonical agent-library bodies are exported in the bundled base snapshot",
+      "xrt_single_header_sha256": "f99fe10ea60b5cb48217be91bc786620b683aae8a7af1b582329c210aa9da83f"
+    }
+  },
+  "native_checks": [
+    {
+      "test": "contracts",
+      "exit_code": 0,
+      "seconds": 2.8
+    },
+    {
+      "test": "agent-media",
+      "exit_code": 0,
+      "seconds": 5.16
+    },
+    {
+      "test": "process-output",
+      "exit_code": 0,
+      "seconds": 3.11
+    },
+    {
+      "test": "model-stream-terminal",
+      "exit_code": 0,
+      "seconds": 9.59
+    },
+    {
+      "test": "artifact-publication",
+      "exit_code": 0,
+      "seconds": 0.34
+    },
+    {
+      "test": "home-artifact",
+      "exit_code": 0,
+      "seconds": 12.53
+    },
+    {
+      "test": "web-result-files",
+      "exit_code": 0,
+      "seconds": 1.77
+    },
+    {
+      "test": "schedule-executor",
+      "exit_code": 0,
+      "seconds": 29.44
+    },
+    {
+      "test": "mcp-reliability",
+      "exit_code": 0,
+      "seconds": 1.23
+    },
+    {
+      "test": "search-restart",
+      "exit_code": 0,
+      "seconds": 84.73
+    }
+  ],
+  "bundle_replay": {
+    "passed": true,
+    "ref": "refs/tags/mdo-xrt-mainline-20261105",
+    "commit": "e9a3551a5a533de34e2ca4291a8def71612fbf35",
+    "patch_paths": 25,
+    "all_dependency_hashes_match": true
+  },
+  "development_runtimes": [
+    {
+      "path": ".build\\host\\xs.exe",
+      "sha256": "4e84d682870be2890e35144087a07aecacd5867ccdc132189ad341801a9335d2",
+      "bytes": 4392960
+    },
+    {
+      "path": ".build\\host\\xsw.exe",
+      "sha256": "e07f7cbe336033452e136fa120d3df58b3734c3b676e26f4b469c646bb429ecd",
+      "bytes": 4392960
+    },
+    {
+      "path": ".build\\android\\native\\libxs.so",
+      "sha256": "0b0e890a09f034968c67de0582912dc85db4571212e97e5c89be6ac38af98053",
+      "bytes": 3958176
+    }
+  ],
+  "linux_model_stream_terminal": {
+    "exit_code": 0,
+    "log": ".build/xrt-core-mainline-20261105/linux-model-stream-terminal.log"
+  },
+  "android_device_tested": false,
+  "artifacts": [
+    {
+      "path": ".build/xrt-core-mainline-20261105/host/xs.exe",
+      "bytes": 4392960,
+      "sha256": "4e84d682870be2890e35144087a07aecacd5867ccdc132189ad341801a9335d2"
+    },
+    {
+      "path": ".build/xrt-core-mainline-20261105/host/xsw.exe",
+      "bytes": 4392960,
+      "sha256": "e07f7cbe336033452e136fa120d3df58b3734c3b676e26f4b469c646bb429ecd"
+    },
+    {
+      "path": ".build/xrt-core-mainline-20261105/candidate/mdo.exe",
+      "bytes": 7114934,
+      "sha256": "8fabc09962b278ddae282f74c3a24f19886b2712d8f43530aa83a226674515d3"
+    },
+    {
+      "path": ".build/xrt-core-mainline-20261105/linux-host/xs",
+      "bytes": 4125768,
+      "sha256": "9210b0e8083abb55dca025fd05efec10b51b24891bf5a224cffb4f9a842b4148"
+    },
+    {
+      "path": ".build/xrt-core-mainline-20261105/android-native/libxs.so",
+      "bytes": 3958176,
+      "sha256": "0b0e890a09f034968c67de0582912dc85db4571212e97e5c89be6ac38af98053"
+    }
+  ],
+  "excluded_concurrent_paths": [
+    "app/include/mdo/sessions.h",
+    "app/src/api/message_edit.inc.c",
+    "app/src/api/sessions.c",
+    "app/src/sessions/manager.c",
+    "app/web/js/api/read-recovery.js",
+    "app/web/js/app.js",
+    "app/web/js/features/chat/message-edit-dialog.js",
+    "app/web/js/features/chat/message-replacement.js",
+    "app/web/js/features/chat/submission-timeline.js",
+    "app/web/js/state/sessions.js"
+  ],
+  "candidate_source": "Current committed app sources with this task's dependency metadata and generated SDK provenance; concurrent app edits replaced in build staging only. Generated SDK routes, contracts and native symbol exports were rebuilt from the committed contract source and validated staging headers.",
+  "mdo_validation_base_commit": "088b872ebfaa6ece648b67560849aaf496dd02e3"
+}

@@ -93,8 +93,8 @@ def restore_bundled_xserver(candidates: list[Path], lock: dict) -> Path | None:
     """Restore a locked compatibility commit without changing any user checkout.
 
     The small Git bundle carries the compatible xs platform/repair commits; the
-    normal xs repository supplies their historical base. It also lets a fresh
-    machine build before the compatible branch is published upstream.
+    normal xs repository supplies their historical base. A fixed snapshot ref
+    lets fresh machines rebuild without retaining a live development branch.
     """
     bundle = lock["xserver"].get("source_bundle")
     if bundle is None:
@@ -104,7 +104,7 @@ def restore_bundled_xserver(candidates: list[Path], lock: dict) -> Path | None:
     relative, digest, ref = bundle.get("path"), bundle.get("sha256"), bundle.get("ref")
     if (not isinstance(relative, str) or not isinstance(digest, str)
             or not re.fullmatch(r"[0-9a-f]{64}", digest)
-            or not isinstance(ref, str) or not ref.startswith("refs/heads/")):
+            or not isinstance(ref, str) or not ref.startswith(("refs/heads/", "refs/tags/"))):
         raise BuildError("xserver source bundle path/hash is invalid")
     path = (ROOT / relative).resolve()
     # Binary Git bundles must be hashed byte-for-byte, not normalized.
@@ -141,6 +141,17 @@ def restore_bundled_xserver(candidates: list[Path], lock: dict) -> Path | None:
 
 def find_xserver(explicit: Path | None, lock: dict) -> Path:
     expected = locked_commit(lock["xserver"], "xserver")
+    if explicit is None and not os.environ.get("MDO_XSERVER_ROOT", "").strip() and isinstance(lock.get("sdk_overlay"), dict):
+        record = lock["sdk_overlay"]
+        cache = os.environ.get("MDO_SDK_OVERLAY_CACHE")
+        cache_root = Path(cache).expanduser().resolve() if cache else ROOT / ".build/sdk-overlays"
+        cached = cache_root / record["sha256"]
+        marker = cached / ".mdo-sdk-overlay.json"
+        if marker.is_file() and load_object(marker) == record:
+            # An already verified export needs no extra checkout or branch.
+            sdk = prepare_sdk_overlay(cached, lock)
+            verify_dependencies(sdk, lock)
+            return sdk
     if explicit is not None:
         candidates = [explicit]
     else:
@@ -306,6 +317,8 @@ def verify_dependencies(xserver: Path, lock: dict) -> None:
     expected_xrt = lock.get("sdk_overlay", {}).get("xrt_single_header_sha256", xrt.get("single_header_sha256"))
     if source_file_sha256(header) != expected_xrt:
         raise BuildError("xserver lib/xrt.h does not match the locked xrt single header")
+    if xrt.get("declarations_sha256") and source_file_sha256(xserver / "lib/xrt_decl.h") != xrt["declarations_sha256"]:
+        raise BuildError("xserver lib/xrt_decl.h does not match the locked xrt declarations")
     if macro(header.read_text(encoding="utf-8"), "XRT_VERSION_TEXT") != xrt.get("version"):
         raise BuildError("xserver lib/xrt.h version does not match deps.lock")
 
