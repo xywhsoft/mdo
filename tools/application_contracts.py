@@ -230,6 +230,9 @@ NO_BODY.add('MarkdownResourceRoute')
 NO_BODY.add('QueueCancelRoute')
 RESULT['QueueCancelRoute'] = 'QueueItem'
 DEFS['QueueItem']['properties'].update(fields('phase:s executed:b terminal:b cancel_requested:b'))
+DEFS['QueueItem']['properties'].update(fields('hold_for_edit:b after_event_id:u input_event_id:u retained_input:b'))
+INPUTS['Queue']['properties'].update(fields('hold_for_edit:b'))
+INPUTS['Truncate']['properties']['replacement'] = document('text:s attachments:ss profile:Profile', ('text','attachments','profile'), True)
 QUERY['MarkdownResourceRoute']='path:s mode:s'
 
 def contract(row):

@@ -65,11 +65,11 @@ typedef struct MdoRunStartOptions {
     bool (*OnPrepared)(void* UserData, const char* RunId,
         uint64 AgentRunId);
     void* PreparedUserData;
-    /* Publish the cancellable native identity before opening/preparing a
-     * session. A false return fences a cancelled queue submission. */
-    bool (*OnReserved)(void* UserData, const char* RunId);
     uint32 Origin; /* Host provenance; unrelated to the selected runtime role. */
     const xvalue* MemberRoute; /* Native adapter: explicit owned-member recovery. */
+    /* Publish the cancellable native identity before opening/preparing a
+     * session. A false return fences a cancelled queue submission. */
+    bool (*OnReserved)(void* UserData, const char* RunId, xwork_error* Error);
 } MdoRunStartOptions;
 
 typedef struct MdoRunInfo {

@@ -39,7 +39,8 @@ export function createSubmissionState(scope) {
     for (const item of state.entries ?? []) {
       if (seen.has(item.id)) continue;
       const row = put({ ...item, durable: true }, state.projectId, state.sessionId);
-      if (row.phase === "unconfirmed" && !row.cancelRequested && !row.receipt?.executed) row.phase = "";
+      if (row.phase === "unconfirmed" && !row.cancelRequested && !row.receipt?.executed &&
+          ["pending", "staged"].includes(item.state) && !item.start_claimed && !item.run_id) row.phase = "";
       if (item.state === "cancelled") {
         row.cancelRequested = true;
         if (!row.receipt?.terminal) row.phase = "stopping";
@@ -59,9 +60,10 @@ export function createSubmissionState(scope) {
         row.id === head && !state.active && !current.some(other => other !== row && other.entered);
       if (!row.entered && entering) {
         row.entered = true;
+        row.anchoredBeforeCancellation = row.state !== "cancelled" && !row.cancelRequested;
         row.afterEventId = (state.events ?? []).reduce((id, event) => Math.max(id, Number(event.event_id) || 0), 0);
       }
-      row.displayPhase = row.phase || (row.error ? "failed" : !row.durable ? "saving" :
+      row.displayPhase = row.phase || (row.hold_for_edit ? "edit_saved" : row.error ? "failed" : !row.durable ? "saving" :
         row.missing ? "unconfirmed" : row.state === "sending" || row.id === head && !state.active ? "preparing" : "queued");
     }
     return { rows: current, visible: current.filter(row => row.entered), seen, head, owner };
@@ -69,6 +71,11 @@ export function createSubmissionState(scope) {
   return {
     reconcile, put, get: id => rows.get(id),
     values: () => [...rows.values()],
+    consume(id, state) {
+      const sessionKey = key(state); let seen = consumed.get(sessionKey);
+      if (!seen) { seen = new Set(); consumed.set(sessionKey, seen); }
+      seen.add(id); rows.delete(id);
+    },
     begin(value) {
       check();
       const pending = [...rows.values()].find(row => !row.durable && !terminal.has(row.phase) &&
@@ -83,7 +90,8 @@ export function createSubmissionState(scope) {
       if (terminal.has(row.phase) && !terminal.has(value.phase)) return;
       if (row.cancelRequested && ["preparing", "running", "accepted"].includes(value.phase) && !value.terminal) return;
       row.receipt = value; row.phase = value.phase || value.state;
-      if (Number.isSafeInteger(value.after_event_id) && value.after_event_id >= 0) row.afterEventId = value.after_event_id;
+      if (!row.anchoredBeforeCancellation && Number.isSafeInteger(value.after_event_id) && value.after_event_id >= 0)
+        row.afterEventId = value.after_event_id;
       if (value.cancel_requested) row.cancelRequested = true;
     },
     delete: id => rows.delete(id),

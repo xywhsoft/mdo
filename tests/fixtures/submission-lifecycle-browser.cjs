@@ -26,6 +26,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
   await entered;
   const old=page.locator('.submission-user').filter({hasText:'cancel during initial preparation'});
   await old.waitFor();
+  assert.notEqual((await page.locator('#run-status').innerText()).trim(),'就绪','preparing input must not show idle');
   assert.equal(await page.locator('#timeline .submission-user').count(),1,'provisional input belongs to the real timeline');
   await page.locator('#send[data-action="stop"]').click();
   await page.locator('#prompt').fill('newer prompt');
@@ -62,10 +63,30 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
   await page.reload();await page.waitForFunction(()=>Boolean(window.mdo));
   await page.locator('#timeline .timeline-item[data-kind="user"]').filter({hasText:'replacement after cancelled preparation'}).waitFor();
   assert.equal(await page.locator('.submission-user').count(),0,'reloading cannot resurrect the cancelled input');
+  // Native admission is NOT the history handoff. Hold a real Agent prepare
+  // callback after the run ID is published but before any Agent Start event.
+  await page.goto(origin+'/#/projects/edit-qa/sessions/accepted-prep');
+  await page.locator('#prompt').fill('accepted preflight barrier');await page.locator('#send').click();
+  for(let attempt=0;attempt<200&&!fs.readFileSync(dir+'/runtime.log','utf8').includes('PREP_BARRIER_ENTERED=1');attempt++)await page.waitForTimeout(50);
+  assert(fs.readFileSync(dir+'/runtime.log','utf8').includes('PREP_BARRIER_ENTERED=1'),'the real prepare callback must be holding');
+  await page.locator('#send[data-action="stop"]').click();
+  await page.waitForFunction(()=>document.querySelector('#prompt').value==='accepted preflight barrier',{},{timeout:30000});
+  await page.waitForFunction(()=>document.querySelectorAll('.submission-user').length===0);
+  assert.equal(await page.locator('#timeline .timeline-item[data-kind="user"]').count(),0,'a native run ID alone cannot commit the user message');
+  assert.equal(fs.readFileSync(dir+'/runtime.log','utf8').match(/EDIT_MODEL_CALL=/g)?.length||0,2,'the stopped prepare callback never reaches a model');
+  const discardId='e'.repeat(32),discardQueue='/api/v1/projects/edit-qa/sessions/accepted-prep/queue';
+  const staged=await page.request.post(origin+discardQueue,{headers:{'X-Mdo-Write-Token':token},data:{id:discardId,text:'discard stopped input',first:false,managed:true,stage:true,hold_for_edit:true}});
+  assert.equal(staged.status(),201);
+  assert.equal((await page.request.post(origin+discardQueue+'/'+discardId+'/cancel',{headers:{'X-Mdo-Write-Token':token}})).status(),200);
+  await page.reload();await page.waitForFunction(()=>Boolean(window.mdo));
+  await page.locator('.submission-reply').getByRole('button',{name:'移除',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelectorAll('.submission-user').length===0);
+  assert.equal(await page.locator('#prompt').inputValue(),'accepted preflight barrier','discard must preserve the occupied draft');
+  assert.equal((await (await page.request.get(origin+discardQueue)).json()).data.items.length,0);
   await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:dir+'/mobile.png',fullPage:true});
   assert.deepEqual(errors,[]);
-  fs.writeFileSync(dir+'/browser.json',JSON.stringify({passed:true,newTask:true,stopBeforeRun:true,noCancelledModelCall:true,newTypingPreserved:true,chronological:true,editable:true,noReplay:true,noResurrection:true,mobile:true,errors},null,2));
+  fs.writeFileSync(dir+'/browser.json',JSON.stringify({passed:true,newTask:true,stopBeforeRun:true,stopAfterAdmissionBeforeHistory:true,noCancelledModelCall:true,newTypingPreserved:true,chronological:true,editable:true,discard:true,noReplay:true,noResurrection:true,mobile:true,errors},null,2));
   console.log('PASS native first-message preparation stop, typing preservation, chronological handoff, edit/resend and reload');
  }catch(error){release?.();console.error(error);console.error((await page.locator('body').innerText()).slice(-4500));await page.screenshot({path:dir+'/failure.png',fullPage:true});throw error;}
  finally{await browser.close();}

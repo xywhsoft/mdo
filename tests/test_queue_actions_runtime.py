@@ -46,12 +46,15 @@ class Model(BaseHTTPRequestHandler):
             pass
 
 
-def check(host):
-    with tempfile.TemporaryDirectory(prefix="queue-actions-", dir=ROOT / ".build") as raw:
+def check(host, temp_root=None):
+    # Keep source injection confined to .build, while allowing Home's atomic
+    # directory operations to run on a native Linux filesystem under WSL.
+    with tempfile.TemporaryDirectory(prefix="queue-actions-", dir=ROOT / ".build") as raw, \
+            tempfile.TemporaryDirectory(prefix="queue-home-", dir=temp_root or raw) as home_raw:
         base = Path(raw)
         port = free_port()
         config = write_site(base, port)
-        home = base / "home"
+        home = Path(home_raw) / "home"
         environment = {**os.environ, "USERPROFILE": str(base), "HOME": str(base),
                        "USE_WEBVIEW": "0", "MDO_QUEUE_FIXTURE_KEY": "fixture-only"}
         server = ThreadingHTTPServer(("127.0.0.1", 0), Model)
@@ -250,12 +253,26 @@ def check(host):
             early = "c" * 32
             assert call("POST", q + "/" + early + "/cancel")["state"] == "cancelled"
             assert call("POST", q, {"id": early, "text": "late arrival", "first": False}, 409)["error"]["code"] == "queue_item_consumed"
+            held = "d" * 32
+            before_held = len(Model.calls)
+            call("POST", q, {"id": held, "text": "durable edit reservation", "first": False,
+                "managed": True, "stage": True, "hold_for_edit": True, "profile": profile}, 201)
+            assert call("PUT", q + "/" + held, {"state": "pending"}, 409)["error"]["code"] == "queue_state_conflict"
+            assert action("resume")[0] == 200
+            stop(); start()
+            assert call("GET", q)["items"][0]["hold_for_edit"]
+            assert len(Model.calls) == before_held, "a crash between edit phases cannot execute an unconfirmed replacement"
+            call("POST", q + "/" + held + "/cancel")
+            assert not call("GET", q)["items"][0].get("hold_for_edit")
             print("Queue runtime: ordering, extraction, headless dispatch, cancellation fences, draft recovery, backup and restart: PASS")
         except BaseException:
             if process and process.poll() is None:
-                print("QUEUE", call("GET", q))
-                print("RUNS", call("GET", "/api/v1/runs"))
-                print("MODEL_CALLS", len(Model.calls))
+                try:
+                    if 'q' in locals(): print("QUEUE", call("GET", q))
+                    print("RUNS", call("GET", "/api/v1/runs"))
+                    print("MODEL_CALLS", len(Model.calls))
+                except Exception:
+                    pass  # Keep the original fixture failure and its log.
             log.flush()
             print((base / "queue.log").read_text(encoding="utf-8", errors="replace")[-9000:])
             raise
@@ -268,4 +285,6 @@ def check(host):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", type=Path, default=ROOT / ".build/host/xs.exe")
-    check(parser.parse_args().host.resolve())
+    parser.add_argument("--temp-root", type=Path, help="Disposable Home parent; use a native Linux filesystem when DrvFS lacks renameat2")
+    args = parser.parse_args()
+    check(args.host.resolve(), args.temp_root)

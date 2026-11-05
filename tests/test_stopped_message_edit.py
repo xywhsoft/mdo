@@ -35,6 +35,11 @@ def main():
         workspace.mkdir()
         home = base / 'home'
         prepare_history_home(home)
+        role = home / 'agents/prepare-barrier'
+        role.mkdir(parents=True)
+        (role / 'extension.json').write_text(json.dumps({'kind':'agents','id':'agent:prepare-barrier',
+            'name':'Prepare barrier','alias':'prepare-barrier','entry':'agent.c','platforms':['any']}),encoding='utf-8')
+        (role / 'agent.c').write_text((ROOT / 'tests/fixtures/submission-prepare-agent.c').read_text(encoding='utf-8'),encoding='utf-8')
         subprocess.run(['git', 'init', '--quiet', str(workspace)], check=True)
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0))

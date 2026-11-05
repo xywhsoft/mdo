@@ -216,7 +216,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     const waitingForProfile = !waitingForRun && isProfileBusy();
     const retry = !writable || waitingForRun || waitingForProfile || !saved.length || reviewPending ||
       sendingLocally ||
-      acceptedRun || claimedRun || (meta.managed && !meta.paused) || saved[0]?.state === "editing" ? null : element("button", {
+      acceptedRun || claimedRun || saved[0]?.hold_for_edit || (meta.managed && !meta.paused) || saved[0]?.state === "editing" ? null : element("button", {
       text: uiMessage(uncertain ? "queue.retryUncertain" : stagedHead
         ? "queue.continueStaged" : "queue.sendNext"),
       attrs: { type: "button", "data-queue-focus": "retry" },

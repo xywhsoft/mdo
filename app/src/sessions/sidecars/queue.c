@@ -204,7 +204,6 @@ bool MdoQueueInsert(MdoQueue* Queue, const char* Id,
     size_t Position = First && Queue->Count != 0u &&
         Queue->Items[0].State == MDO_QUEUE_SENDING ? 1u :
         (First ? 0u : Queue->Count);
-    while ( Position && Queue->Items[Position - 1u].State == MDO_QUEUE_CANCELLED ) --Position;
     if ( Queue->Count >= MDO_QUEUE_MAX_ITEMS ||
          Text.Size > MDO_QUEUE_MAX_TOTAL_TEXT - Queue->TextBytes )
         return false;
@@ -317,6 +316,7 @@ bool MdoQueueParse(xstrview Json, MdoQueue* Queue)
         const xvalue* ProfileValue = xrtValueObjectGet(Entry,
             XRT_STR_LITERAL("profile"));
         const xvalue* EditValue = xrtValueObjectGet(Entry, XRT_STR_LITERAL("edit"));
+        const xvalue* HoldValue = xrtValueObjectGet(Entry, XRT_STR_LITERAL("hold_for_edit"));
         MdoComposerProfile Profile = { 0 };
         char IdText[MDO_QUEUE_ID_SIZE + 1u];
         char Attachments[4][33] = {{ 0 }};
@@ -327,7 +327,7 @@ bool MdoQueueParse(xstrview Json, MdoQueue* Queue)
              xrtValueCount(Entry) != (Schema == 1u ? 3u :
                 (Schema == 2u ? 4u : 5u +
                     (Schema >= 5u && RunIdValue != NULL ? 1u : 0u))) +
-                    (ProfileValue != NULL ? 1u : 0u) + (EditValue != NULL ? 1u : 0u) ||
+                    (ProfileValue != NULL ? 1u : 0u) + (EditValue != NULL ? 1u : 0u) + (HoldValue != NULL ? 1u : 0u) ||
              (ProfileValue != NULL && (Schema < 7u ||
               !MdoComposerProfileParse(ProfileValue, false, &Profile) ||
               !Profile.Present)) ||
@@ -353,6 +353,8 @@ bool MdoQueueParse(xstrview Json, MdoQueue* Queue)
                 AttachmentCount, false, Priority, State, &Profile) ) goto done;
         if ( RunIdValue != NULL )
             memcpy(Queue->Items[Queue->Count - 1u].RunId, RunId, sizeof(RunId));
+        if (HoldValue && (Schema < 8u || State != MDO_QUEUE_STAGED ||
+            !MdoQueueBool(Entry, "hold_for_edit", &Queue->Items[Queue->Count - 1u].HoldForEdit))) goto done;
         if ( (State == MDO_QUEUE_EDITING) != (EditValue != NULL) ||
              (EditValue && (Schema < 8u ||
               !MdoQueueActionParse(EditValue, &Queue->Items[Queue->Count - 1u].Edit) ||
@@ -391,14 +393,17 @@ bool MdoQueueReceiptParse(xstrview Json, const char* ExpectedId, MdoQueueReceipt
         Schema = (uint64)Signed;
     } else goto done;
     if ( xrtValueType(Root) != XVALUE_OBJECT ||
-         xrtValueCount(Root) != (Schema == 3u ? 5u : Schema == 4u ? 4u : 3u) ||
-         (Schema != 1u && Schema != 2u && Schema != 3u && Schema != 4u) ||
+         xrtValueCount(Root) != (Schema == 3u || Schema == 5u ? 5u : Schema == 4u ? 4u : 3u) ||
+         (Schema < 1u || Schema > 5u) ||
          !MdoQueueString(Root, "id", &StoredId) ||
          StoredId.Size != MDO_QUEUE_ID_SIZE || strlen(ExpectedId) != MDO_QUEUE_ID_SIZE ||
          memcmp(StoredId.Data, ExpectedId, MDO_QUEUE_ID_SIZE) != 0 ) goto done;
-    if ( Schema == 1u ) {
+    if ( Schema == 1u || Schema == 5u ) {
         if ( !MdoQueueString(Root, "run_id", &StoredRun) ||
              !MdoQueueRunId(StoredRun, Receipt->RunId) ) goto done;
+        if (Schema == 5u && (!MdoQueueUInt(Root, "input_event_id", &Receipt->InputEventId) ||
+            !Receipt->InputEventId || Receipt->InputEventId > UINT64_C(9007199254740991) ||
+            !MdoQueueUInt(Root, "agent_run_id", &Receipt->AgentRunId) || !Receipt->AgentRunId)) goto done;
     } else {
         if ( !MdoQueueString(Root, "state", &StoredState) ||
              StoredState.Size != 8u ||

@@ -3592,5 +3592,7 @@
   "submission.syncing": "正在同步回复…",
   "submission.edit": "编辑",
   "submission.cancel": "停止",
-  "submission.draftOccupied": "请先发送或清空输入框中的草稿，再恢复这条消息。"
+  "submission.draftOccupied": "请先发送或清空输入框中的草稿，再恢复这条消息。",
+  "submission.editSaved": "消息编辑尚未完成，输入已保存。可停止并恢复编辑后继续。",
+  "submission.remove": "移除"
 }

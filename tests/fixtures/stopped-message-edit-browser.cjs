@@ -55,6 +55,8 @@ const assert=require('node:assert/strict');const fs=require('node:fs');
   }
   assert.equal(staleReplay.status(),409,await staleReplay.text());
   assert.equal((await staleReplay.json()).error.code,'session_history_changed','a cached cut cannot replay after new history');
+  const different=await page.request.post(origin+session+'/truncate',{headers:{'If-Match':editEtag,'X-Mdo-Write-Token':token},data:{...editBody,replacement:{...editBody.replacement,text:'different body under the same edit ID'}}});
+  assert.equal(different.status(),409);assert.equal((await different.json()).error.code,'session_edit_conflict');
   let releaseRead,readEntered;
   const readGate=new Promise(resolve=>releaseRead=resolve),reading=new Promise(resolve=>readEntered=resolve);
   await page.route('**/history',async route=>{readEntered();await readGate;await route.continue();});

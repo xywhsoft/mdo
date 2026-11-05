@@ -729,9 +729,9 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
     (void)xrtMutexUnlock(g_MdoRuns.Lock);
 
     if ( Options->OnReserved != NULL &&
-         !Options->OnReserved(Options->PreparedUserData, Reserved.Id) ) {
-        MdoRunsError(Error, XWORK_ERROR_CANCELLED,
-            "queued message was cancelled before session preparation");
+         !Options->OnReserved(Options->PreparedUserData, Reserved.Id, Error) ) {
+        if (!Error || Error->eCode == XWORK_ERROR_NONE) MdoRunsError(Error, XWORK_ERROR_CONTEXT,
+            "queued run reservation was rejected before session preparation");
         goto publish;
     }
     Deadline = Options->TimeoutMilliseconds != 0u ?

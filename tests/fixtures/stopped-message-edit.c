@@ -25,6 +25,9 @@ void ServiceInit(XS_HostInfo* Host){
     if(!MdoProjectCreate(&P,NULL,&E)){printf("EDIT_INIT_FAILED=%s\n",E.sMessage);return;}
     MdoSessionCreateOptions O;MdoSessionCreateOptionsInit(&O);O.ProjectId=P.Id;O.RequestedId="stopped-edit";O.Title="Stopped edit fixture";
     O.Agent.WorkspaceRoot=Workspace;O.Agent.AgentId="mdo.default";O.Agent.ModelId="history-fixture";O.Agent.Protocol=MDO_MODEL_PROTOCOL_OPENAI_RESPONSES;O.Agent.PermissionProfile="full-access";
-    MdoSession* Session=MdoSessionCreate(&O,&E);if(!Session)printf("EDIT_INIT_FAILED=%s\n",E.sMessage);MdoSessionRelease(Session);xrtFree(Workspace);
+    MdoSession* Session=MdoSessionCreate(&O,&E);if(!Session)printf("EDIT_INIT_FAILED=%s\n",E.sMessage);MdoSessionRelease(Session);
+    O.RequestedId="accepted-prep";O.Title="Accepted preparation";O.Agent.AgentId="agent.prepare-barrier";
+    O.Agent.WorkspaceRoot=P.WorkspaceRoot;
+    Session=MdoSessionCreate(&O,&E);if(!Session)printf("EDIT_INIT_FAILED=barrier:%s\n",E.sMessage);MdoSessionRelease(Session);xrtFree(Workspace);
     printf("EDIT_FIXTURE_READY=1\n");fflush(stdout);
 }

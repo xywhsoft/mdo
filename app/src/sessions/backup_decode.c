@@ -114,7 +114,6 @@ static bool MdoDecodeSidecar(MdoDecode* Decode, const MdoBackupOwnedFile* File)
     } else if ( strncmp(File->Path, "queue-cancellations/", 20u) == 0 ) {
         xvalue* Value = xrtJsonParse(Json); xstrview Id;
         uint64 Schema = 0u;
-        const xvalue* Version = xrtValueObjectGet(Value, XRT_STR_LITERAL("schema_version"));
         uint64 Anchor = 0u;
         const xvalue* After = xrtValueObjectGet(Value, XRT_STR_LITERAL("after_event_id"));
         Ok = xrtValueType(Value) == XVALUE_OBJECT && xrtValueCount(Value) == (After ? 3u : 2u) &&

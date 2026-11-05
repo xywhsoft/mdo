@@ -175,6 +175,7 @@ export async function truncateSession(session, throughSequence, sourceEventId, o
     if (!/^[0-9a-f]{32}$/.test(options.editId) || !body.source_event_id)
       throw new TypeError(uiErrorText("error.detail.guardedEditIdentityIsInvalid", {}, "Guarded edit identity is invalid"));
     body.client_edit_id = options.editId;
+    if (options.replacement) body.replacement = options.replacement;
     if (options.historyToken) body.history_token = options.historyToken;
   }
   const response = await withSessionRuntime(session.project_id, session.id,

@@ -1714,16 +1714,16 @@ void MdoSessionEventBridgeCaptureUnlock(MdoSessionEventBridge* Bridge)
     if ( Bridge != NULL ) xrtMutexUnlock(Bridge->Lock);
 }
 
-bool MdoSessionEventQueueStartSeen(const char* ProjectId,
-    const char* SessionId, const char* QueueItemId, uint64 AgentRunId,
-    bool* Seen)
+bool MdoSessionEventQueueInput(const char* ProjectId,
+    const char* SessionId, const char* QueueItemId, uint64* EventId,
+    uint64* AgentRunId)
 {
     char Path[MDO_SESSION_PATH_CAPACITY];
-    if(!Seen||!QueueItemId||!AgentRunId||
+    if(!EventId||!AgentRunId||!QueueItemId||
        !MdoEventsIdValid(ProjectId,MDO_PROJECT_ID_CAPACITY)||
        !MdoEventsIdValid(SessionId,MDO_SESSION_ID_CAPACITY)||strlen(QueueItemId)!=32u||
        !MdoEventsPath(Path,ProjectId,SessionId))return false;
-    *Seen=false;
+    *EventId=0u;*AgentRunId=0u;
     for(size_t I=0;I<32u;++I)
         if(!((QueueItemId[I]>='0'&&QueueItemId[I]<='9')||(QueueItemId[I]>='a'&&QueueItemId[I]<='f')))return false;
     MdoEventReader* Reader=MdoEventReaderOpen(Path);if(!Reader)return false;
@@ -1732,12 +1732,24 @@ bool MdoSessionEventQueueStartSeen(const char* ProjectId,
         if(!MdoEventRecordContains(Record,QueueItemId,32u))continue;
         MdoSessionEventOwned Event;
         if(MdoEventsParse(ProjectId,SessionId,Record,&Event)){
-            *Seen=Event.Info.Kind==XWORK_EVENT_AGENT_START&&!Event.Info.AgentDepth&&
-                Event.Info.RunId==AgentRunId&&!strcmp(Event.Info.QueueItemId,QueueItemId);
-            MdoEventsOwnedUnit(&Event);if(*Seen)break;
+            if(Event.Info.Kind==XWORK_EVENT_AGENT_START&&!Event.Info.AgentDepth&&
+                !strcmp(Event.Info.QueueItemId,QueueItemId)){
+                *EventId=Event.Info.EventId;*AgentRunId=Event.Info.RunId;
+            }
+            MdoEventsOwnedUnit(&Event);if(*EventId)break;
         }else xrtClearError();
     }
     bool Ok=!Reader->Failed;MdoEventReaderClose(Reader);return Ok;
+}
+
+bool MdoSessionEventQueueStartSeen(const char* ProjectId,
+    const char* SessionId, const char* QueueItemId, uint64 AgentRunId, bool* Seen)
+{
+    uint64 EventId, FoundRun;
+    if(!Seen||!AgentRunId)return false;
+    *Seen=false;
+    if(!MdoSessionEventQueueInput(ProjectId,SessionId,QueueItemId,&EventId,&FoundRun))return false;
+    *Seen=EventId&&FoundRun==AgentRunId;return true;
 }
 
 MdoSessionEventSnapshot* MdoSessionEventSnapshotRef(

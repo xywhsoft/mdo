@@ -3592,5 +3592,7 @@
   "submission.syncing": "Syncing reply…",
   "submission.edit": "Edit",
   "submission.cancel": "Stop",
-  "submission.draftOccupied": "Send or clear your current draft before restoring this message."
+  "submission.draftOccupied": "Send or clear your current draft before restoring this message.",
+  "submission.editSaved": "This message edit is incomplete. Your input is saved; stop and restore it to continue.",
+  "submission.remove": "Remove"
 }

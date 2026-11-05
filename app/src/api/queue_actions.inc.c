@@ -125,7 +125,8 @@ bool MdoApiQueueActionsRoute(MdoApiContext* Context)
                     bool Exists; char Run[MDO_RUN_ID_CAPACITY], Reserved[MDO_RUN_ID_CAPACITY];
                     if ( !MdoQueueReceiptReadEx(Project, Session, Item->Id, &Exists, Run, Reserved, NULL) ) Ok = false;
                     MdoRunInfo Info = {0}; Info.Size = sizeof(Info);
-                    if ( Ok && Reserved[0] && MdoRunGetInfo(Reserved, &Info) && !Info.Terminal )
+                    const char* Identity = Run[0] ? Run : Reserved;
+                    if ( Ok && Identity[0] && MdoRunGetInfo(Identity, &Info) && !Info.Terminal )
                         Conflict = "session_runtime_busy";
                 }
                 for ( size_t i = 0u; i < Queue.Count; ++i )

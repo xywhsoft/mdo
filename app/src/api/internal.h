@@ -237,8 +237,10 @@ bool MdoApiQueueInit(void);
 void MdoApiQueueUnit(void);
 bool MdoApiQueueActionsRoute(MdoApiContext* Context);
 bool MdoApiQueueCancelRoute(MdoApiContext* Context);
+bool MdoApiQueueStageReplacement(MdoApiContext* Context, const char* Id, const xvalue* Input);
+bool MdoApiQueueCommitReplacement(const char* Project, const char* Session, const char* Id);
 bool MdoApiQueueRunRecordReserved(const char* ProjectId,
-    const char* SessionId, const char* Id, const char* RunId);
+    const char* SessionId, const char* Id, const char* RunId, xwork_error* Error);
 bool MdoApiQueueStart(void);
 void MdoApiQueueStop(void);
 int MdoApiDraftQueueRestore(const char* Project, const char* Session,

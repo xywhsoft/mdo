@@ -90,20 +90,15 @@ static bool MdoQueueReceiptPath(char Path[MDO_SESSION_PATH_CAPACITY],
 
 /* A receipt survives queue removal. A malformed receipt fails closed: the
  * same queue ID must never become available merely because storage is bad. */
-static bool MdoQueueReceiptReadEx(const char* ProjectId,
-    const char* SessionId, const char* Id, bool* Exists,
-    char RunId[MDO_RUN_ID_CAPACITY],
-    char PreparedRunId[MDO_RUN_ID_CAPACITY], uint64* AgentRunId)
+static bool MdoQueueReceiptLoad(const char* ProjectId,
+    const char* SessionId, const char* Id, bool* Exists, MdoQueueReceipt* Receipt)
 {
     char Path[MDO_SESSION_PATH_CAPACITY];
     xfileinfo Info;
     xfile File = NULL;
     char Bytes[MDO_QUEUE_RECEIPT_FILE_MAX + 1u];
-    MdoQueueReceipt Receipt;
     bool Ok = false;
-    *Exists = false; RunId[0] = '\0';
-    if ( PreparedRunId != NULL ) PreparedRunId[0] = '\0';
-    if ( AgentRunId != NULL ) *AgentRunId = 0u;
+    *Exists = false; memset(Receipt, 0, sizeof(*Receipt));
     if ( !MdoQueueReceiptPath(Path, ProjectId, SessionId, Id) ||
          !MdoHomeExternalStat(Path, Exists, &Info) ) return false;
     if ( !*Exists ) return true;
@@ -111,13 +106,24 @@ static bool MdoQueueReceiptReadEx(const char* ProjectId,
          Info.Size == 0u || Info.Size > MDO_QUEUE_RECEIPT_FILE_MAX ) return false;
     File = MdoHomeOpenRead(Path);
     if ( File != NULL && xrtReadFull(File, Bytes, (size_t)Info.Size, NULL) )
-        Ok = MdoQueueReceiptParse(xrtStrViewN(Bytes, (size_t)Info.Size), Id, &Receipt);
+        Ok = MdoQueueReceiptParse(xrtStrViewN(Bytes, (size_t)Info.Size), Id, Receipt);
     if ( File != NULL && !xrtClose(File) ) Ok = false;
-    if ( !Ok ) return false;
-    if ( Receipt.Schema == 1u ) memcpy(RunId, Receipt.RunId, MDO_RUN_ID_CAPACITY);
-    if ( Receipt.Schema == 3u || Receipt.Schema == 4u ) {
-        if ( PreparedRunId != NULL ) memcpy(PreparedRunId, Receipt.RunId, MDO_RUN_ID_CAPACITY);
-        if ( AgentRunId != NULL ) *AgentRunId = Receipt.AgentRunId;
+    return Ok;
+}
+
+static bool MdoQueueReceiptReadEx(const char* ProjectId,
+    const char* SessionId, const char* Id, bool* Exists,
+    char RunId[MDO_RUN_ID_CAPACITY], char PreparedRunId[MDO_RUN_ID_CAPACITY], uint64* AgentRunId)
+{
+    MdoQueueReceipt Receipt;
+    RunId[0] = '\0';
+    if (PreparedRunId) PreparedRunId[0] = '\0';
+    if (AgentRunId) *AgentRunId = 0u;
+    if (!MdoQueueReceiptLoad(ProjectId, SessionId, Id, Exists, &Receipt)) return false;
+    if (Receipt.Schema == 1u || Receipt.Schema == 5u) memcpy(RunId, Receipt.RunId, MDO_RUN_ID_CAPACITY);
+    if (Receipt.Schema == 3u || Receipt.Schema == 4u) {
+        if (PreparedRunId) memcpy(PreparedRunId, Receipt.RunId, MDO_RUN_ID_CAPACITY);
+        if (AgentRunId) *AgentRunId = Receipt.AgentRunId;
     }
     return true;
 }
@@ -153,6 +159,26 @@ static bool MdoQueueReceiptWrite(const char* ProjectId,
         MdoHomeAtomicWrite(Path, Bytes, (size_t)Written, false);
 }
 
+static bool MdoQueueInputAnchor(const char* Project, const char* Session, const char* Id, uint64* EventId)
+{
+    bool Exists; MdoQueueReceipt Receipt;
+    *EventId = 0u;
+    if (!MdoQueueReceiptLoad(Project, Session, Id, &Exists, &Receipt)) return false;
+    if (!Exists || Receipt.Schema == 2u || Receipt.Schema == 4u) return true;
+    if (Receipt.Schema == 5u) { *EventId = Receipt.InputEventId; return true; }
+    uint64 AgentRun;
+    if (!MdoSessionEventQueueInput(Project, Session, Id, EventId, &AgentRun)) return false;
+    if (*EventId && Receipt.Schema == 1u) {
+        char Path[MDO_SESSION_PATH_CAPACITY], Json[MDO_QUEUE_RECEIPT_FILE_MAX];
+        int n = snprintf(Json, sizeof(Json),
+            "{\"schema_version\":5,\"id\":\"%s\",\"run_id\":\"%s\",\"input_event_id\":%llu,\"agent_run_id\":%llu}",
+            Id, Receipt.RunId, (unsigned long long)*EventId, (unsigned long long)AgentRun);
+        if (!MdoQueueReceiptPath(Path, Project, Session, Id) || n <= 0 || (size_t)n >= sizeof(Json) ||
+            !MdoHomeAtomicWrite(Path, Json, (size_t)n, false)) return false;
+    }
+    return true;
+}
+
 /* Only a matching, durable main-Agent start event can promote a prepared
  * receipt. Missing or trimmed evidence remains an explicit review state. */
 static bool MdoQueueReceiptResolve(const char* ProjectId,
@@ -175,7 +201,7 @@ static bool MdoQueueReceiptResolve(const char* ProjectId,
 }
 
 bool MdoApiQueueRunRecordReserved(const char* ProjectId,
-    const char* SessionId, const char* Id, const char* RunId)
+    const char* SessionId, const char* Id, const char* RunId, xwork_error* Error)
 {
     char Path[MDO_SESSION_PATH_CAPACITY], Json[MDO_QUEUE_RECEIPT_FILE_MAX];
     char Existing[MDO_RUN_ID_CAPACITY], Prepared[MDO_RUN_ID_CAPACITY];
@@ -190,6 +216,11 @@ bool MdoApiQueueRunRecordReserved(const char* ProjectId,
         Ok = n > 0 && (size_t)n < sizeof(Json) && MdoHomeAtomicWrite(Path, Json, (size_t)n, false);
     }
     xrtMutexUnlock(g_MdoQueueLock);
+    if (!Ok && Error) {
+        xworkErrorInit(Error); Error->eCode = Cancelled ? XWORK_ERROR_CANCELLED : XWORK_ERROR_IO;
+        snprintf(Error->sMessage, sizeof(Error->sMessage), "%s", Cancelled ?
+            "queued message was cancelled before session preparation" : "cannot persist the queued run reservation");
+    }
     return Ok;
 }
 
@@ -283,8 +314,11 @@ static bool MdoQueueRead(const char* Path, const char* ProjectId,
                     /* Once history owns this input, it must not also survive
                      * as an editable pre-start draft. */
                     if ( !MdoQueueReceiptResolve(ProjectId, SessionId, Item->Id, &ReceiptExists, ReceiptRunId) ) { Ok = false; break; }
-                    if ( ReceiptRunId[0] ) { MdoQueueRemove(Queue, i--); continue; }
+                    uint64 Input = 0u;
+                    if (!MdoQueueInputAnchor(ProjectId, SessionId, Item->Id, &Input)) { Ok = false; break; }
+                    if ( Input ) { MdoQueueRemove(Queue, i--); continue; }
                     if ( Item->State != MDO_QUEUE_EDITING ) Item->State = MDO_QUEUE_CANCELLED;
+                    Item->HoldForEdit = false;
                     Item->StartClaimed = false; Item->RunId[0] = '\0'; Item->Priority = false;
                     continue;
                 }
@@ -379,6 +413,7 @@ static xvalue* MdoQueueValue(const MdoQueue* Queue, bool IncludeClaim)
             MdoAttachmentIdsWriteValue(Item, Source->Attachments,
                 Source->AttachmentCount) &&
             MdoApiValueSetBool(Item, "priority", Source->Priority) &&
+            (!Source->HoldForEdit || MdoApiValueSetBool(Item, "hold_for_edit", true)) &&
             MdoApiProfileSet(Item, "profile", &Source->Profile) &&
             (Source->State != MDO_QUEUE_EDITING ||
              xrtValueObjectSetNew(Item, XRT_STR_LITERAL("edit"), MdoQueueActionValue(&Source->Edit))) &&
@@ -750,6 +785,7 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
     bool First = false;
     bool Priority = false;
     bool Stage = false;
+    bool HoldForEdit = false;
     bool Managed = false;
     bool Add = Context->Request->head->MethodCode == XHTTP_METHOD_POST;
     bool Ok;
@@ -787,11 +823,12 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
             const xvalue* ProfileValue = xrtValueObjectGet(Body.Value,
                 XRT_STR_LITERAL("profile"));
             const xvalue* ManagedValue = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("managed"));
+            const xvalue* HoldValue = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("hold_for_edit"));
             Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
                 xrtValueCount(Body.Value) == (References == NULL ? 3u : 4u) +
                     (PriorityValue == NULL ? 0u : 1u) +
                     (StageValue == NULL ? 0u : 1u) +
-                    (ProfileValue == NULL ? 0u : 1u) + (ManagedValue == NULL ? 0u : 1u) &&
+                    (ProfileValue == NULL ? 0u : 1u) + (ManagedValue == NULL ? 0u : 1u) + (HoldValue == NULL ? 0u : 1u) &&
                 MdoQueueString(Body.Value, "id", &IdView) &&
                 MdoQueueString(Body.Value, "text", &Text) &&
                 MdoQueueBool(Body.Value, "first", &First) &&
@@ -800,6 +837,7 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
                  MdoQueueBool(Body.Value, "priority", &Priority)) &&
                 (StageValue == NULL ||
                  MdoQueueBool(Body.Value, "stage", &Stage)) &&
+                (HoldValue == NULL || (MdoQueueBool(Body.Value, "hold_for_edit", &HoldForEdit) && Stage)) &&
                 (ProfileValue == NULL ||
                  (MdoApiProfileRead(ProfileValue, &Profile) &&
                   Profile.Present)) &&
@@ -869,11 +907,13 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
                     Queue.CancelRunId[0] = '\0';
                 }
                 Queue.Managed = Queue.Managed || Managed;
-                if ( !Full ) Ok = MdoQueueInsert(&Queue, Id, Text,
+                if ( !Full ) {
+                Ok = MdoQueueInsert(&Queue, Id, Text,
                     Attachments, AttachmentCount, First, Priority,
                     Stage ? MDO_QUEUE_STAGED : MDO_QUEUE_PENDING,
-                    &Profile) &&
-                    MdoQueueWrite(Path, &Queue);
+                    &Profile);
+                if (Ok) { Queue.Items[MdoQueueFind(&Queue, Id)].HoldForEdit = HoldForEdit; Ok = MdoQueueWrite(Path, &Queue); }
+                }
             }
         }
     }
@@ -999,6 +1039,7 @@ bool MdoApiQueueItemRoute(MdoApiContext* Context)
         Index = MdoQueueFind(&Queue, Id);
         if ( Change ) {
             Conflict = Index == SIZE_MAX ||
+                Queue.Items[Index].HoldForEdit ||
                 !((Queue.Items[Index].State == MDO_QUEUE_STAGED &&
                    NextState == MDO_QUEUE_PENDING) ||
                   (Queue.Items[Index].State == MDO_QUEUE_PENDING &&

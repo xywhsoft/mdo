@@ -48,14 +48,26 @@ static void MdoQueueDispatchSession(const MdoSessionInfo* Session)
     MdoSessionOutcome Outcome = MDO_SESSION_OUTCOME_KEEP;
     char Cancel[MDO_RUN_ID_CAPACITY] = {0};
     if ( Head->State == MDO_QUEUE_SENDING && Head->RunId[0] ) {
-        snprintf(Queue.LastRunId, sizeof(Queue.LastRunId), "%s", Head->RunId);
-        Queue.CancelRunId[0] = '\0';
-        MdoQueueRemove(&Queue, 0u);
-        (void)MdoQueueWrite(Path, &Queue);
+        uint64 Input = 0u;
+        if (MdoQueueInputAnchor(Session->ProjectId, Session->Id, Head->Id, &Input) && Input) {
+            snprintf(Queue.LastRunId, sizeof(Queue.LastRunId), "%s", Head->RunId);
+            Queue.CancelRunId[0] = '\0';
+            MdoQueueRemove(&Queue, 0u); (void)MdoQueueWrite(Path, &Queue);
+        } else if (!Active.Id[0]) {
+            Queue.Paused = true; snprintf(Queue.Error, sizeof(Queue.Error), "queue_confirmation_pending");
+            (void)MdoQueueWrite(Path, &Queue);
+        }
     } else if ( Head->State == MDO_QUEUE_SENDING ) {
-        Queue.Paused = true;
-        snprintf(Queue.Error, sizeof(Queue.Error), "%s", Head->StartClaimed ? "queue_run_starting" : "queue_confirmation_pending");
-        if ( MdoQueueWrite(Path, &Queue) ) Outcome = MDO_SESSION_OUTCOME_FAILED;
+        bool Exists = false; char Run[MDO_RUN_ID_CAPACITY], Reserved[MDO_RUN_ID_CAPACITY];
+        MdoRunInfo Preparing = {0}; Preparing.Size = sizeof(Preparing);
+        bool Read = MdoQueueReceiptReadEx(Session->ProjectId, Session->Id, Head->Id, &Exists, Run, Reserved, NULL);
+        bool Owned = Read && Exists && (!Reserved[0] ||
+            (MdoRunGetInfo(Reserved, &Preparing) && !Preparing.Terminal));
+        if (!Owned && !Active.Id[0]) {
+            Queue.Paused = true;
+            snprintf(Queue.Error, sizeof(Queue.Error), "queue_confirmation_pending");
+            (void)MdoQueueWrite(Path, &Queue);
+        }
     } else if ( Head->State == MDO_QUEUE_PENDING ) {
         if ( Active.Id[0] ) {
             bool Changed = strcmp(Queue.LastRunId, Active.Id) != 0;
@@ -128,7 +140,9 @@ static void MdoQueueDispatchSession(const MdoSessionInfo* Session)
                 if ( Response.Status == 202u && Sent->RunId[0] && RunId.Size ) {
                     snprintf(After.LastRunId, sizeof(After.LastRunId), "%s", Sent->RunId);
                     After.CancelRunId[0] = '\0';
-                    MdoQueueRemove(&After, Index);
+                    uint64 Input = 0u;
+                    if (MdoQueueInputAnchor(Session->ProjectId, Session->Id, Sent->Id, &Input) && Input)
+                        MdoQueueRemove(&After, Index);
                 } else if ( Code.Size == 12u && !memcmp(Code.Data, "session_busy", 12u) && !Sent->StartClaimed )
                     Sent->State = MDO_QUEUE_PENDING;
                 else {

@@ -41,8 +41,12 @@ test("a stopped input retains its insertion anchor when a newer run starts", () 
   state.entries = [{ ...input(), state: "sending" }]; model.reconcile(state);
   state.entries = []; state.events.push({ kind: "agent_start", event_id: 20, queue_item_id: "b" });
   assert.equal(model.reconcile(state).visible[0].afterEventId, 9);
-  model.status("a", { state: "cancelled", phase: "cancelled", terminal: true, after_event_id: 9 });
+  model.status("a", { state: "cancelled", phase: "cancelled", terminal: true, after_event_id: 20 });
   assert.equal(model.reconcile(state).visible[0].afterEventId, 9);
+  const recovered = createSubmissionState(() => "local");
+  state.entries = [{ ...input(), state: "cancelled" }]; recovered.reconcile(state);
+  recovered.status("a", {state:"cancelled",phase:"cancelled",terminal:true,after_event_id:9});
+  assert.equal(recovered.reconcile(state).visible[0].afterEventId,9,"a reloaded cancelled input uses its durable server anchor");
 });
 
 test("device changes clear both pending messages and old history ownership", () => {
@@ -72,7 +76,8 @@ function coordinatorFixture(overrides = {}) {
     setTimer: timer, clearTimer() {}, createRecovery: recovery, ...overrides,
   });
   return { coordinator, observations, errors, calls, row: values[0], stopped,
-    changeScope() { owner = "two"; values = [{ ...input(), durable: true }]; } };
+    changeScope() { owner = "two"; values = [{ ...input(), durable: true }]; },
+    handoff() { values = []; } };
 }
 
 test("two Stop clicks cancel the original input once and restore only after a terminal acknowledgement", async () => {
@@ -105,4 +110,13 @@ test("an unconfirmed stop retains identity without starting a replacement run", 
   await f.coordinator.stop(f.row);
   assert.equal(f.observations.at(-1).phase, "unconfirmed"); assert.equal(f.calls.restore, 0);
   assert.equal(f.errors.length, 1); f.coordinator.destroy();
+});
+
+test("history handoff does not abandon the cancellation of the original message", async () => {
+  let release; const preparing = new Promise(resolve => release = resolve);
+  const f = coordinatorFixture({ prepareCancel: () => preparing });
+  const operation = f.coordinator.stop(f.row); await new Promise(resolve => setImmediate(resolve));
+  f.handoff(); release(); await operation;
+  assert.equal(f.calls.cancel,1,"the original ID is still cancelled after its provisional row disappears");
+  f.coordinator.destroy();
 });

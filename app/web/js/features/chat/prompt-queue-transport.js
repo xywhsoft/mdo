@@ -24,6 +24,7 @@ export function queueResponse(response) {
     if (typeof item?.id !== "string" || !/^[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(item.id) ||
         ids.has(item.id) || typeof item.text !== "string" ||
         !["pending", "staged", "sending", "editing", "cancelled"].includes(item.state) ||
+        (item.hold_for_edit !== undefined && (typeof item.hold_for_edit !== "boolean" || item.state !== "staged")) ||
         typeof item.priority !== "boolean" || !Array.isArray(item.attachments) ||
         item.attachments.some(id => typeof id !== "string" || !/^[0-9a-f]{32}$/.test(id))) return true;
     ids.add(item.id); return false;

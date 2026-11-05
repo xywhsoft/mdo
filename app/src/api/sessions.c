@@ -18,6 +18,7 @@ static xmutex* g_MdoApiSessionCreateLock;
 #define MDO_API_EDIT_REPLIES 64u
 #define MDO_API_EDIT_REPLY_TTL_US 180000000u
 typedef struct MdoApiEditReply {
+    uint8 ReplacementHash[32];
     char HistoryToken[65], ResultHistoryToken[65];
     char Project[MDO_PROJECT_ID_CAPACITY];
     char Session[MDO_SESSION_ID_CAPACITY];
@@ -1216,6 +1217,7 @@ static bool MdoApiSessionLedgerMutation(MdoApiContext* Context,
         if ( BodyStatus != MDO_API_BODY_OK ) {
             return MdoApiReplyBodyError(Context, BodyStatus);
         }
+        const xvalue* Replacement = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("replacement"));
         Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
             MdoApiSessionUInt64(Body.Value, "through_sequence",
                 &ThroughSequence, &Present) && Present == 1u &&
@@ -1229,17 +1231,21 @@ static bool MdoApiSessionLedgerMutation(MdoApiContext* Context,
                 MdoApiClientSessionIdValid(EditId))) &&
             MdoApiSessionString(Body.Value,"history_token",HistoryToken,sizeof(HistoryToken),false,&Present) &&
             (!HistoryToken[0]||(EditId[0]&&MdoApiHistoryTokenValid(HistoryToken))) &&
-            Present == xrtValueCount(Body.Value);
-        MdoApiJsonBodyUnit(&Body);
+            Present + (Replacement ? 1u : 0u) == xrtValueCount(Body.Value) &&
+            (!Replacement || (EditId[0] && HistoryToken[0] && xrtValueType(Replacement) == XVALUE_OBJECT));
         if ( !Ok ) {
+            MdoApiJsonBodyUnit(&Body);
             return MdoApiReplyError(Context, 422u,
                 "session_truncate_invalid",
                 "Truncate requires through_sequence, an optional positive source_event_id, and an optional client_edit_id for guarded edits",
                 NULL);
         }
-        if ( EditId[0] != '\0' )
-            return MdoApiSessionEditOnce(Context, ThroughSequence,
-                SourceEventId, EditId, HistoryToken);
+        if ( EditId[0] != '\0' ) {
+            bool Result = MdoApiSessionEditOnce(Context, ThroughSequence,
+                SourceEventId, EditId, HistoryToken, Replacement);
+            MdoApiJsonBodyUnit(&Body); return Result;
+        }
+        MdoApiJsonBodyUnit(&Body);
     }
     if (!Clear && SourceEventId &&
         MdoApiSessionMessageObsolete(Context, ThroughSequence, SourceEventId))

@@ -34,6 +34,7 @@ typedef struct MdoQueueItem {
     size_t AttachmentCount;
     MdoQueueState State;
     bool Priority;
+    bool HoldForEdit;
     MdoComposerProfile Profile;
     bool StartClaimed;
     char RunId[MDO_RUN_ID_CAPACITY];
@@ -61,6 +62,7 @@ typedef struct MdoQueueReceipt {
     char Id[33];
     char RunId[MDO_RUN_ID_CAPACITY];
     uint64 AgentRunId;
+    uint64 InputEventId;
     uint32 Schema;
 } MdoQueueReceipt;
 

@@ -154,7 +154,9 @@ static bool MdoBackupIndexRead(MdoBackupHistoryIndex* Index)
         if ( Event->QueueId[0] != '\0' ) {
             MdoBackupReceiptFact* Receipt = MdoBackupReceiptFind(Index, Event->QueueId);
             if ( Event->Run == 0u || Receipt == NULL || Receipt->Seen ||
-                 (Receipt->Value.Schema == 3u && Receipt->Value.AgentRunId != Event->Run) ) goto invalid;
+                 ((Receipt->Value.Schema == 3u || Receipt->Value.Schema == 5u) &&
+                    Receipt->Value.AgentRunId != Event->Run) ||
+                 (Receipt->Value.Schema == 5u && Receipt->Value.InputEventId != Event->Id) ) goto invalid;
             Receipt->Seen = true;
         }
         ++Index->Count; Offset += Event->Bytes + 1u;
@@ -307,7 +309,7 @@ static bool MdoBackupQueueRelations(MdoBackupHistoryIndex* Index)
             char Fence[80]; snprintf(Fence, sizeof(Fence), "queue-cancellations/%s.json", Item->Id);
             if ( MdoBackupFind(Index->Backup, Fence) != NULL ) continue;
             if ( Receipt != NULL && (Receipt->Value.Schema == 1u ||
-                    (Receipt->Value.Schema == 3u && Receipt->Seen)) )
+                    (Receipt->Value.Schema == 3u && Receipt->Seen) || Receipt->Value.Schema == 5u) )
                 memcpy(Run, Receipt->Value.RunId, sizeof(Run));
             Ok = MdoQueueReceiptApply(Item, Receipt != NULL, Run);
         }
@@ -360,7 +362,7 @@ bool MdoBackupClassifyInputs(const MdoSessionBackup* Backup,
         MdoBackupReceiptFact* Receipt = MdoBackupReceiptFind(&Index, Ids[i]);
         Ok = MdoBackupHistoryTime(&Index);
         Admission[i] = Receipt == NULL ? MDO_BACKUP_NOT_ACCEPTED :
-            ((Receipt->Value.Schema == 1u || Receipt->Seen) ? MDO_BACKUP_ACCEPTED :
+            ((Receipt->Value.Schema == 1u || Receipt->Value.Schema == 5u || Receipt->Seen) ? MDO_BACKUP_ACCEPTED :
                 MDO_BACKUP_ADMISSION_UNCERTAIN);
         char Fence[80]; snprintf(Fence, sizeof(Fence), "queue-cancellations/%s.json", Ids[i]);
         if ( Admission[i] != MDO_BACKUP_ACCEPTED && MdoBackupFind(Backup, Fence) )

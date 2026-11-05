@@ -7,7 +7,7 @@ import { createSubmissionState } from "./submission-state.js";
 // Presentation only. The existing Home draft, queue ID and run receipt remain
 // the authoritative submission journal; displaying a bubble never sends it.
 export function createSubmissionTimeline({ container, host, snapshot, scope,
-  onPresentationChange = () => {}, onProjectionChange = null, onCancel = null, onEdit = null }) {
+  onPresentationChange = () => {}, onProjectionChange = null, onCancel = null, onEdit = null, onDiscard = null, isWritable = () => true }) {
   const lifecycle = createSubmissionState(scope);
   let owner = scope(), errorBinding = null, projection = [];
   let presented = new Set(), presentedProject, presentedSession, presentedScope;
@@ -37,9 +37,9 @@ export function createSubmissionTimeline({ container, host, snapshot, scope,
       const status = element("p", { className: "submission-status", attrs: { role: "status" } });
       reply.append(status);
       Object.assign(row, { user, body, reply, status });
-      if (onEdit || onCancel) {
+      if (onEdit || onCancel || onDiscard) {
         row.actions = element("div", { className: "submission-actions" });
-        for (const [name, callback] of [["edit", onEdit], ["cancel", onCancel]]) {
+        for (const [name, callback] of [["edit", onEdit], ["cancel", onCancel], ["remove", onDiscard]]) {
           if (!callback) continue;
           const button = element("button", { className: "secondary-button", attrs: { type: "button" } });
           button.onclick = () => callback(row);
@@ -70,7 +70,7 @@ export function createSubmissionTimeline({ container, host, snapshot, scope,
         ? errorMessage({ code: state.error }) : "");
       const editPhase = row.edit && !row.durable && !row.error ? row.phase : "";
       const explicit = !error && { stopping: "stopping", cancelled: "cancelled", failed: "failed",
-        unconfirmed: "confirming", accepted: "syncing", running: "syncing", completed: "syncing" }[row.displayPhase];
+        unconfirmed: "confirming", edit_saved: "editSaved", accepted: "syncing", running: "syncing", completed: "syncing" }[row.displayPhase];
       setUiText(row.status, explicit ? uiMessage(`submission.${explicit}`) : editPhase ? uiMessage(`messageEdit.${editPhase}`) : error || !row.durable
         ? error || uiMessage("submission.saving", {}, "正在保存消息…")
         : row.priority || row.interrupt
@@ -79,11 +79,12 @@ export function createSubmissionTimeline({ container, host, snapshot, scope,
           ? uiMessage("submission.preparing", {}, "正在准备回复…")
           : uiMessage("submission.queued", {}, "已排队，等待上一条消息结束…"));
       row.reply.dataset.state = error ? "error" : row.displayPhase;
-      for (const name of ["edit", "cancel"]) if (row[`${name}Action`]) {
+      for (const name of ["edit", "cancel", "remove"]) if (row[`${name}Action`]) {
         const button = row[`${name}Action`];
         setUiText(button, uiMessage(`submission.${name}`));
-        button.disabled = row.displayPhase === "stopping" || row.edit && !row.durable && !["waiting", "preparing"].includes(editPhase);
-        button.hidden = name === "cancel" && ["cancelled", "completed"].includes(row.displayPhase);
+        button.disabled = !isWritable() || row.displayPhase === "stopping" || row.edit && ["updating", "sending"].includes(row.phase);
+        button.hidden = name === "remove" ? row.displayPhase !== "cancelled" || !row.receipt?.terminal :
+          name === "cancel" && ["cancelled", "completed"].includes(row.displayPhase);
       }
       row.status.hidden = errorBinding?.id === row.id;
       if(row.cancelEdit&&!row.cancelButton){
@@ -137,7 +138,13 @@ export function createSubmissionTimeline({ container, host, snapshot, scope,
     accepted(id) { const row = lifecycle.get(id); if (row) { row.durable = true; row.error = ""; } render(); },
     progress(id,phase) { const row=lifecycle.get(id);if(row){row.phase=phase;render();} },
     status(id, value) {
-      if (value.cancel_requested && value.terminal && !value.executed && value.retained_input === false) lifecycle.delete(id);
+      const state = snapshot(), inputId = value.input_event_id;
+      const anchors = (state.events || []).map(event => event.kind === "agent_start" && !(event.agent_depth > 0)
+        ? event.event_id : event.action_prompt?.event_id).filter(id => Number.isSafeInteger(id) && id > 0);
+      const earliest = anchors.reduce((min, id) => Math.min(min, id), Infinity);
+      if (value.executed && Number.isSafeInteger(inputId) && inputId > 0 &&
+          (anchors.includes(inputId) || earliest < Infinity && earliest > inputId)) lifecycle.consume(id, state);
+      else if (value.cancel_requested && value.terminal && !value.executed && value.retained_input === false) lifecycle.consume(id, state);
       else lifecycle.status(id, value);
       render();
     },

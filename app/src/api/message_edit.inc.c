@@ -4,7 +4,7 @@
  * completed replies are retained, for longer than the client's retry budget. */
 static bool MdoApiSessionEditOnce(MdoApiContext* Context,
     uint64 ThroughSequence, uint64 SourceEventId, const char* EditId,
-    const char* HistoryToken)
+    const char* HistoryToken, const xvalue* Replacement)
 {
     char Project[MDO_PROJECT_ID_CAPACITY];
     char SessionId[MDO_SESSION_ID_CAPACITY];
@@ -24,6 +24,12 @@ static bool MdoApiSessionEditOnce(MdoApiContext* Context,
     bool MutationFailure = false;
     char CurrentToken[65] = { 0 };
     uint64 Last = 0;
+    uint8 ReplacementHash[32] = {0};
+    if (Replacement) {
+        size_t Bytes = 0u; char* Json = xrtJsonStringify(Replacement, false, &Bytes);
+        bool Hashed = Json && xrtSha256(Json, Bytes, ReplacementHash); xrtFree(Json);
+        if (!Hashed) return MdoApiReplyError(Context, 503u, "session_edit_draft_unsaved", "Cannot identify the replacement payload", NULL);
+    }
 
     if ( !MdoApiSessionPath(Context, Project, SessionId) )
         return MdoApiReplyError(Context, 400u, "invalid_session_path",
@@ -68,6 +74,10 @@ static bool MdoApiSessionEditOnce(MdoApiContext* Context,
             Message = "The same edit ID was used for a different history edit";
             goto done;
         }
+        if (memcmp(Reply->ReplacementHash, ReplacementHash, sizeof(ReplacementHash))) {
+            Status = 409u; Code = "session_edit_conflict";
+            Message = "The same edit ID was used for a different replacement input"; goto done;
+        }
         /* Legacy receipts use metadata only. History-fenced receipts verify
          * the resulting ledger in an idle runtime; neither path trims again. */
         Session = HistoryToken[0] ? MdoSessionOpen(Project, SessionId, NULL, &Error)
@@ -87,6 +97,10 @@ static bool MdoApiSessionEditOnce(MdoApiContext* Context,
         } else if ( Info.CreatedAt != Reply->CreatedAt ||
                     Info.Revision != Reply->Revision || Info.Status != MDO_SESSION_ACTIVE )
             goto changed;
+        if (Replacement && !MdoApiQueueCommitReplacement(Project, SessionId, EditId)) {
+            Status = 503u; Code = "session_edit_unconfirmed";
+            Message = "The replacement input is retained but could not be released";
+        }
         goto done;
     }
     if ( Free == NULL ) {
@@ -107,6 +121,11 @@ static bool MdoApiSessionEditOnce(MdoApiContext* Context,
             goto unavailable;
         if ( strcmp(CurrentToken, HistoryToken) ) goto history_changed;
     } else if ( Info.Revision != ExpectedRevision ) goto changed;
+    if (Replacement && !MdoApiQueueStageReplacement(Context, EditId, Replacement)) {
+        Status = 503u; Code = "session_edit_draft_unsaved";
+        Message = "The replacement input could not be reserved; history was not changed";
+        goto done;
+    }
     {
         MdoSessionMessageMutationResult Result = MdoSessionTruncateMessage(
             Session, ThroughSequence, SourceEventId, &Error);
@@ -122,6 +141,7 @@ static bool MdoApiSessionEditOnce(MdoApiContext* Context,
          !MdoApiSessionHistoryToken(Session, &Info, CurrentToken, &Last, &Error) )
         goto unavailable;
     memset(Free, 0, sizeof(*Free));
+    memcpy(Free->ReplacementHash, ReplacementHash, sizeof(ReplacementHash));
     snprintf(Free->Project, sizeof(Free->Project), "%s", Project);
     snprintf(Free->Session, sizeof(Free->Session), "%s", SessionId);
     snprintf(Free->Id, sizeof(Free->Id), "%s", EditId);
@@ -134,6 +154,10 @@ static bool MdoApiSessionEditOnce(MdoApiContext* Context,
     snprintf(Free->HistoryToken, sizeof(Free->HistoryToken), "%s", HistoryToken);
     snprintf(Free->ResultHistoryToken, sizeof(Free->ResultHistoryToken), "%s", CurrentToken);
     Free->ExpiresAt = MdoMonotonicUs() + MDO_API_EDIT_REPLY_TTL_US;
+    if (Replacement && !MdoApiQueueCommitReplacement(Project, SessionId, EditId)) {
+        Status = 503u; Code = "session_edit_unconfirmed";
+        Message = "History was updated but the replacement remains held; the edited input is preserved";
+    }
     goto done;
 history_changed:
     Status = 409u; Code = "session_history_changed";

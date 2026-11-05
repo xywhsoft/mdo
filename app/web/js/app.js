@@ -53,6 +53,7 @@ import { createResourceRefresh } from "./features/shell/resource-refresh.js";
 import { createRunStopController, resolvesRunStopError, createRunObservation } from "./features/chat/run-stop-controller.js";
 import { createRunPollRead } from "./features/chat/run-poll-read.js";
 import { createSubmissionCoordinator } from "./features/chat/submission-coordinator.js";
+import { submissionHistoryIds } from "./features/chat/submission-state.js";
 import { createMessageEditDialog } from "./features/chat/message-edit-dialog.js";
 import { runMessageReplacement } from "./features/chat/message-replacement.js";
 import { createConversationSearch } from "./features/chat/conversation-search.js";
@@ -198,6 +199,7 @@ export async function boot() {
   let sendBlockedByState = true;
   let submissionTimeline = null;
   let submissionCoordinator = null;
+  let displayedRun = null;
   const observeRun = createRunObservation(() => JSON.stringify([targetState().selected, currentPageWriteToken()]));
   const composerError = $("#composer-error");
   let composerErrorState = null;
@@ -488,8 +490,9 @@ export async function boot() {
     if (!draftStore.isLoaded(key))
       throw new Error(t("composer.hintLoadingDraft", {}, "正在读取草稿，请稍候"));
     if (draftStore.isRunUncertain(key)) throw uncertainRunError();
-    if (draftStore.submissions(key).length ||
-        promptQueue.peek(selected.projectId, selected.sessionId) ||
+    const historyInputs = submissionHistoryIds(timelineStore.get().data?.events);
+    if (draftStore.submissions(key).some(item => !historyInputs.has(item.id)) ||
+        promptQueue.snapshot(selected.projectId, selected.sessionId).items.some(item => !historyInputs.has(item.id)) ||
         composerText().trim() || composerAttachments.length)
       throw new Error(t("messageAction.resolveDraft", {}, "请先处理草稿和待发送队列，再编辑历史消息"));
   }
@@ -523,7 +526,7 @@ export async function boot() {
       navigation.get().sessionId === selected.sessionId;
     const editId = submissionTimeline.begin({ id: promptQueue.newId(),
       projectId: selected.projectId, sessionId: selected.sessionId, text, attachments: [...attachments],
-      edit: true, editSourceEventId: sourceEventId, phase: "waiting", cancelEdit: () => editController.abort() });
+      profile, edit: true, editSourceEventId: sourceEventId, phase: "waiting", cancelEdit: () => editController.abort() });
     if (!editId) throw new Error(t("messageAction.waitForRun", {}, "请在当前运行结束后操作消息"));
     messageActionBusy = true;
     if (action === "edit") messageEditDialog.showPending(true);
@@ -549,13 +552,28 @@ export async function boot() {
           assertReplacementProfile(attachments);
           assertReplacementIdle(selected);
         },
-        loadHistory: editHistory ? () => editHistory : loadSessionHistory, truncate: truncateSession,
+        loadHistory: editHistory ? () => editHistory : loadSessionHistory,
+        truncate: async (original, through, source, options) => {
+          try { return await truncateSession(original, through, source,
+            { ...options, replacement: { text: text.trim(), attachments, profile } }); }
+          catch (error) {
+            // The single product operation already owns both the cut and the
+            // queued replacement. Its exact ID can confirm a lost HTTP ACK.
+            await promptQueue.select(selected.projectId, selected.sessionId);
+            const item = promptQueue.find(selected.projectId, selected.sessionId, editId);
+            const receipt = item ? null : await promptQueue.receipt(selected.projectId, selected.sessionId, editId);
+            if (item && !item.hold_for_edit && ["pending", "sending"].includes(item.state) || receipt?.state === "accepted")
+              return (await api.get(`/projects/${selected.projectId}/sessions/${selected.sessionId}`)).data;
+            throw error;
+          }
+        },
         startRun: async (projectId,sessionId,content,images)=>{
-          const key=`${projectId}/${sessionId}`;
-          const accepted=await submissionController.submit(key,content,images,false,profile,editId);
-          if(!accepted&&!draftStore.submissions(key).some(item=>item.id===editId))
-            throw new ApiError(t("error.sessionEditDraftUnsaved"),{code:"session_edit_draft_unsaved"});
-          return {queued:true,accepted};
+          await promptQueue.select(projectId, sessionId);
+          const item = promptQueue.find(projectId, sessionId, editId);
+          const receipt = item ? null : await promptQueue.receipt(projectId, sessionId, editId);
+          if (!(item && !item.hold_for_edit && ["pending", "sending"].includes(item.state)) && receipt?.state !== "accepted")
+            throw new ApiError(t("error.sessionEditUnconfirmed"), { code: "session_edit_unconfirmed" });
+          return { queued: true, accepted: true };
         },
         async preserveInput() {
           draftStore.edit(targetKey, text, attachments, true);
@@ -1079,7 +1097,14 @@ export async function boot() {
     writable: () => navigation.get().view === "workspace" && !prompt.disabled && !prompt.readOnly,
     add: item => { const added = composerContext.add(item); if (added) prompt.focus(); return added; } });
   window.addEventListener("pagehide", () => selectionQuote.destroy(), { once: true });
-  navigation.subscribe(() => { addMenu.close(); sessionMentions.hide(); selectionQuote.hide(); messageEditDialog.cancel(); });
+  let editNavigationOwner = "";
+  navigation.subscribe(route => {
+    const owner = JSON.stringify([route.view, route.projectId, route.sessionId]);
+    if (owner !== editNavigationOwner) {
+      addMenu.close(); sessionMentions.hide(); selectionQuote.hide(); messageEditDialog.cancel();
+    }
+    editNavigationOwner = owner;
+  });
   const tokenMeter = createTokenMeter({
     root: $("#context-meter"), trigger: $("#context-meter-trigger"),
     ring: $("#context-meter-ring"), panel: $("#context-meter-panel"),
@@ -1443,9 +1468,10 @@ export async function boot() {
   const resourcePanels = createResourcePanels();
   const submissionRows = element("ol", { className: "timeline submission-timeline", attrs: { "aria-label": uiMessage("submission.pending", {}, "正在提交的消息") } });
   submissionTimeline = createSubmissionTimeline({ container: submissionRows, host: $(".conversation"),
+    isWritable: () => !composerStopDisabled(),
     scope: () => promptQueue.stamp(),
     onPresentationChange: () => promptQueue.render(),
-    onProjectionChange: () => { timelineView.refresh(); submissionCoordinator?.schedule(); syncSendDisabled(); },
+    onProjectionChange: () => { timelineView.refresh(); submissionCoordinator?.schedule(); syncSendDisabled(); renderRunStatus(); },
     onCancel: row => {
       if (row.cancelEdit && !row.durable) { row.cancelEdit(); return; }
       void submissionCoordinator.stop(row);
@@ -1453,6 +1479,16 @@ export async function boot() {
     onEdit: row => {
       if (row.cancelEdit && !row.durable) { row.cancelEdit(); return; }
       void submissionCoordinator.stop(row, true);
+    },
+    onDiscard: async row => {
+      if (composerStopDisabled() || row.removing || row.receipt?.executed) return;
+      row.removing = true;
+      try {
+        await promptQueue.remove(row.projectId, row.sessionId, row.id);
+        promptQueue.rememberUnusedImages(row.projectId, row.sessionId, row.attachments || []);
+        submissionTimeline.forget(row.id);
+      } catch (error) { toast(errorMessage(error), "error"); }
+      finally { row.removing = false; }
     },
     snapshot() {
       const route = navigation.get(), projectId = route.projectId || "default";
@@ -1473,6 +1509,7 @@ export async function boot() {
     read: row => promptQueue.status(row.projectId, row.sessionId, row.id),
     cancel: row => promptQueue.cancel(row.projectId, row.sessionId, row.id),
     async prepareCancel(row, assert) {
+      row.cancelComposerEpoch ??= draftStore.editEpoch();
       newTaskController.cancelIntent(row.id);
       const recovery = createRequestRecovery();
       try {
@@ -1493,12 +1530,20 @@ export async function boot() {
       } finally { recovery.dispose(); }
     },
     async restore(row, manual) {
+      const editEpoch = row.cancelComposerEpoch ?? draftStore.editEpoch();
       const key = `${row.projectId}/${row.sessionId}`;
       if (!selectedOwnsDraft(key)) return false;
       if (submissionController.isSettling(key)) return "deferred";
       await submissionController.reconcile(key);
       if (!await draftStore.ensureLoaded(key)) return false;
+      // A late Stop ACK cannot reinsert an old prompt after the user has
+      // typed (or already sent) another one, even if the editor is empty now.
+      if (!manual && editEpoch !== draftStore.editEpoch()) return false;
       const draft = draftStore.snapshot(key);
+      if (draft.text === row.text && JSON.stringify(draft.attachments) === JSON.stringify(row.attachments || [])) {
+        await promptQueue.remove(row.projectId, row.sessionId, row.id);
+        submissionTimeline.forget(row.id); prompt.focus(); return true;
+      }
       if (draft.text || draft.attachments.length || draftStore.submissions(key).length) {
         if (manual) toast(uiMessage("submission.draftOccupied"), "error");
         return false;
@@ -1512,6 +1557,8 @@ export async function boot() {
       return restored;
     },
     changed(row, value) {
+      if (value.cancel_requested && value.terminal && composerErrorState?.submissionId === row.id &&
+          selectedOwnsDraft(`${row.projectId}/${row.sessionId}`)) hideComposerError();
       if (value.cancel_requested && activeRun?.project_id === row.projectId && activeRun?.session_id === row.sessionId &&
           (!value.run_id || value.run_id === activeRun.id)) setRun({ ...activeRun, cancel_requested: true });
       if (value.executed && selectedOwnsDraft(`${row.projectId}/${row.sessionId}`)) void refreshSelectedTimeline();
@@ -1531,7 +1578,8 @@ export async function boot() {
     composerContext?.render();
     $("#composer-attach").disabled = extractingQueue;
     const phase = runStops.phase(activeRun?.id);
-    const stopLabel = phase === "waiting"
+    const submissionStopping = submissionTimeline?.pending().some(row => row.displayPhase === "stopping");
+    const stopLabel = submissionStopping ? uiMessage("submission.stopping") : phase === "waiting"
       ? uiMessage("shell.stopWaiting", {}, "连接恢复后停止任务")
       : phase || activeRun?.cancel_requested
         ? uiMessage("task.stopping", {}, "正在停止…") : uiMessage("shell.stop");
@@ -1543,7 +1591,7 @@ export async function boot() {
         ((composerImages?.isUploading() || composerFileImports?.isBusy() ||
           composerImages?.hasUnsupportedDraft()) && !localCommand),
       stopDisabled: composerStopDisabled(),
-      stopBusy: Boolean(activeRun &&
+      stopBusy: Boolean(submissionStopping || activeRun &&
         (activeRun.cancel_requested || runStops.has(activeRun.id))),
       queue: Boolean(activeRun || (!navigation.get().sessionId && newTaskController?.isBusy())),
       stopLabel,
@@ -1551,8 +1599,26 @@ export async function boot() {
   }
 
   function composerStopDisabled() {
-    return purgeRecovery.isPaused() || (isRemoteTarget() &&
+    return submissionTimeline?.pending().some(row => row.edit && ["updating", "sending"].includes(row.phase)) ||
+      purgeRecovery.isPaused() || (isRemoteTarget() &&
       (targetState().runtimeChanged || targetState().selected.mode === "view"));
+  }
+
+  function renderRunStatus() {
+    const pending = !activeRun && submissionTimeline?.pending().find(row =>
+      !["failed", "cancelled", "completed"].includes(row.displayPhase) && !row.error);
+    const shown = displayedRun ?? { state: sessionWritable ? "idle" : selectedSessionStatus };
+    const stopPhase = runStops.phase(activeRun?.id);
+    runStatus.dataset.state = pending ? "preparing" : shown.state;
+    writeUiText(runStatus.lastElementChild, pending
+      ? uiMessage(pending.displayPhase === "stopping" ? "submission.stopping" :
+          pending.displayPhase === "unconfirmed" ? "submission.confirming" :
+          pending.displayPhase === "saving" ? "submission.saving" :
+          pending.displayPhase === "edit_saved" ? "submission.editSaved" : "submission.preparing")
+      : stopPhase === "waiting" ? uiMessage("shell.stopWaiting", {}, "连接恢复后停止任务")
+      : stopPhase || activeRun?.cancel_requested ? uiMessage("task.stopping", {}, "正在停止…")
+      : runAwaitingRelease(activeRun, timelineStore.get().data)
+        ? uiMessage("task.finishing", {}, "正在结束上一轮…") : runStateText(shown.state));
   }
 
   function setRun(run) {
@@ -1563,14 +1629,8 @@ export async function boot() {
     activeRun = run && !terminalState(run) ? run : null;
     if (wasActive !== Boolean(activeRun)) promptQueue.render();
     const guide = settingsStore.get().data?.composer?.submit_mode === "guide";
-    const shown = run ?? { state: sessionWritable ? "idle" : selectedSessionStatus };
-    runStatus.dataset.state = shown.state;
-    const stopPhase = runStops.phase(activeRun?.id);
-    writeUiText(runStatus.lastElementChild, stopPhase === "waiting"
-      ? uiMessage("shell.stopWaiting", {}, "连接恢复后停止任务")
-      : stopPhase || activeRun?.cancel_requested ? uiMessage("task.stopping", {}, "正在停止…")
-      : runAwaitingRelease(activeRun, timelineStore.get().data)
-        ? uiMessage("task.finishing", {}, "正在结束上一轮…") : runStateText(shown.state));
+    displayedRun = run;
+    renderRunStatus();
     const route = navigation.get();
     const creatingNewTask = !route.sessionId &&
       Boolean(newTaskController?.isBusy());

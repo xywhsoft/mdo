@@ -123,3 +123,15 @@ test("a restored pending queue shows its message and a genuine preflight error i
     assert.equal(f.container.children[1].dataset.state, "error");
   } finally { f.view.destroy(); }
 });
+
+test("an acknowledged input outside the loaded history window cannot remain as a preparing bubble", () => {
+  const f = fixture();
+  try {
+    f.view.begin(f.value()); f.view.accepted("a");
+    f.state.events = [{kind:"agent_start",event_id:50,queue_item_id:"b",agent_depth:0}];
+    f.view.status("a",{state:"accepted",phase:"accepted",executed:true,input_event_id:10});
+    assert.equal(f.container.children.length,0);
+    f.state.events=[];f.state.entries=[{id:"a",text:"A new message",state:"sending"}];f.view.render();
+    assert.equal(f.container.children.length,0,"a stale queue cannot undo a durable input handoff");
+  } finally {f.view.destroy();}
+});

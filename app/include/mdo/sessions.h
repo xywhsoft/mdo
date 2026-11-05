@@ -412,6 +412,8 @@ bool MdoSessionEventSnapshotHistoryLost(
 bool MdoSessionEventQueueStartSeen(const char* ProjectId,
     const char* SessionId, const char* QueueItemId, uint64 AgentRunId,
     bool* Seen);
+bool MdoSessionEventQueueInput(const char* ProjectId, const char* SessionId,
+    const char* QueueItemId, uint64* EventId, uint64* AgentRunId);
 
 /* The bundled todo tool (and legacy mdo.todo records) projects the latest successful main-Agent
  * snapshot into a bounded Home sidecar. A missing sidecar loads as empty and
