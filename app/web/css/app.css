@@ -708,7 +708,6 @@ select:focus-visible,
 .submission-reply[data-state="preparing"] .submission-status::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: currentColor; }
 .submission-reply[data-state="error"] .submission-status { color: var(--danger); }
 .submission-user small { display: block; margin-top: 8px; color: var(--muted); }
-.submission-actions { display: flex; gap: 8px; margin-top: 10px; }
 .model-retry-notice { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid color-mix(in srgb, #d8a63e 38%, var(--border)); border-radius: 10px; background: color-mix(in srgb, #d8a63e 6%, transparent); }
 .model-retry-dot { flex: 0 0 7px; width: 7px; height: 7px; margin-top: 7px; border-radius: 50%; background: #d8a63e; }
 .model-retry-title { color: var(--ink); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }

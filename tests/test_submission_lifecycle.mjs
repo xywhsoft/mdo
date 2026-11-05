@@ -58,7 +58,7 @@ test("device changes clear both pending messages and old history ownership", () 
 
 function coordinatorFixture(overrides = {}) {
   let owner = "one", values = [{ ...input(), durable: true, displayPhase: "preparing" }];
-  const observations = [], errors = [], calls = { cancel: 0, restore: 0, read: 0 };
+  const observations = [], errors = [], calls = { cancel: 0, read: 0 };
   const stopped = { id: "a", state: "cancelled", phase: "cancelled", terminal: true, cancel_requested: true, executed: false };
   const timer = () => 1;
   const recovery = () => { let disposed = false; return {
@@ -71,7 +71,6 @@ function coordinatorFixture(overrides = {}) {
       if (row) { row.receipt = value; row.displayPhase = value.phase; } },
     async cancel() { calls.cancel++; return stopped; },
     async read() { calls.read++; return stopped; },
-    async restore() { calls.restore++; return true; },
     failure(_row, error) { errors.push(error); },
     setTimer: timer, clearTimer() {}, createRecovery: recovery, ...overrides,
   });
@@ -80,10 +79,10 @@ function coordinatorFixture(overrides = {}) {
     handoff() { values = []; } };
 }
 
-test("two Stop clicks cancel the original input once and restore only after a terminal acknowledgement", async () => {
+test("two Stop clicks cancel once and leave the original message for an explicit edit", async () => {
   const f = coordinatorFixture();
   await Promise.all([f.coordinator.stop(f.row), f.coordinator.stop(f.row)]);
-  assert.equal(f.calls.cancel, 1); assert.equal(f.calls.restore, 1);
+  assert.equal(f.calls.cancel, 1); assert.equal(f.row.text,"same text");
   assert.equal(f.observations[0].phase, "stopping"); assert.equal(f.observations.at(-1).phase, "cancelled");
   f.coordinator.destroy();
 });
@@ -93,22 +92,22 @@ test("late cancellation acknowledgements cannot restore text or mutate the next 
   const f = coordinatorFixture({ cancel: () => waiting });
   const operation = f.coordinator.stop(f.row); await new Promise(done => setImmediate(done));
   f.changeScope(); resolve(f.stopped); await operation;
-  assert.equal(f.calls.restore, 0); assert.equal(f.observations.length, 1); assert.deepEqual(f.errors, []);
+  assert.equal(f.observations.length, 1); assert.deepEqual(f.errors, []);
   f.coordinator.destroy();
 });
 
 test("cancellation racing actual execution never duplicates an input into the composer", async () => {
   const f = coordinatorFixture({ cancel: async () => ({ id: "a", state: "accepted", phase: "cancelled",
     terminal: true, cancel_requested: true, executed: true }) });
-  await f.coordinator.stop(f.row, true);
-  assert.equal(f.calls.restore, 0); assert.equal(f.observations.at(-1).executed, true);
+  await f.coordinator.stop(f.row);
+  assert.equal(f.observations.at(-1).executed, true);
   f.coordinator.destroy();
 });
 
 test("an unconfirmed stop retains identity without starting a replacement run", async () => {
   const f = coordinatorFixture({ cancel: async () => { throw new Error("connection lost"); } });
   await f.coordinator.stop(f.row);
-  assert.equal(f.observations.at(-1).phase, "unconfirmed"); assert.equal(f.calls.restore, 0);
+  assert.equal(f.observations.at(-1).phase, "unconfirmed");
   assert.equal(f.errors.length, 1); f.coordinator.destroy();
 });
 

@@ -152,14 +152,15 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     // every item for dispatch/receipts, but never repeat a conversation row.
     const entries = [...saved, ...staged].filter(item => !isMessagePresented(item.id));
     const meta = metadata.get(key) ?? {};
-    const uncertain = saved[0]?.state === "sending";
+    const head = saved.find(item => item.state !== "cancelled");
+    const uncertain = head?.state === "sending";
     // This page still owns the dispatch while exclusive() is running. A
     // persisted sending item without that owner needs review after reload.
     const sendingLocally = uncertain && (busy.has(key) || meta.managed && !meta.paused);
-    const acceptedRun = uncertain && Boolean(saved[0]?.run_id);
-    const claimedRun = uncertain && saved[0]?.start_claimed === true;
-    const stagedHead = saved[0]?.state === "staged";
-    const reviewHead = saved.length && isMessagePresented(saved[0].id) &&
+    const acceptedRun = uncertain && Boolean(head?.run_id);
+    const claimedRun = uncertain && head?.start_claimed === true;
+    const stagedHead = head?.state === "staged";
+    const reviewHead = head && isMessagePresented(head.id) &&
       (meta.paused || uncertain && !sendingLocally || stagedHead && !meta.managed);
     const reviewOnly = reviewHead && !entries.length;
     const focused = container.dataset.queueKey === key &&
@@ -245,7 +246,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     ]);
     let reviewRemove = null;
     if (reviewHead) {
-      const entry = saved[0], origin = transport.stamp();
+      const entry = head, origin = transport.stamp();
       reviewRemove = element("button", { text: uiMessage("queue.removeNumber", { number: 1 }), attrs: {
         type: "button", "data-queue-focus": "review-remove" } });
       reviewRemove.disabled = !writable || busy.has(key) || actionBusy.has(key) ||

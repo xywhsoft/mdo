@@ -1,13 +1,14 @@
 import { element, errorMessage } from "../../utils/dom.js";
-import { uiMessage, setUiText, subscribeLocale } from "../../i18n.js";
+import { uiMessage, setUiText, setUiAttribute, subscribeLocale } from "../../i18n.js";
 import { parsePromptContext } from "./prompt-context.js";
 import { promptContextChips } from "./context-chips.js";
 import { createSubmissionState } from "./submission-state.js";
+import { messageActionButton, messageCopyButton } from "./message-actions.js";
 
 // Presentation only. The existing Home draft, queue ID and run receipt remain
 // the authoritative submission journal; displaying a bubble never sends it.
 export function createSubmissionTimeline({ container, host, snapshot, scope,
-  onPresentationChange = () => {}, onProjectionChange = null, onCancel = null, onEdit = null, onDiscard = null, isWritable = () => true }) {
+  onPresentationChange = () => {}, onProjectionChange = null, onEdit = null, isWritable = () => true }) {
   const lifecycle = createSubmissionState(scope);
   let owner = scope(), errorBinding = null, projection = [];
   let presented = new Set(), presentedProject, presentedSession, presentedScope;
@@ -37,16 +38,16 @@ export function createSubmissionTimeline({ container, host, snapshot, scope,
       const status = element("p", { className: "submission-status", attrs: { role: "status" } });
       reply.append(status);
       Object.assign(row, { user, body, reply, status });
-      if (onEdit || onCancel || onDiscard) {
-        row.actions = element("div", { className: "submission-actions" });
-        for (const [name, callback] of [["edit", onEdit], ["cancel", onCancel], ["remove", onDiscard]]) {
-          if (!callback) continue;
-          const button = element("button", { className: "secondary-button", attrs: { type: "button" } });
-          button.onclick = () => callback(row);
-          row[`${name}Action`] = button; row.actions.append(button);
-        }
-        reply.append(row.actions);
+      row.actions = element("div", { className: "timeline-actions" });
+      row.copyAction = messageCopyButton(() => ({ text: row.text, complete: true }), { actionRef: `submission-${row.id}/copy` });
+      row.actions.append(row.copyAction);
+      if (onEdit) {
+        row.editAction = messageActionButton("compose", "", "", `submission-${row.id}/edit`, () => {
+          if (!row.editAction.hidden && !row.editAction.disabled) onEdit(row, row.editAction);
+        });
+        row.actions.append(row.editAction);
       }
+      user.append(row.actions);
     }
     return row;
   }
@@ -71,7 +72,7 @@ export function createSubmissionTimeline({ container, host, snapshot, scope,
       const editPhase = row.edit && !row.durable && !row.error ? row.phase : "";
       const explicit = !error && { stopping: "stopping", cancelled: "cancelled", failed: "failed",
         unconfirmed: "confirming", edit_saved: "editSaved", accepted: "syncing", running: "syncing", completed: "syncing" }[row.displayPhase];
-      setUiText(row.status, explicit ? uiMessage(`submission.${explicit}`) : editPhase ? uiMessage(`messageEdit.${editPhase}`) : error || !row.durable
+      setUiText(row.status, explicit === "cancelled" ? uiMessage("timeline.stopped") : explicit ? uiMessage(`submission.${explicit}`) : editPhase ? uiMessage(`messageEdit.${editPhase}`) : error || !row.durable
         ? error || uiMessage("submission.saving", {}, "正在保存消息…")
         : row.priority || row.interrupt
           ? uiMessage("submission.steering", {}, "正在应用新指令…")
@@ -79,19 +80,18 @@ export function createSubmissionTimeline({ container, host, snapshot, scope,
           ? uiMessage("submission.preparing", {}, "正在准备回复…")
           : uiMessage("submission.queued", {}, "已排队，等待上一条消息结束…"));
       row.reply.dataset.state = error ? "error" : row.displayPhase;
-      for (const name of ["edit", "cancel", "remove"]) if (row[`${name}Action`]) {
-        const button = row[`${name}Action`];
-        setUiText(button, uiMessage(`submission.${name}`));
-        button.disabled = !isWritable() || row.displayPhase === "stopping" || row.edit && ["updating", "sending"].includes(row.phase);
-        button.hidden = name === "remove" ? row.displayPhase !== "cancelled" || !row.receipt?.terminal :
-          name === "cancel" && ["cancelled", "completed"].includes(row.displayPhase);
+      setUiAttribute(row.copyAction, "title", uiMessage("timeline.copyMessage"));
+      setUiAttribute(row.copyAction, "aria-label", uiMessage("timeline.copyMessage"));
+      row.copyAction.hidden = !row.text;
+      if (row.editAction) {
+        setUiAttribute(row.editAction, "title", uiMessage("timeline.edit"));
+        setUiAttribute(row.editAction, "aria-label", uiMessage("timeline.editResend"));
+        const editable = isWritable() && !state.active && row.receipt?.terminal &&
+          !row.receipt.executed && row.displayPhase === "cancelled";
+        row.editAction.disabled = !editable;
+        row.editAction.hidden = !editable;
       }
       row.status.hidden = errorBinding?.id === row.id;
-      if(row.cancelEdit&&!row.cancelButton){
-        row.cancelButton=element("button",{className:"submission-edit-cancel secondary-button",text:uiMessage("messageEdit.cancelPending"),attrs:{type:"button"}});
-        row.cancelButton.onclick=()=>row.cancelEdit();row.reply.append(row.cancelButton);
-      }
-      if(row.cancelButton)row.cancelButton.hidden=!["waiting","preparing"].includes(editPhase);
       nodes.push(row.user, row.reply);
     }
     if (errorBinding) {

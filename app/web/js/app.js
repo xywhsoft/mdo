@@ -482,17 +482,17 @@ export async function boot() {
       throw unsupportedModelError();
   }
 
-  function assertReplacementIdle(selected) {
+  function assertReplacementIdle(selected, stoppedInputId = "") {
     const key = `${selected.projectId}/${selected.sessionId}`;
-    if ((activeRun && !(activeRun.cancel_requested || runStops.has(activeRun.id) || submissionCoordinator?.hasSession(selected.projectId, selected.sessionId))) ||
+    if (activeRun ||
         submittingCurrent() || composerImages?.isUploading() || composerFileImports?.isBusy())
       throw new Error(t("messageAction.waitForRun", {}, "请在当前运行结束后操作消息"));
     if (!draftStore.isLoaded(key))
       throw new Error(t("composer.hintLoadingDraft", {}, "正在读取草稿，请稍候"));
     if (draftStore.isRunUncertain(key)) throw uncertainRunError();
     const historyInputs = submissionHistoryIds(timelineStore.get().data?.events);
-    if (draftStore.submissions(key).some(item => !historyInputs.has(item.id)) ||
-        promptQueue.snapshot(selected.projectId, selected.sessionId).items.some(item => !historyInputs.has(item.id)) ||
+    if (draftStore.submissions(key).some(item => item.id !== stoppedInputId && !historyInputs.has(item.id)) ||
+        promptQueue.snapshot(selected.projectId, selected.sessionId).items.some(item => item.id !== stoppedInputId && !historyInputs.has(item.id)) ||
         composerText().trim() || composerAttachments.length)
       throw new Error(t("messageAction.resolveDraft", {}, "请先处理草稿和待发送队列，再编辑历史消息"));
   }
@@ -671,8 +671,59 @@ export async function boot() {
       route.sessionId === owner.sessionId &&
       selectedKey === `${owner.projectId}/${owner.sessionId}`;
   }
+  async function editStoppedMessage(row, opener) {
+    const version = routeVersion, owner = { projectId: row.projectId, sessionId: row.sessionId };
+    const key = `${row.projectId}/${row.sessionId}`, origin = promptQueue.stamp();
+    const attachments = [...(row.attachments || [])];
+    const current = () => promptQueue.stamp() === origin && isCurrentMessageOwner(owner, version);
+    const assertReady = () => {
+      if (!current()) throw new DOMException("Message owner changed", "AbortError");
+      if (!row.receipt?.terminal || row.receipt.executed || row.displayPhase !== "cancelled")
+        throw new Error(t("messageAction.waitForRun"));
+      assertReplacementProfile(attachments); assertReplacementIdle(navigation.get(), row.id);
+    };
+    assertReady();
+    if (messageEditingKey || messageActionBusy) throw new Error(t("messageAction.busy"));
+    let detached = false, attempted = false;
+    messageEditingKey = key; syncSendDisabled(); editCommandResults.clear();
+    try {
+      const result = await messageEditDialog.open(row.text, attachments, opener, {
+        host: row.user,
+        onDraft: text => { if (promptQueue.stamp() === origin) draftStore.edit(key, text, attachments); },
+        onDetach: text => {
+          detached = true;
+          if (promptQueue.stamp() === origin) { draftStore.edit(key, text, attachments, true); void draftStore.flush(key); }
+        },
+        onCommit: async text => {
+          assertReady(); attempted = true;
+          const status = await promptQueue.status(row.projectId, row.sessionId, row.id);
+          if (!status?.terminal || status.executed || status.phase !== "cancelled")
+            throw new Error(t("messageAction.waitForRun"));
+          if (!current()) throw new DOMException("Message owner changed", "AbortError");
+          // Save the replacement before retiring the nonexecuted input. A
+          // failed acknowledgement still leaves the edit in its owned draft.
+          draftStore.edit(key, text, attachments, true);
+          if (!await draftStore.flush(key)) throw new Error(t("composer.newTaskSaveFailed"));
+          await promptQueue.remove(row.projectId, row.sessionId, row.id);
+          submissionTimeline.forget(row.id);
+          if (!current()) throw new DOMException("Message owner changed", "AbortError");
+          await submitPrompt({ text, attachments, fromComposer: false });
+        },
+        fallbackFocus: () => current() ? prompt : null,
+      });
+      if (result === null && !detached && !attempted && promptQueue.stamp() === origin)
+        draftStore.clearIfMatches(key, messageEditDialog.text(), attachments);
+    } finally {
+      messageEditingKey = ""; syncSendDisabled(); inlineFiles.hide(); inlineSessions.hide(); inlineSlash.hide();
+      if (selectedKey === key && promptQueue.stamp() === origin) {
+        const saved = draftStore.snapshot(key); restoreComposerText(saved.text);
+        composerAttachments = saved.attachments; composerImages.set(saved.attachments); resizePrompt(); tokenMeter.refresh();
+      }
+    }
+  }
   const timelineView = createTimelineView({
     getSubmissions: () => submissionTimeline?.projection() ?? [],
+    canEditMessages: () => !activeRun && !submissionTimeline?.busy(),
     container: $("#timeline"), welcome: $("#welcome"),
     toBottom: $("#to-bottom"), store: timelineStore,
     sessionStore: sessionDetailStore,
@@ -1468,28 +1519,13 @@ export async function boot() {
   const resourcePanels = createResourcePanels();
   const submissionRows = element("ol", { className: "timeline submission-timeline", attrs: { "aria-label": uiMessage("submission.pending", {}, "正在提交的消息") } });
   submissionTimeline = createSubmissionTimeline({ container: submissionRows, host: $(".conversation"),
-    isWritable: () => !composerStopDisabled(),
+    isWritable: () => sessionWritable && !composerStopDisabled() && !activeRun && !submissionTimeline?.busy(),
     scope: () => promptQueue.stamp(),
     onPresentationChange: () => promptQueue.render(),
     onProjectionChange: () => { timelineView.refresh(); submissionCoordinator?.schedule(); syncSendDisabled(); renderRunStatus(); },
-    onCancel: row => {
-      if (row.cancelEdit && !row.durable) { row.cancelEdit(); return; }
-      void submissionCoordinator.stop(row);
-    },
-    onEdit: row => {
-      if (row.cancelEdit && !row.durable) { row.cancelEdit(); return; }
-      void submissionCoordinator.stop(row, true);
-    },
-    onDiscard: async row => {
-      if (composerStopDisabled() || row.removing || row.receipt?.executed) return;
-      row.removing = true;
-      try {
-        await promptQueue.remove(row.projectId, row.sessionId, row.id);
-        promptQueue.rememberUnusedImages(row.projectId, row.sessionId, row.attachments || []);
-        submissionTimeline.forget(row.id);
-      } catch (error) { toast(errorMessage(error), "error"); }
-      finally { row.removing = false; }
-    },
+    onEdit: (row, opener) => { void editStoppedMessage(row, opener).catch(error => {
+      if (error?.name !== "AbortError") toast(errorMessage(error), "error");
+    }); },
     snapshot() {
       const route = navigation.get(), projectId = route.projectId || "default";
       const task = draftStore.newTask();
@@ -1509,7 +1545,6 @@ export async function boot() {
     read: row => promptQueue.status(row.projectId, row.sessionId, row.id),
     cancel: row => promptQueue.cancel(row.projectId, row.sessionId, row.id),
     async prepareCancel(row, assert) {
-      row.cancelComposerEpoch ??= draftStore.editEpoch();
       newTaskController.cancelIntent(row.id);
       const recovery = createRequestRecovery();
       try {
@@ -1528,33 +1563,6 @@ export async function boot() {
           catch (error) { if (error.code !== "queue_item_consumed") throw error; }
         }
       } finally { recovery.dispose(); }
-    },
-    async restore(row, manual) {
-      const editEpoch = row.cancelComposerEpoch ?? draftStore.editEpoch();
-      const key = `${row.projectId}/${row.sessionId}`;
-      if (!selectedOwnsDraft(key)) return false;
-      if (submissionController.isSettling(key)) return "deferred";
-      await submissionController.reconcile(key);
-      if (!await draftStore.ensureLoaded(key)) return false;
-      // A late Stop ACK cannot reinsert an old prompt after the user has
-      // typed (or already sent) another one, even if the editor is empty now.
-      if (!manual && editEpoch !== draftStore.editEpoch()) return false;
-      const draft = draftStore.snapshot(key);
-      if (draft.text === row.text && JSON.stringify(draft.attachments) === JSON.stringify(row.attachments || [])) {
-        await promptQueue.remove(row.projectId, row.sessionId, row.id);
-        submissionTimeline.forget(row.id); prompt.focus(); return true;
-      }
-      if (draft.text || draft.attachments.length || draftStore.submissions(key).length) {
-        if (manual) toast(uiMessage("submission.draftOccupied"), "error");
-        return false;
-      }
-      if (!promptQueue.find(row.projectId, row.sessionId, row.id)) {
-        await promptQueue.select(row.projectId, row.sessionId);
-        if (!promptQueue.find(row.projectId, row.sessionId, row.id)) return false;
-      }
-      const restored = await promptQueue.withdraw(row.projectId, row.sessionId, row.id);
-      if (restored) submissionTimeline.forget(row.id);
-      return restored;
     },
     changed(row, value) {
       if (value.cancel_requested && value.terminal && composerErrorState?.submissionId === row.id &&
@@ -1627,6 +1635,7 @@ export async function boot() {
     if (resolvesRunStopError(composerErrorState?.error, run)) hideComposerError();
     const wasActive = Boolean(activeRun);
     activeRun = run && !terminalState(run) ? run : null;
+    timelineView.refresh();
     if (wasActive !== Boolean(activeRun)) promptQueue.render();
     const guide = settingsStore.get().data?.composer?.submit_mode === "guide";
     displayedRun = run;

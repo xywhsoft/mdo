@@ -72,6 +72,16 @@ test("the first message leaves the pending view before and after queue admission
   assert.deepEqual(f.writes, []);
 });
 
+test("a stopped message already in chat does not leave a paused pending-message panel", async context => {
+  const f=fixture(context),first={...message('a','stopped first prompt'),state:'cancelled'};
+  f.data.items=[first];f.data.paused=true;f.data.error='queue_stopped';await f.load();
+  f.view.status(first.id,{state:'cancelled',phase:'cancelled',terminal:true,cancel_requested:true,executed:false});
+  f.queue.render();
+  assert.equal(f.conversation.children.length,2);
+  assert.equal(f.pending.hidden,true);
+  assert.deepEqual(f.writes,[]);
+});
+
 test("new-session draft migration keeps the initial prompt in just one place", async context => {
   const f = fixture(context), first = message("a", "new session prompt");
   f.route({ projectId: "default", sessionId: "" });

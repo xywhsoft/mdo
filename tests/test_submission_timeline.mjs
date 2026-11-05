@@ -3,12 +3,12 @@ import test from "node:test";
 import { TestElement, testDocument } from "./helpers/extension-dom.mjs";
 import { createSubmissionTimeline } from "../app/web/js/features/chat/submission-timeline.js";
 
-function fixture() {
+function fixture(options = {}) {
   globalThis.document = testDocument();
   const host = new TestElement("section"), container = new TestElement("ol");
   document.body.append(host); host.append(container);
   let scope = "local", state = { projectId: "default", sessionId: "", entries: [], events: [] };
-  const view = createSubmissionTimeline({ host, container, scope: () => scope, snapshot: () => state });
+  const view = createSubmissionTimeline({ host, container, scope: () => scope, snapshot: () => state, ...options });
   return { view, host, container, state, switchScope(value) { scope = value; },
     value: (id = "a") => ({ id, text: "A new message", projectId: "default", sessionId: "", attachments: [] }) };
 }
@@ -18,12 +18,30 @@ test("edited resend is visible while the old run is finishing and hands off by s
   try{
     const value={...f.value('edited'),sessionId:'editing',edit:true,phase:'waiting',cancelEdit:()=>cancelled++};
     f.view.begin(value);assert.equal(f.container.children.length,2);
-    assert.equal(f.container.children[1].children.at(-1).hidden,false);
-    f.container.children[1].children.at(-1).onclick();assert.equal(cancelled,1);
-    f.view.progress('edited','updating');assert.equal(f.container.children[1].children.at(-1).hidden,true);
+    assert.equal(f.container.children[1].querySelectorAll('button').length,0,"the reply never creates a second Stop or cancellation control");
+    assert.equal(cancelled,0);
+    f.view.progress('edited','updating');assert.equal(f.container.children[1].querySelectorAll('button').length,0);
     f.state.entries=[{id:'edited',text:value.text,state:'prepared',attachments:[]}];f.view.accepted('edited');
     assert.equal(f.container.children.length,2);
     f.state.events=[{kind:'agent_start',queue_item_id:'edited'}];f.view.render();assert.equal(f.container.children.length,0);
+  }finally{f.view.destroy();}
+});
+
+test("a preparing message uses ordinary icon controls and permits editing only after Stop completes", () => {
+  let edits = 0; const f = fixture({onEdit:()=>edits++});
+  try {
+    f.view.begin(f.value());
+    const user=f.container.children[0],reply=f.container.children[1];
+    const actions=user.querySelector('.timeline-actions'),edit=actions.querySelector('[data-timeline-action="submission-a/edit"]');
+    assert.equal(actions.querySelectorAll('button').length,2);
+    assert.equal(reply.querySelectorAll('button').length,0);
+    assert.equal(edit.hidden,true);edit.click();assert.equal(edits,0);
+    f.view.status('a',{state:'starting',phase:'stopping',cancel_requested:true,terminal:false});
+    assert.equal(edit.hidden,true);
+    f.view.status('a',{state:'cancelled',phase:'cancelled',cancel_requested:true,terminal:true,executed:false});
+    assert.equal(edit.hidden,false);assert.equal(edit.textContent,'');edit.click();assert.equal(edits,1);
+    assert.equal(actions.querySelector('[data-icon="compose"]').dataset.icon,'compose');
+    f.state.active=true;f.view.render();assert.equal(edit.hidden,true);
   }finally{f.view.destroy();}
 });
 

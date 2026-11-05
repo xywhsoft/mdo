@@ -23,6 +23,7 @@ import { modelRetryNode, modelRetryInlineNode, updateModelRetryCountdowns } from
 import { createStreamScroll } from "./stream-scroll.js";
 import { appendTurnChanges, createTurnChanges } from "./turn-changes.js";
 import { conversationTurnActions } from "./turn-actions.js";
+import { messageActionIcon as actionIcon, messageActionButton, messageCopyButton } from "./message-actions.js";
 
 // Live disclosures keep their interactive shell while their contents change.
 // Replacing a summary between pointer press and release loses the activation.
@@ -781,21 +782,11 @@ function foldableNode(item, openState, previewOpen, previewScroll, projectId, se
   return row;
 }
 
-function actionIcon(name) {
-  return element("span", { className: "icon", attrs: {
-    "data-icon": name, "aria-hidden": "true",
-  } });
-}
-
 function commandButton(label, description, iconName, actionRef, handlers, sessionKey, action) {
-  const button = element("button", { className: "timeline-action-button", attrs: {
-    type: "button", "aria-label": description,
-    title: label,
-    "data-timeline-action": actionRef,
-    "data-timeline-command": "",
-    "aria-disabled": String(handlers.isBusy(sessionKey)),
-  } }, [actionIcon(iconName)]);
-  button.addEventListener("click", () => handlers.runAction(sessionKey, () => action(button)));
+  const button = messageActionButton(iconName, label, description, actionRef,
+    () => handlers.runAction(sessionKey, () => action(button)));
+  button.setAttribute("data-timeline-command", "");
+  button.setAttribute("aria-disabled", String(handlers.isBusy(sessionKey)));
   return button;
 }
 
@@ -806,26 +797,8 @@ function timelineActionsNode(item, handlers, projectId, sessionId, writable) {
     role: "group", "aria-label": t("timeline.turnActions", {}, "本轮对话操作") } : {} });
   const copyTarget = wholeTurn ? item.primaryReply : item;
   if (copyTarget?.text) {
-    const copyLabel = wholeTurn ? t("timeline.copyMainReply", {}, "复制主要回复")
-      : t("timeline.copyMessage", {}, "复制消息");
-    const copy = element("button", { className: "timeline-action-button", attrs: {
-      type: "button", "aria-label": copyLabel, title: copyLabel,
-      "data-timeline-action": `${item.key}/copy` },
-    }, [actionIcon("copy")]);
-    let copying = false;
-    copy.addEventListener("click", async () => {
-      if (copying) return;
-      copying = true; copy.setAttribute("aria-disabled", "true");
-      try {
-        const resolved = await resolveTimelineCopyText(copyTarget, owner);
-        await copyText(promptContextText(resolved.text));
-        toast(resolved.complete ? t("timeline.messageCopied", {}, "消息已复制")
-          : t("timeline.visibleMessageCopied", {}, "已复制可见部分"));
-      } catch (error) {
-        if (error?.name !== "AbortError") toast(t("timeline.messageCopyFailed", {}, "无法复制消息"), "error");
-      } finally { copying = false; copy.setAttribute("aria-disabled", "false"); }
-    });
-    actions.append(copy);
+    actions.append(messageCopyButton(() => resolveTimelineCopyText(copyTarget, owner),
+      { mainReply: wholeTurn, actionRef: `${item.key}/copy` }));
   }
   if (writable && !item.historyReadOnly) {
     if (item.kind === "user" && Number.isSafeInteger(item.userMessageSequence) && item.userMessageSequence > 0)
@@ -1070,7 +1043,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
 
 export function createTimelineView({ container, welcome, toBottom, store, sessionStore = null,
   onFork, onEdit, onRetry, onSearchCount, onLoadOlder, onLoadIndex, onRevealTurn, onReload, onOpenChanges,
-  showReadError = true, getSubmissions = () => [] }) {
+  showReadError = true, getSubmissions = () => [], canEditMessages = () => true }) {
   const busySessions = new Set();
   const renderedRows = new Map();
   let retryTimer = 0;
@@ -1352,7 +1325,8 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       const writable = !sessionStore || (session?.status === "active" &&
         session.project_id === data?.projectId && session.id === data?.sessionId);
       for (const item of visible)
-        entries.push({ item, writable });
+        entries.push({ item, writable: writable && (item.kind !== "user" || canEditMessages() &&
+          (!item.turnState || ["done", "failed", "cancelled"].includes(item.turnState))) });
     }
     reconcileRows(entries, data?.projectId, data?.sessionId);
     streamScroll.restore(container);

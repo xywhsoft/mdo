@@ -5,17 +5,16 @@ import { isTransientReadError } from "../../api/read-recovery.js";
 // All asynchronous results are scoped to the original device and message.
 // A missing ACK causes reads; it is never permission to resend a user input.
 export function createSubmissionCoordinator({ scope, rows, status, read, cancel,
-  prepareCancel = async () => {}, restore = async () => false,
+  prepareCancel = async () => {},
   changed = () => {}, failure = () => {},
   setTimer = setTimeout, clearTimer = clearTimeout, now = Date.now,
   createRecovery = createRequestRecovery }) {
   const reading = new Set(), stopping = new Map(), checked = new Map(), recoveries = new Set();
-  const restored = new Set();
   let owner = scope(), timer = 0, destroyed = false;
   function check() {
     if (owner === scope()) return;
     for (const recovery of recoveries) recovery.dispose();
-    recoveries.clear(); reading.clear(); stopping.clear(); checked.clear(); restored.clear(); owner = scope();
+    recoveries.clear(); reading.clear(); stopping.clear(); checked.clear(); owner = scope();
   }
   const identity = row => `${row.projectId}/${row.sessionId}/${row.id}`;
   function current(row, origin) { return !destroyed && scope() === origin && rows().some(item => identity(item) === identity(row)); }
@@ -31,10 +30,6 @@ export function createSubmissionCoordinator({ scope, rows, status, read, cancel,
       const value = await read(row);
       if (value) {
         observe(row, value, origin);
-        if (value.state === "cancelled" && value.terminal && !value.executed && current(row, origin) && !restored.has(id)) {
-          const result = await restore(row, false);
-          if (result !== "deferred") restored.add(id);
-        }
       } else if (row.missing) observe(row, { state: "starting", phase: "unconfirmed" }, origin);
     } catch (error) {
       if (error?.name !== "AbortError" && current(row, origin))
@@ -61,7 +56,7 @@ export function createSubmissionCoordinator({ scope, rows, status, read, cancel,
     }
     if (values.length) schedule();
   }
-  async function stop(row, edit = false) {
+  async function stop(row) {
     check(); const id = identity(row), origin = owner;
     if (stopping.has(id)) return stopping.get(id);
     const recovery = createRecovery(); recoveries.add(recovery);
@@ -79,9 +74,8 @@ export function createSubmissionCoordinator({ scope, rows, status, read, cancel,
       }, { retryable: error => isTransientReadError(error) || error?.code === "session_runtime_busy" });
       assert(); observe(row, value, origin);
       if (!current(row, origin)) changed(row, value);
-      if (!value.executed) { const result = await restore(row, edit); if (result !== "deferred") restored.add(id); }
-      // Executed inputs belong to normal history/editing; do not copy their
-      // text into a second input or truncate history during reconciliation.
+      // Stop leaves the message in the conversation, just like a recorded
+      // input. Editing is a separate user action, never an automatic restore.
       return value;
     }).catch(error => {
       if (error?.name !== "AbortError" && current(row, origin)) {

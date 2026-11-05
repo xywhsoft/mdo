@@ -141,7 +141,6 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
   const transport = createDraftTransport({ matchesSnapshot, createRecovery });
   const encoder = new TextEncoder();
   let selected = "";
-  let editEpoch = 0;
   let readPaused = false;
 
   function entry(key) {
@@ -451,7 +450,6 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     const current = entry(key);
     const ids = key ? imageIds(attachments) : [];
     const changed = current.text !== text || !sameIds(current.attachments, ids);
-    if (changed) editEpoch++;
     if (!changed && !current.dirty) return;
     if (changed && current.loaded && !current.conflict) current.error = null;
     current.text = text;
@@ -522,7 +520,6 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
   return Object.freeze({
     select,
     edit,
-    editEpoch: () => editEpoch,
     forgetSession(key) {
       if (!key || key.startsWith("project:")) throw new TypeError(uiErrorText("error.detail.aSessionDraftKeyIsRequired", {}, "a session draft key is required"));
       forgotten.add(key);

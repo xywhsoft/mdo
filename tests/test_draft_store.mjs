@@ -19,19 +19,13 @@ test("a lost saved-text acknowledgement is confirmed by one read without another
     const store = createDraftStore({ onRestore() {}, onError() {}, onSaved() {} });
     store.select(key); assert.equal(await store.ensureLoaded(key), true);
     store.edit(key, "replacement input", [image], true);
-    const editEpoch = store.editEpoch();
     assert.equal(await store.flush(key), true);
     assert.equal(store.isDraftDurable(key, "replacement input", [image]), true);
     assert.equal(await store.refreshSessionSubmissions(key), true);
-    assert.equal(store.editEpoch(), editEpoch, "background acknowledgements do not count as a new editor input");
     assert.equal(store.isDraftDurable(key, "replacement input", [image]), true);
     assert.equal(store.isDraftDurable(key, "other input", [image]), false);
     assert.equal(store.isDraftDurable(key, "replacement input", []), false);
     assert.equal(writes, 1);
-    store.edit(key, "newer input", [image]);
-    store.edit(key, "", []);
-    assert.ok(store.editEpoch() > editEpoch, "an empty editor after later typing is not the original empty editor");
-    await store.flush(key);
   } finally {
     globalThis.window = originalWindow; globalThis.fetch = originalFetch;
   }
