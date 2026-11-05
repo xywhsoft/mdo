@@ -36,11 +36,19 @@ export function createRunNotifications({ runsStore, navigation, settingsStore,
   }
 
   navigation.subscribe(({ view, projectId, sessionId }) => {
-    if (view === "workspace") selectedKey = sessionId ? `${projectId}/${sessionId}` : "";
+    selectedKey = view === "workspace" && sessionId ? `${projectId}/${sessionId}` : "";
     if (unread.delete(selectedKey)) display();
   });
 
   runsStore.subscribe((state) => {
+    if (state.status === "idle") {
+      // Device changes reset the run store. Do not carry unread results or
+      // compare the new device's first snapshot with the previous device.
+      seen = null;
+      unread.clear();
+      display();
+      return;
+    }
     if (state.status !== "ready") return;
     const next = new Map();
     let changed = false;

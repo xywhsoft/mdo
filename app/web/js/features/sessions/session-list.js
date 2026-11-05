@@ -152,13 +152,19 @@ export function createSessionList({ container, count, filter, searchButton, stor
     // Polling changes only the status spans. Keep row/menu nodes, selection,
     // and scroll intact while another task finishes.
     const outcomes = sessionRunOutcomes(latestRuns, state.data?.items ?? []);
+    const selected = navigation.get();
+    const selectedKey = selected.view === "workspace" && selected.sessionId
+      ? `${selected.projectId}/${selected.sessionId}` : "";
     for (const button of container.querySelectorAll(".session-item")) {
       const key = button.dataset.sessionKey;
       const row = button.parentElement;
-      const activity = activities.get(key) || outcomes.get(key) || "";
+      // A stored outcome describes the last run, not whether it is unread.
+      // Keep live progress visible; completed results clear on navigation.
+      const hasUnread = unread.has(key) && key !== selectedKey;
+      const activity = activities.get(key) || (hasUnread ? outcomes.get(key) : "") || "";
       if (activity) row.setAttribute("data-run-state", activity);
       else row.removeAttribute("data-run-state");
-      if (unread.has(key)) row.setAttribute("data-unread", "true");
+      if (hasUnread) row.setAttribute("data-unread", "true");
       else row.removeAttribute("data-unread");
       const indicator = button.querySelector(".session-item-activity");
       const activityLabel = activityText(activity);
@@ -168,7 +174,7 @@ export function createSessionList({ container, count, filter, searchButton, stor
       else dot.removeAttribute("title");
       if (indicator.textContent !== activityLabel) writeUiText(indicator, activityLabel);
       const result = button.querySelector(".session-item-unread");
-      const resultLabel = unread.has(key) ? t("nav.unread", {}, "有新结果") : "";
+      const resultLabel = hasUnread ? t("nav.unread", {}, "有新结果") : "";
       if (result.textContent !== resultLabel) writeUiText(result, resultLabel);
     }
   }

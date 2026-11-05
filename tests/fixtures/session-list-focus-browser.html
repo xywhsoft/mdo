@@ -6,6 +6,7 @@
 <pre id="result">Running</pre>
 <script type="module">
 import { createSessionList } from "/app/web/js/features/sessions/session-list.js";
+import { createRunNotifications } from "/app/web/js/features/shell/run-notifications.js";
 
 const checks = {};
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
@@ -19,33 +20,49 @@ async function painted(predicate, message) {
 const session = (id, project_id = "default", extra = {}) => ({ id, project_id,
   title: id, status: "active", pinned: false, updated_at: 100, ...extra });
 
-function fixture(items) {
+function fixture(items, notify = false) {
   const root = document.createElement("aside"); root.className = "sidebar";
   root.innerHTML = '<select><option value="active">Active</option><option value="trash">Trash</option></select><span></span><div class="session-list"></div>';
   document.body.append(root);
   const container = root.querySelector("div"), filter = root.querySelector("select");
   let state = { status: "ready", updatedAt: 1, data: { items } }, publish;
-  let runs = { status: "ready", data: { items: [] } }, publishRuns;
+  let runs = { status: "ready", data: { items: [] } };
+  const runListeners = new Set();
   const store = { get: () => state,
     subscribe(listener) { publish = listener; listener(state); return () => {}; } };
-  const runsStore = { get: () => runs, subscribe(listener) { publishRuns = listener; listener(runs); return () => {}; } };
+  const runsStore = { get: () => runs, subscribe(listener) {
+    runListeners.add(listener); listener(runs); return () => runListeners.delete(listener);
+  } };
   const projectActions = [];
+  let selected = { view: "workspace", projectId: items[0]?.project_id, sessionId: items[0]?.id };
+  const navigationListeners = new Set();
+  const navigation = { get: () => selected, subscribe(listener) {
+    navigationListeners.add(listener); listener(selected); return () => navigationListeners.delete(listener);
+  } };
   const view = createSessionList({ container, count: root.querySelector("span"), filter, store, runsStore,
     projectsStore: { get: () => ({ data: { items: [] } }), subscribe: () => () => {} },
-    navigation: { get: () => ({ projectId: items[0]?.project_id, sessionId: items[0]?.id }),
-      subscribe: () => () => {} }, onSelect() {}, onAction() {}, onNewInProject() {},
+    navigation, onSelect(session) { select(session.id, session.project_id); }, onAction() {}, onNewInProject() {},
     onProjectAction(action, id) { projectActions.push({ action, id }); } });
+  function select(id, projectId = "default", page = "workspace") {
+    selected = { view: page, projectId, sessionId: id };
+    for (const listener of navigationListeners) listener(selected);
+  }
+  const baseTitle = document.title;
+  if (notify) createRunNotifications({ runsStore, navigation,
+    settingsStore: { get: () => ({ data: { notifications: { sound: false } } }) },
+    onUnreadChange(keys) { view.setUnread(keys); } });
   return { container, filter, view, projectActions,
+    select,
     item(id) { return [...container.querySelectorAll(".session-item")]
       .find(node => node.dataset.sessionKey.endsWith("/" + id)); },
     update(next) { state = { ...state, data: { items: next } }; publish(state); },
-    runs(items, status = "ready") { runs = { status, data: { items } }; publishRuns(runs); },
+    runs(items, status = "ready") { runs = { status, data: { items } }; for (const listener of runListeners) listener(runs); },
     focusValid() { return container.contains(document.activeElement) && document.activeElement.isConnected; },
-    close() { view.destroy(); root.remove(); } };
+    close() { view.destroy(); root.remove(); document.title = baseTitle; } };
 }
 
-async function check(name, items, run) {
-  const f = fixture(items);
+async function check(name, items, run, notify = false) {
+  const f = fixture(items, notify);
   try { await new Promise(resolve => setTimeout(resolve, 100)); await run(f); checks[name] = true; }
   finally { f.close(); }
 }
@@ -64,13 +81,14 @@ try {
     assert(!document.querySelector('[role="menuitem"]') && f.focusValid(), "opening a directory must close the menu and retain sidebar focus");
   });
   const one = session("one"), two = session("two");
-  await check("persistent_completion_indicators_without_remount", [one, two], async f => {
+  await check("unread_completion_indicators_without_remount", [one, two], async f => {
+    f.select("two"); f.view.setUnread(["default/one"]);
     const original = f.item("one"); original.focus();
     const state = () => original.closest(".session-item-row").dataset.runState;
     f.update([{ ...one, last_run_outcome: "succeeded", last_run_at: 30 }, two]);
     assert(f.item("one") === original && document.activeElement === original && state() === "succeeded", "completion must preserve row and focus");
     assert(getComputedStyle(original.querySelector(".session-run-indicator")).visibility === "visible",
-      "completion must remain visible on a focused session");
+      "keyboard focus alone must not acknowledge a result");
     f.filter.focus();
     const dot = original.querySelector(".session-run-indicator");
     const green = getComputedStyle(dot).backgroundColor;
@@ -92,6 +110,7 @@ try {
   });
   await check("completion_colors_follow_light_and_dark_theme", [
     { ...one, last_run_outcome: "succeeded" }, { ...two, last_run_outcome: "failed" }], async f => {
+    f.select(""); f.view.setUnread(["default/one", "default/two"]);
     try {
       for (const theme of ["light", "dark"]) {
         document.documentElement.dataset.theme = theme;
@@ -103,6 +122,43 @@ try {
       }
     } finally { delete document.documentElement.dataset.theme; }
   });
+  await check("completion_is_unread_until_session_opened", [one, two, session("one", "other")], async f => {
+    const run = { id: "background", project_id: "default", session_id: "two",
+      terminal: false, state: "running", ended_at: 0 };
+    const state = (id = "two") => f.item(id).closest(".session-item-row").dataset.runState;
+    const finish = (id, result, at) => ({ ...run, id, state: result, terminal: true, ended_at: at });
+    f.runs([run]); assert(state() === "running", "background progress must remain visible");
+    f.runs([finish("background", "succeeded", 30)]);
+    f.update([one, { ...two, last_run_outcome: "succeeded", last_run_at: 30 }, session("one", "other")]);
+    assert(state() === "succeeded" && document.title.startsWith("(1)"), "new background result must be unread");
+    const dot = f.item("two").querySelector(".session-run-indicator");
+    const time = f.item("two").querySelector(".session-item-time");
+    const center = node => { const rect = node.getBoundingClientRect(); return rect.top + rect.height / 2; };
+    assert(Math.abs(center(dot) - center(time)) < .5 && getComputedStyle(time).lineHeight === "18px",
+      "dot and time must share the same vertical center and an explicit text line height");
+    f.item("two").click();
+    assert(!state() && !f.item("two").closest(".session-item-row").hasAttribute("data-unread") &&
+      !document.title.startsWith("(1)"), "opening the session must clear its dot and unread count");
+    f.select("one");
+    f.runs([finish("background", "succeeded", 30)]);
+    f.update([one, { ...two, last_run_outcome: "succeeded", last_run_at: 30 }, session("one", "other")]);
+    assert(!state(), "switching away and polling persisted results must not restore the read dot");
+    f.runs([{ ...run, id: "retry" }]);
+    f.runs([finish("retry", "failed", 40)]);
+    assert(state() === "failed", "a later background failure must become a new unread red dot");
+    f.item("two").click(); assert(!state(), "opening a failed session must also acknowledge its red dot");
+    f.runs([{ ...run, id: "foreground" }]);
+    assert(state() === "running", "viewing a running conversation must retain its progress ring");
+    f.runs([finish("foreground", "succeeded", 50)]);
+    assert(!state(), "completion in the current conversation must not create an unread dot");
+    f.select("", "", "settings");
+    f.runs([finish("settings-background", "failed", 60)]);
+    assert(state() === "failed", "a hidden conversation finishing in settings is unread");
+    f.runs([], "error"); assert(state() === "failed", "a failed refresh must retain unread results");
+    f.runs([], "idle"); assert(!state(), "switching devices must clear the previous device's unread results");
+    f.runs([finish("first-snapshot", "succeeded", 70)]);
+    assert(!state(), "a new device's historical runs must not invent unread results");
+  }, true);
   await check("message_order_ignores_navigation_and_metadata", [
     { ...one, last_message_at: 10 }, { ...two, last_message_at: 20 }], f => {
     const order = () => [...f.container.querySelectorAll(".session-item")].map(n => n.dataset.sessionKey);
