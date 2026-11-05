@@ -84,8 +84,9 @@ try {
   checks.stableFinished=process()===originalProcess&&process().querySelector("summary")===originalSummary;
   // File-change summaries have their own regression; keep this assertion about
   // dialogue/tool grouping independent of those additional completion cards.
-  checks.dialogueOnly=[...container.children].filter(node=>!node.classList.contains("turn-changes"))
+  checks.dialogueOnly=[...container.children].filter(node=>!node.classList.contains("turn-changes")&&node.dataset.kind!=="turn-actions")
     .map(node=>node.dataset.kind).join(",")==="user,assistant,process,assistant";
+  checks.oneTurnToolbar=container.querySelectorAll('[data-kind="turn-actions"]').length===1;
   process().querySelector("summary").click();await paint();
   checks.childRestored=process().querySelector("details[data-timeline-key='tool-4']")?.open===true;
   process().querySelector("summary").click();await paint();

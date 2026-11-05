@@ -1,5 +1,5 @@
 """Real DOM tool grouping, live updates and locale/mobile layout; in place."""
-import argparse,json,os,shutil,subprocess,tempfile,threading
+import argparse,json,os,shutil,subprocess,tempfile,threading,time
 from functools import partial
 from http.server import SimpleHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
@@ -28,7 +28,10 @@ def main(fixture=None,output_name='tool-call-groups',locales=('zh-CN','en-US','r
         try:
             for locale in locales:
                 for width in (1400,390):
-                    with tempfile.TemporaryDirectory(prefix='tool-group-browser-',dir=ROOT/'.build') as profile:
+                    profile_temp=tempfile.TemporaryDirectory(prefix='tool-group-browser-',dir=ROOT/'.build')
+                    profile=profile_temp.name
+                    assert Path(profile).resolve().parent==(ROOT/'.build').resolve()
+                    try:
                         screenshot=proof/f'{locale}-{width}.png'
                         command=['node',str(ROOT/'tests/queue_browser_driver.mjs'),str(browser),profile,f'http://127.0.0.1:{server.server_port}/tests/fixtures/{Handler.fixture.name}?locale={locale}',str(width),str(screenshot),'','desktop']
                         result=subprocess.run(command,capture_output=True,timeout=35,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
@@ -36,6 +39,15 @@ def main(fixture=None,output_name='tool-call-groups',locales=('zh-CN','en-US','r
                         report=json.loads(result.stdout.decode('utf-8'));reports.append(dict(locale=locale,width=width,**report))
                         assert report['passed'],reports[-1]
                         print('PASS',locale,width,flush=True)
+                    finally:
+                        # Chromium's child processes may briefly retain their
+                        # cache after the browser process has exited on Windows.
+                        for attempt in range(20):
+                            try:
+                                profile_temp.cleanup();break
+                            except PermissionError:
+                                if attempt==19:raise
+                                time.sleep(.1)
         finally:server.shutdown();thread.join(timeout=5)
     (proof/'report.json').write_text(json.dumps(reports,ensure_ascii=False,indent=2),encoding='utf-8')
 if __name__=='__main__':main()

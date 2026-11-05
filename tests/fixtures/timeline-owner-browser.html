@@ -31,6 +31,7 @@ store.setData({ projectId: "qa", sessionId: "original", events: [
     text: "First answer", time: 2000000 },
   { event_id: 3, run_id: 1, kind: "model_done", success: true,
     input_tokens: 2, output_tokens: 2, time: 3000000 },
+  { event_id: 4, run_id: 1, kind: "agent_done", success: true, time: 4000000 },
 ] });
 const output = document.querySelector("#result");
 try {

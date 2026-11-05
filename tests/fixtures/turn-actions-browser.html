@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo whole turn actions</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>body{margin:16px;background:var(--bg);color:var(--ink)}.conversation{height:72vh;max-width:820px;margin:auto;overflow:auto}#result{display:block;max-width:820px;margin:auto;font-size:11px;white-space:pre-wrap}#timeline{max-width:100%;padding:0}</style>
+<div class="conversation"><p id="welcome"></p><ol id="timeline" class="timeline"></ol></div>
+<button id="to-bottom" hidden>↓</button><output id="result">Preparing</output><div id="toast-region"></div>
+<script type="module">
+import {createTimelineView} from "/app/web/js/features/chat/timeline.js";
+import {createResourceStore} from "/app/web/js/state/store.js";
+import {loadLocale} from "/app/web/js/i18n.js";
+const result=document.querySelector("#result"),container=document.querySelector("#timeline"),checks={},errors=[];
+window.addEventListener("error",event=>errors.push(event.message));
+try {
+  await loadLocale(new URL(location.href).searchParams.get("locale")||"zh-CN");
+  let copied="";Object.defineProperty(navigator,"clipboard",{configurable:true,value:{writeText:async text=>{copied=text;}}});
+  const store=createResourceStore(),sessions=createResourceStore(),forks=[],retries=[],now=Date.now()*1000;
+  const e=(id,kind,fields={})=>({event_id:id,kind,schema_version:11,run_id:"main",agent_depth:0,agent_turn:1,time:now+id*1000,...fields});
+  const input=()=>e(1,"agent_start",{text:"Complete the original request",user_message_sequence:7});
+  let events=[input(),e(2,"model_text_delta",{text:"Inspecting files."}),e(3,"model_done",{success:true}),
+    e(4,"tool_start",{tool_name:"read",tool_call_id:"read",text:'{"path":"src/main.c"}'}),
+    e(5,"tool_done",{tool_call_id:"read",success:true,text:"Source"}),
+    e(6,"model_text_delta",{agent_turn:2,text:"**Main answer:** the work is complete."}),e(7,"model_done",{agent_turn:2,success:true})];
+  const view=createTimelineView({container,welcome:document.querySelector("#welcome"),toBottom:document.querySelector("#to-bottom"),store,sessionStore:sessions,
+    onFork:(boundary,owner)=>forks.push({boundary,owner}),onRetry:(sequence,text,images,owner,resolveText,sourceEventId)=>retries.push({sequence,text,sourceEventId,owner})});
+  const paint=async()=>{await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);};
+  const publish=async()=>{store.setData({projectId:"qa",sessionId:"turn-actions",events});await paint();};
+  const footers=()=>[...container.querySelectorAll('[data-kind="turn-actions"]')];
+  const button=(suffix,footer=footers().at(-1))=>footer?.querySelector(`[data-timeline-action$="/${suffix}"]`);
+  sessions.setData({project_id:"qa",id:"turn-actions",status:"active"});await publish();
+  checks.noLiveToolbar=footers().length===0;
+  checks.noIntermediateActions=container.querySelectorAll('[data-kind="assistant"] .timeline-actions').length===0;
+  events.push(e(8,"tool_start",{agent_turn:2,tool_name:"write",tool_call_id:"memory",text:'{"path":"@memory-global/decision.md","content":"A durable decision"}'}),
+    e(9,"tool_done",{agent_turn:2,tool_call_id:"memory",success:true,text:"Saved"}),
+    e(10,"model_text_delta",{agent_turn:3,text:"Memory saved."}),e(11,"model_done",{agent_turn:3,success:true}),e(12,"agent_done",{success:true}));
+  await publish();const memoryCase=[...events];checks.oneToolbar=footers().length===1;
+  checks.exactlyThreeButtons=footers()[0].querySelectorAll("button").length===3;
+  checks.noIntermediateActions&&=container.querySelectorAll('[data-kind="assistant"] .timeline-actions').length===0;
+  button("copy").click();await paint();checks.primaryCopy=copied==="**Main answer:** the work is complete.";
+  button("fork").click();await paint();button("retry").click();await paint();
+  checks.wholeTurnTargets=forks.length===1&&forks[0].boundary===null&&retries.length===1&&retries[0].sequence===7&&
+    retries[0].sourceEventId===1&&retries[0].text==="Complete the original request"&&retries[0].owner.sessionId==="turn-actions";
+  events.push(e(13,"agent_start",{run_id:"resume",user_message_sequence:0}));await publish();
+  checks.hiddenWhileResuming=footers().length===0;
+  events.push(e(14,"model_text_delta",{run_id:"resume",text:"A completed continuation."}),e(15,"agent_done",{run_id:"resume",success:true}));
+  await publish();button("copy").click();await paint();checks.resumedCopy=copied==="A completed continuation.";
+  events=[input(),e(2,"model_text_delta",{text:"Public answer before compaction."}),e(3,"compaction_start"),
+    e(4,"model_text_delta",{text:"Private context summary."}),e(5,"compaction_done"),e(6,"agent_done",{success:true})];
+  await publish();button("copy").click();await paint();checks.compactionExcluded=copied==="Public answer before compaction."&&footers().length===1;
+  sessions.setData({project_id:"qa",id:"turn-actions",status:"archived"});await paint();
+  checks.archivedCopyOnly=footers()[0].querySelectorAll("button").length===1&&Boolean(button("copy"));
+  sessions.setData({project_id:"qa",id:"turn-actions",status:"active"});
+  events=[input(),e(2,"error",{text:"Provider unavailable"})];await publish();
+  checks.failedTurnRecovery=footers().length===1&&!button("copy")&&Boolean(button("fork"))&&Boolean(button("retry"));
+  events=[input(),e(2,"model_text_delta",{text:"First answer"}),e(3,"agent_done",{success:true}),
+    e(4,"agent_start",{run_id:"next",user_message_sequence:12,text:"Next question"}),
+    e(5,"model_text_delta",{run_id:"next",text:"Second answer."})];await publish();
+  checks.onlyCompletedTurn=footers().length===1;button("fork").click();await paint();checks.earlierBoundary=forks.at(-1).boundary===11;
+  events.push(e(6,"agent_done",{run_id:"next",success:true}));await publish();checks.twoCompletedTurns=footers().length===2;
+  events=memoryCase;await publish();
+  checks.noOverflow=document.documentElement.scrollWidth<=innerWidth;
+  result.textContent=JSON.stringify({passed:errors.length===0&&Object.values(checks).every(Boolean),checks,errors},null,2);
+} catch(error) {result.textContent=JSON.stringify({passed:false,error:String(error.stack),checks,errors});}
+</script></html>

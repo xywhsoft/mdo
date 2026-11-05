@@ -38,9 +38,9 @@ async function select(id) {
   return page;
 }
 function actions() {
-  const answer = [...document.querySelectorAll('[data-kind="assistant"]')].at(-1);
-  return { fork: answer?.querySelector('[data-timeline-action$="/fork"]'),
-    retry: answer?.querySelector('[data-timeline-action$="/retry"]') };
+  const footer = [...document.querySelectorAll('[data-kind="turn-actions"]')].at(-1);
+  return { fork: footer?.querySelector('[data-timeline-action$="/fork"]'),
+    retry: footer?.querySelector('[data-timeline-action$="/retry"]') };
 }
 function check(condition, label) { if (!condition) throw new Error(label); }
 let childId = "", forkError;

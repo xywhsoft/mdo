@@ -28,10 +28,11 @@ let events = [
     text: "First complete answer", time: 2000000 },
   { event_id: 3, run_id: 1, kind: "model_done", success: true,
     input_tokens: 4, output_tokens: 3, time: 3000000 },
-  { event_id: 4, run_id: 2, kind: "agent_start", schema_version: 3,
+  { event_id: 4, run_id: 1, kind: "agent_done", success: true, time: 3500000 },
+  { event_id: 5, run_id: 2, kind: "agent_start", schema_version: 3,
     agent_depth: 0, user_message_sequence: 2, text: "Second prompt", time: 4000000 },
-  { event_id: 5, run_id: 2, kind: "model_start", time: 5000000 },
-  { event_id: 6, run_id: 2, kind: "model_text_delta", model: "Test model",
+  { event_id: 6, run_id: 2, kind: "model_start", time: 5000000 },
+  { event_id: 7, run_id: 2, kind: "model_text_delta", model: "Test model",
     text: "Live answer", time: 6000000 },
 ];
 const store = createResourceStore();
@@ -58,7 +59,7 @@ function report(action) {
 document.querySelector("#extend").addEventListener("click", () => {
   const action = oldUser().querySelector('[data-timeline-action$="/copy"]');
   action.focus();
-  events = [...events, { event_id: 7, run_id: 2, kind: "model_text_delta",
+  events = [...events, { event_id: 8, run_id: 2, kind: "model_text_delta",
     model: "Test model", text: " updated", time: 7000000 }];
   store.setData({ projectId: "qa", sessionId: "timeline", events });
   report("stream");
@@ -73,15 +74,14 @@ document.querySelector("#select-extend").addEventListener("click", () => {
   range.selectNodeContents(oldUser().querySelector(".timeline-body"));
   document.getSelection().removeAllRanges();
   document.getSelection().addRange(range);
-  events = [...events, { event_id: 8, run_id: 2, kind: "model_text_delta",
+  events = [...events, { event_id: 9, run_id: 2, kind: "model_text_delta",
     model: "Test model", text: " selected", time: 8000000 }];
   store.setData({ projectId: "qa", sessionId: "timeline", events });
   report("selection");
 });
 document.querySelector("#focused-extend").addEventListener("click", () => {
-  [...document.querySelectorAll('#timeline [data-kind="assistant"]')].at(-1)
-    .querySelector('[data-timeline-action$="/copy"]').focus();
-  events = [...events, { event_id: 9, run_id: 2, kind: "model_text_delta",
+  document.querySelector('#timeline [data-kind="turn-actions"] [data-timeline-action$="/copy"]').focus();
+  events = [...events, { event_id: 10, run_id: 2, kind: "model_text_delta",
     model: "Test model", text: " focused", time: 9000000 }];
   store.setData({ projectId: "qa", sessionId: "timeline", events });
   report("focused-stream");
