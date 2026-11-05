@@ -50,7 +50,7 @@ import { createTimelineView } from "./features/chat/timeline.js";
 import { createQueueGate } from "./features/chat/queue-gate.js";
 import { runAwaitingRelease } from "./features/chat/run-finishing.js";
 import { createResourceRefresh } from "./features/shell/resource-refresh.js";
-import { createRunStopController, resolvesRunStopError, createRunObservation } from "./features/chat/run-stop-controller.js";
+import { createRunStopController, resolvesRunStopError, createRunObservation, applySubmissionCancellation } from "./features/chat/run-stop-controller.js";
 import { createRunPollRead } from "./features/chat/run-poll-read.js";
 import { createSubmissionCoordinator } from "./features/chat/submission-coordinator.js";
 import { submissionHistoryIds } from "./features/chat/submission-state.js";
@@ -251,6 +251,8 @@ export async function boot() {
   let selectedSessionStatus = "active";
   let activeRun = null;
   const runPollReads = createRunPollRead({ read: readRun });
+  const missingRunReads = createRunPollRead({ read: readRun });
+  let missingRunId = "";
   const readRunForMonitor = owner => runPollReads.read(owner);
   const runStops = createRunStopController({ cancel: cancelRun, read: readRun,
     canWrite: () => !purgeRecovery.isPaused() && !localServiceReconnecting &&
@@ -1567,8 +1569,8 @@ export async function boot() {
     changed(row, value) {
       if (value.cancel_requested && value.terminal && composerErrorState?.submissionId === row.id &&
           selectedOwnsDraft(`${row.projectId}/${row.sessionId}`)) hideComposerError();
-      if (value.cancel_requested && activeRun?.project_id === row.projectId && activeRun?.session_id === row.sessionId &&
-          (!value.run_id || value.run_id === activeRun.id)) setRun({ ...activeRun, cancel_requested: true });
+      const stopped = applySubmissionCancellation(activeRun, row, value);
+      if (stopped !== activeRun) setRun(stopped);
       if (value.executed && selectedOwnsDraft(`${row.projectId}/${row.sessionId}`)) void refreshSelectedTimeline();
       void loadRuns();
     },
@@ -1630,8 +1632,9 @@ export async function boot() {
   }
 
   function setRun(run) {
+    if (observeRun.isRetired(run)) run = null;
     run = observeRun(run);
-    if (!run || terminalState(run) || activeRun?.id !== run.id) runPollReads.cancel();
+    if (!run || terminalState(run) || activeRun?.id !== run.id) { runPollReads.cancel(); missingRunReads.cancel(); }
     if (resolvesRunStopError(composerErrorState?.error, run)) hideComposerError();
     const wasActive = Boolean(activeRun);
     activeRun = run && !terminalState(run) ? run : null;
@@ -1939,11 +1942,30 @@ export async function boot() {
     mobileActivity.hidden = !active && !activeRun;
   });
 
+  function confirmMissingRun(owner) {
+    if (missingRunId === owner.id) return;
+    const version = routeVersion, key = selectedKey, origin = promptQueue.stamp();
+    const current = () => routeVersion === version && selectedKey === key &&
+      promptQueue.stamp() === origin && activeRun?.id === owner.id;
+    missingRunId = owner.id;
+    // A list alone may be stale. Confirm this exact native identity before
+    // retiring an in-memory reservation; transport errors prove nothing.
+    void missingRunReads.read(owner).then(run => { if (current()) setRun(run); }).catch(error => {
+      if (!current() || error?.name === "AbortError") return;
+      if (error?.status === 404 && error?.code === "run_not_found") {
+        observeRun.retire(owner);
+        runStops.forget(owner.id); setRun(null);
+        void Promise.allSettled([refreshSelectedTimeline(), refreshSelectedQueue(), loadRecovery()]);
+      }
+    }).finally(() => { if (missingRunId === owner.id) missingRunId = ""; });
+  }
+
   function findActiveRun() {
     for (const run of runsStore.get().data?.items ?? []) runStops.observe(run);
     const selected = navigation.get();
     const run = [...(runsStore.get().data?.items ?? [])].reverse().find((item) =>
-      item.project_id === selected.projectId && item.session_id === selected.sessionId && !terminalState(item));
+      item.project_id === selected.projectId && item.session_id === selected.sessionId &&
+      !observeRun.isRetired(item) && !terminalState(item));
     if (run) {
       monitorRun(run);
       void maybeCancelPriorityRun();
@@ -1953,7 +1975,7 @@ export async function boot() {
       const finished = (runsStore.get().data?.items ?? []).find((item) => item.id === activeRun?.id);
       setRun(finished ?? null);
       void dispatchQueued();
-    }
+    } else if (runsStore.get().status === "ready") confirmMissingRun(activeRun);
   }
   runsStore.subscribe(findActiveRun);
   runsStore.subscribe(() => { void promptQueue.flushUnusedImages(); });

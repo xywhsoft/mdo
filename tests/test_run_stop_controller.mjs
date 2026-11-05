@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRunStopController, resolvesRunStopError } from "../app/web/js/features/chat/run-stop-controller.js";
+import { createRunStopController, resolvesRunStopError, applySubmissionCancellation } from "../app/web/js/features/chat/run-stop-controller.js";
 import { cancelRun, readRun } from "../app/web/js/state/runs.js";
 
 const active = { id: "run-a", project_id: "qa", session_id: "a",
@@ -8,6 +8,18 @@ const active = { id: "run-a", project_id: "qa", session_id: "a",
 const stopped = { ...active, cancel_requested: true };
 const failure = code => Object.assign(new Error(code), { code });
 const flush = () => new Promise(resolve => setImmediate(resolve));
+
+test("an old or unadmitted message cancellation cannot mark the next run as stopping", () => {
+  const owner={projectId:'qa',sessionId:'a'};
+  for(const receipt of [{cancel_requested:true,terminal:true,phase:'cancelled'},
+    {cancel_requested:true,terminal:true,phase:'cancelled',run_id:'run-old'},
+    {cancel_requested:'true',run_id:active.id}])
+    assert.equal(applySubmissionCancellation(active,owner,receipt),active);
+  assert.equal(applySubmissionCancellation(active,{...owner,sessionId:'b'},
+    {cancel_requested:true,run_id:active.id}),active);
+  const exact=applySubmissionCancellation(active,owner,{cancel_requested:true,terminal:true,phase:'cancelled',run_id:active.id});
+  assert.equal(exact.terminal,true);assert.equal(exact.state,'cancelled');assert.equal(exact.cancel_requested,true);
+});
 function fixture(options = {}) {
   const timers = new Map(), calls = [], accepted = [], errors = [];
   let serial = 0, time = 0, writable = true;
@@ -288,6 +300,9 @@ test("late reads cannot undo a confirmed cancellation or resurrect a terminal ru
   assert.equal(observe({ ...run, cancel_requested: false }).cancel_requested, true);
   observe({ ...run, terminal: true, state: "cancelled" });
   assert.equal(observe({ ...run, terminal: false }).terminal, true);
+  observe.retire(run);assert.equal(observe.isRetired(run),true);
+  assert.equal(observe.isRetired({...run,id:'run-next'}),false);
   epoch = "two";
+  assert.equal(observe.isRetired(run),false);
   assert.equal(observe({ ...run, terminal: false, cancel_requested: false }).cancel_requested, false);
 });

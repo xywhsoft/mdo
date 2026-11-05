@@ -133,21 +133,38 @@ export function createRunStopController({ cancel, read, canWrite = () => true,
         if (entry.waitingConnection) void attempt(entry);
     },
     clear,
+    forget(id) { const entry = pending.get(id); if (entry) remove(entry); },
     dispose() { disposed = true; clear(); },
   });
+}
+
+// A message stopped before native admission has no run ID. Its cancellation
+// cannot change another run that happens to use the same conversation.
+export function applySubmissionCancellation(run, submission, receipt) {
+  if (!run?.id || receipt?.cancel_requested !== true || receipt.run_id !== run.id ||
+      submission.projectId !== run.project_id || submission.sessionId !== run.session_id) return run;
+  const state = receipt.terminal === true &&
+    ({ completed: "succeeded", failed: "failed", cancelled: "cancelled" })[receipt.phase];
+  return { ...run, cancel_requested: true, ...(state ? { terminal: true, state } : {}) };
 }
 // Reads issued before Stop may arrive after its acknowledgement. Positive
 // cancellation/terminal facts cannot be rolled back within a runtime epoch.
 export function createRunObservation(scope) {
-  let owner = scope(); const facts = new Map();
-  return run => {
-    if (owner !== scope()) { facts.clear(); owner = scope(); }
+  let owner = scope(); const facts = new Map(), retired = new Set();
+  const keyOf = run => `${run.project_id}/${run.session_id}/${run.id}`;
+  function check() { if (owner !== scope()) { facts.clear(); retired.clear(); owner = scope(); } }
+  const observe = run => {
+    check();
     if (!run?.id) return run;
-    const key = `${run.project_id}/${run.session_id}/${run.id}`, previous = facts.get(key);
+    const key = keyOf(run), previous = facts.get(key);
     const next = previous?.terminal ? previous : previous?.cancel_requested && !run.cancel_requested
       ? { ...run, cancel_requested: true } : run;
     if (next.terminal || next.cancel_requested) facts.set(key, next);
     while (facts.size > 128) facts.delete(facts.keys().next().value);
     return next;
   };
+  observe.retire = run => { check(); if (!run?.id) return;
+    retired.add(keyOf(run)); while (retired.size > 128) retired.delete(retired.values().next().value); };
+  observe.isRetired = run => { check(); return Boolean(run?.id && retired.has(keyOf(run))); };
+  return observe;
 }

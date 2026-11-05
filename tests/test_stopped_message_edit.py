@@ -24,6 +24,7 @@ def main():
     parser.add_argument('--evidence-name', default='stopped-message-edit-qa')
     parser.add_argument('--expected-calls', type=int, default=3)
     parser.add_argument('--no-model-hold', action='store_true')
+    parser.add_argument('--hold-all-model-calls', action='store_true')
     args = parser.parse_args()
     evidence = ROOT / '.build' / args.evidence_name
     assert evidence.resolve().parent == (ROOT / '.build').resolve()
@@ -61,7 +62,8 @@ def main():
                 process = subprocess.Popen([str(args.host.resolve()), str(config)],
                     cwd=ROOT / 'app', stdout=out, stderr=out,
                     env={**os.environ, 'MDO_HOME': str(home), 'MDO_EDIT_WORKSPACE': str(workspace),
-                         'MDO_EDIT_NO_HOLD': '1' if args.no_model_hold else ''},
+                         'MDO_EDIT_NO_HOLD': '1' if args.no_model_hold else '',
+                         'MDO_EDIT_HOLD_ALL': '1' if args.hold_all_model_calls else ''},
                     creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             end, text = time.monotonic() + 60, ''
             while process.poll() is None and time.monotonic() < end:
