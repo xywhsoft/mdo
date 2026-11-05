@@ -3524,7 +3524,6 @@
   "turnChanges.more": "Show {count} more files",
   "turnChanges.label": "Changes in this reply",
   "turnChanges.scope": "Net workspace changes during this run; may include concurrent external edits.",
-  "turnChanges.unavailable": "Changes unavailable. Click to retry.",
   "turnChanges.openFailed": "Could not open. Click to retry.",
   "turnChanges.before": "Before this run",
   "turnChanges.after": "After this run",

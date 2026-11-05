@@ -9,7 +9,7 @@ const assert=require('node:assert/strict');
   // Open the actual persisted session through ordinary navigation.
   await page.locator('.turn-changes:not([hidden])').first().waitFor({timeout:25000});
   const cards=page.locator('.turn-changes').filter({has:page.locator('.turn-changes-files')});await cards.nth(1).waitFor();assert.equal(await cards.count(),2);
-  await page.getByRole('button',{name:'本轮文件变更暂不可用，点击重试',exact:true}).waitFor();
+  assert.equal(await page.locator('.turn-changes:not([hidden])').count(),2,'empty and unavailable captures do not add error-like cards to successful replies');
   const first=cards.first();await first.getByRole('button',{name:'已修改 5 个文件',exact:true}).waitFor();
   assert.equal(await first.locator('.turn-changes-file').count(),3);
   await first.getByRole('button',{name:'再显示 2 个文件',exact:true}).click();assert.equal(await first.locator('.turn-changes-file').count(),5);

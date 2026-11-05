@@ -3524,7 +3524,6 @@
   "turnChanges.more": "Показать ещё {count} файлов",
   "turnChanges.label": "Изменения в этом ответе",
   "turnChanges.scope": "Изменения рабочей папки за время выполнения; могут включать параллельные внешние правки.",
-  "turnChanges.unavailable": "Изменения недоступны. Нажмите для повтора.",
   "turnChanges.openFailed": "Не удалось открыть. Нажмите для повтора.",
   "turnChanges.before": "До выполнения",
   "turnChanges.after": "После выполнения",

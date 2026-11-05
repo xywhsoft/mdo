@@ -3524,7 +3524,6 @@
   "turnChanges.more": "再显示 {count} 个文件",
   "turnChanges.label": "本轮文件变更",
   "turnChanges.scope": "本轮运行前后的工作区净变化，可能包含同期外部修改。",
-  "turnChanges.unavailable": "本轮文件变更暂不可用，点击重试",
   "turnChanges.openFailed": "打开失败，点击重试",
   "turnChanges.before": "原版本：本轮开始前",
   "turnChanges.after": "新版本：本轮结束后",

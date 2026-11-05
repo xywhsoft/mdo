@@ -1,5 +1,5 @@
 import { element } from "../../utils/dom.js";
-import { setUiText, setUiAttribute, uiMessage, t } from "../../i18n.js";
+import { setUiText, setUiAttribute, uiMessage } from "../../i18n.js";
 import { createApplicationClient } from "../../api/application.js";
 import { readOperation } from "../workbench/read-operation.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
@@ -101,11 +101,11 @@ export function createTurnChanges({ read = (context, turn, signal) => readOperat
           throw error;
         }
       }
-    } catch (error) {
+    } catch {
       if (controller.signal.aborted) return;
-      change(() => { root.hidden = false; const retry = button(uiMessage("turnChanges.unavailable", {}, "本轮文件变更暂不可用，点击重试"), () => {
-        root.hidden = true; return load(entry);
-      }); setUiAttribute(retry, "title", error.message || error.code || ""); root.replaceChildren(retry); });
+      // Automatic diff summaries are optional. A failed inspection says
+      // nothing about the reply's success; show a card only for actual changes.
+      change(() => { entry.data = null; root.hidden = true; root.replaceChildren(); });
     }
   }
   return {
