@@ -152,7 +152,7 @@ bool MdoQueueMove(MdoQueue* Queue, const char* Id, const char* Before)
     return true;
 }
 
-static bool MdoQueueUInt(const xvalue* Object, const char* Key, uint64* Number)
+bool MdoQueueUInt(const xvalue* Object, const char* Key, uint64* Number)
 {
     const xvalue* Value = xrtValueObjectGet(Object, xrtStrView(Key));
     int64 Signed;

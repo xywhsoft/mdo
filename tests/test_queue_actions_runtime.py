@@ -238,6 +238,9 @@ def check(host):
             newer = "b" * 32
             call("POST", q, {"id": newer, "text": "after preflight cancel", "first": False,
                 "managed": True, "profile": profile}, 201)
+            # Only a user's explicit continue releases a stopped queue.
+            status, _, _ = action("resume")
+            assert status == 200
             wait(lambda: len(Model.calls) == calls_before + 1)
             wait(lambda: len(call("GET", q)["items"]) == 1)
             assert call("GET", q)["items"][0]["id"] == cancelled

@@ -23,7 +23,7 @@ export function queueResponse(response) {
   if (!Array.isArray(items) || items.length > 20 || items.some(item => {
     if (typeof item?.id !== "string" || !/^[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(item.id) ||
         ids.has(item.id) || typeof item.text !== "string" ||
-        !["pending", "staged", "sending", "editing"].includes(item.state) ||
+        !["pending", "staged", "sending", "editing", "cancelled"].includes(item.state) ||
         typeof item.priority !== "boolean" || !Array.isArray(item.attachments) ||
         item.attachments.some(id => typeof id !== "string" || !/^[0-9a-f]{32}$/.test(id))) return true;
     ids.add(item.id); return false;
@@ -36,16 +36,16 @@ export function queueResponse(response) {
   return response;
 }
 
-async function receipt(key, id, signal, verify) {
+async function receipt(key, id, signal, verify, detailed = false) {
   try {
     const reply = await api.get(path(key, id), { signal });
     verify?.(reply, signal);
     const value = reply.data;
-    if (value?.id === id && value.state === "starting") return null;
-    if (value?.id !== id || value.state !== "accepted" ||
-        !/^run-[A-Za-z0-9_.-]+$/.test(value.run_id ?? ""))
+    if (value?.id !== id || !["starting", "accepted", "cancelled"].includes(value.state) ||
+        (value.run_id && !/^run-[A-Za-z0-9_.-]+$/.test(value.run_id)) ||
+        value.state === "accepted" && !value.run_id)
       throw new ApiError(uiErrorText("error.detail.invalidPromptQueueReceipt", {}, "Invalid prompt queue receipt"), { code: "invalid_response" });
-    return value;
+    return detailed || value.state !== "starting" ? value : null;
   } catch (error) {
     if (error?.status === 404 && error.code === "queue_receipt_not_found") return null;
     throw error;
@@ -124,6 +124,32 @@ export function createPromptQueueTransport({ createRecovery = createRequestRecov
     stamp,
     readQueue: key => read(async signal => queueResponse(await api.get(path(key), { signal }))),
     readReceipt: (key, id) => read(signal => receipt(key, resourceId(id, "queue item"), signal)),
+    async readStatus(key, id) {
+      const origin = stamp();
+      const value = await read(signal => receipt(key, resourceId(id, "queue item"), signal, null, true));
+      if (stamp() !== origin) throw new DOMException("Message target changed", "AbortError");
+      return value;
+    },
+    async cancel(key, id) {
+      const origin = stamp(), recovery = createRecovery();
+      const guard = () => { recovery.assertActive(); if (stamp() !== origin) throw new DOMException("Message target changed", "AbortError"); };
+      try {
+        guard();
+        try {
+          await recovery.request(signal => { guard(); return api.post(`${path(key, id)}/cancel`, undefined, { signal }); }, { retry: false, mutation: true });
+        } catch (error) {
+          guard();
+          if (!uncertain(error) && error?.name !== "AbortError") throw error;
+          // A lost cancellation ACK only permits status reads, never an
+          // unbounded replay of writes or a replacement run.
+        }
+        return await recovery.request(async signal => {
+          guard(); const status = await receipt(key, id, signal, guard, true); guard();
+          if (!status?.cancel_requested) throw pending();
+          return status;
+        }, { retryable: error => isTransientReadError(error) || error?.code === "queue_confirmation_pending" });
+      } finally { recovery.dispose(); }
+    },
     post(key, body, { keepalive = false, origin = stamp() } = {}) {
       return mutate(key, body.id, signal => api.post(path(key), body, { keepalive, signal }), items => {
         const item = items.find(item => item.id === body.id);

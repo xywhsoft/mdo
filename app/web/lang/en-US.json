@@ -3584,5 +3584,13 @@
   "error.sessionHistoryChanged": "The conversation changed during editing. Your input is retained. Review it before editing again, or create a branch.",
   "timeline.turnActions": "Turn actions",
   "timeline.copyMainReply": "Copy main reply",
-  "timeline.forkTurn": "Fork after this entire turn"
+  "timeline.forkTurn": "Fork after this entire turn",
+  "submission.stopping": "Stopping…",
+  "submission.cancelled": "Stopped. Your input is preserved and can be edited and sent again.",
+  "submission.failed": "The message did not run. Edit it and send again.",
+  "submission.confirming": "Confirming message status…",
+  "submission.syncing": "Syncing reply…",
+  "submission.edit": "Edit",
+  "submission.cancel": "Stop",
+  "submission.draftOccupied": "Send or clear your current draft before restoring this message."
 }

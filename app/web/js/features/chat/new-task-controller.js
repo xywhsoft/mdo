@@ -22,13 +22,14 @@ function sameSubmission(a, b) {
 // Keep the unsent new-task intent in the global Home draft until its entire
 // ordered list is copied to the new session draft. No queue POST happens here.
 export function createNewTaskController({ draftStore, newId, createSession,
-  findSession, onPersisted, onMigrated, onReview, onChange,
+  findSession, onPersisted, onMigrated, onReview, onChange, cancelInput = async () => {},
   isWritePaused = () => false, agentId = () => "mdo.default" }) {
   let pumping = false;
   let preparing = false;
   let migrating = false;
   let blocked = false;
   let createRejected = false;
+  const cancelled = new Set();
 
   function changed() { onChange(); }
 
@@ -127,6 +128,8 @@ export function createNewTaskController({ draftStore, newId, createSession,
         }
         throw error;
       }
+      for (const input of draftStore.submissions(""))
+        if (cancelled.has(input.id)) await cancelInput(task, input);
       migrating = true;
       changed();
       const fresh = task.phase === "creating";
@@ -139,6 +142,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
         fresh || reviewedCopy);
       createRejected = false;
       onMigrated(key);
+      cancelled.clear();
     } catch (error) {
       blocked = true;
       onReview(error);
@@ -246,6 +250,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
   }
 
   return Object.freeze({ submit, reconcile, review, createForAttachment,
+    cancelIntent(id) { cancelled.add(id); },
     isBusy() { return pumping || (blocked && !createRejected); },
     isPreparing() { return preparing; },
     isBlocked() { return blocked; },

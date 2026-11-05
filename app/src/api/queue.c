@@ -25,11 +25,36 @@ static bool MdoQueueCancelled(const char* Project, const char* Session,
 
 static bool MdoQueueCancelFence(const char* Project, const char* Session, const char* Id)
 {
-    char Path[MDO_SESSION_PATH_CAPACITY], Json[96];
+    bool Cancelled = false;
+    if (!MdoQueueCancelled(Project, Session, Id, &Cancelled)) return false;
+    if (Cancelled) return true;
+    char Path[MDO_SESSION_PATH_CAPACITY], Json[160];
+    xwork_error Error;
+    MdoSessionEventSnapshot* Events = MdoSessionEventReplay(Project, Session, UINT64_MAX, 1u, &Error);
+    if (!Events) return false;
+    uint64 Anchor = MdoSessionEventSnapshotLatestId(Events);
+    MdoSessionEventSnapshotRelease(Events);
     int n = snprintf(Path, sizeof(Path), "sessions/%s/%s/queue-cancellations/%s.json", Project, Session, Id);
-    int bytes = snprintf(Json, sizeof(Json), "{\"schema_version\":1,\"id\":\"%s\"}", Id);
+    int bytes = snprintf(Json, sizeof(Json), "{\"schema_version\":1,\"id\":\"%s\",\"after_event_id\":%llu}", Id, (unsigned long long)Anchor);
     return n > 0 && (size_t)n < sizeof(Path) && bytes > 0 && (size_t)bytes < sizeof(Json) &&
         MdoHomeAtomicWrite(Path, Json, (size_t)bytes, false);
+}
+
+static bool MdoQueueCancellationAnchor(const char* Project, const char* Session, const char* Id, uint64* Anchor)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY], Bytes[160]; xfileinfo Info; bool Exists;
+    *Anchor = 0u;
+    int n = snprintf(Path, sizeof(Path), "sessions/%s/%s/queue-cancellations/%s.json", Project, Session, Id);
+    if (n <= 0 || (size_t)n >= sizeof(Path) || !MdoHomeExternalStat(Path, &Exists, &Info)) return false;
+    if (!Exists) return true;
+    if (Info.Type != XFILE_TYPE_FILE || !Info.Size || Info.Size > sizeof(Bytes)) return false;
+    xfile File = MdoHomeOpenRead(Path);
+    bool Ok = File && xrtReadFull(File, Bytes, (size_t)Info.Size, NULL);
+    if (File && !xrtClose(File)) Ok = false;
+    xvalue* Root = Ok ? xrtJsonParse(xrtStrViewN(Bytes, (size_t)Info.Size)) : NULL;
+    const xvalue* Value = xrtValueObjectGet(Root, XRT_STR_LITERAL("after_event_id"));
+    if (Ok && Value) Ok = MdoQueueUInt(Root, "after_event_id", Anchor) && *Anchor <= UINT64_C(9007199254740991);
+    xrtValueRelease(Root); return Ok;
 }
 
 bool MdoApiQueueInit(void)
@@ -844,10 +869,6 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
                     Queue.CancelRunId[0] = '\0';
                 }
                 Queue.Managed = Queue.Managed || Managed;
-                if ( Managed && Queue.Paused && !strcmp(Queue.Error, "queue_stopped") ) {
-                    Queue.Paused = false; Queue.Error[0] = '\0';
-                    Queue.LastRunId[0] = '\0'; Queue.CancelRunId[0] = '\0';
-                }
                 if ( !Full ) Ok = MdoQueueInsert(&Queue, Id, Text,
                     Attachments, AttachmentCount, First, Priority,
                     Stage ? MDO_QUEUE_STAGED : MDO_QUEUE_PENDING,

@@ -136,3 +136,18 @@ export function createRunStopController({ cancel, read, canWrite = () => true,
     dispose() { disposed = true; clear(); },
   });
 }
+// Reads issued before Stop may arrive after its acknowledgement. Positive
+// cancellation/terminal facts cannot be rolled back within a runtime epoch.
+export function createRunObservation(scope) {
+  let owner = scope(); const facts = new Map();
+  return run => {
+    if (owner !== scope()) { facts.clear(); owner = scope(); }
+    if (!run?.id) return run;
+    const key = `${run.project_id}/${run.session_id}/${run.id}`, previous = facts.get(key);
+    const next = previous?.terminal ? previous : previous?.cancel_requested && !run.cancel_requested
+      ? { ...run, cancel_requested: true } : run;
+    if (next.terminal || next.cancel_requested) facts.set(key, next);
+    while (facts.size > 128) facts.delete(facts.keys().next().value);
+    return next;
+  };
+}

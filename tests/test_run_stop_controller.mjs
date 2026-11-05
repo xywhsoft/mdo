@@ -280,3 +280,14 @@ test("authoritative completion clears only the error belonging to the same run",
     { ...active, cancel_requested: "true" }]) assert.equal(resolvesRunStopError(error, candidate), false);
   assert.equal(resolvesRunStopError({ code: "quota_exceeded" }, stopped), false);
 });
+import { createRunObservation } from "../app/web/js/features/chat/run-stop-controller.js";
+test("late reads cannot undo a confirmed cancellation or resurrect a terminal run", () => {
+  let epoch = "one"; const observe = createRunObservation(() => epoch);
+  const run = { id: "run-a", project_id: "p", session_id: "s", terminal: false, cancel_requested: true };
+  observe(run);
+  assert.equal(observe({ ...run, cancel_requested: false }).cancel_requested, true);
+  observe({ ...run, terminal: true, state: "cancelled" });
+  assert.equal(observe({ ...run, terminal: false }).terminal, true);
+  epoch = "two";
+  assert.equal(observe({ ...run, terminal: false, cancel_requested: false }).cancel_requested, false);
+});

@@ -8,7 +8,7 @@ function owner(key) {
 function matches(item, submission) {
   return item?.id === submission.id &&
     item.text === submission.text.trim() &&
-    item.priority === submission.interrupt &&
+    (item.state === "cancelled" || item.priority === submission.interrupt) &&
     JSON.stringify(item.attachments ?? []) ===
       JSON.stringify(submission.attachments) &&
     ((!item.profile && !submission.profile) ||
@@ -137,10 +137,11 @@ export function createSubmissionController({ draftStore, promptQueue,
             requestReview(key, posting);
             return;
           }
+          if (item.state === "cancelled") continue;
           await promptQueue.promote(projectId, sessionId, posting.id);
           onPromoted(key, posting);
         } catch (error) {
-          if (error?.code === "queue_item_consumed") {
+          if (["queue_item_consumed", "queue_state_conflict", "queue_run_conflict"].includes(error?.code)) {
             try {
               if (await consumeReceipt(key, posting,
                   await promptQueue.receipt(projectId, sessionId,
@@ -302,6 +303,7 @@ export function createSubmissionController({ draftStore, promptQueue,
     submit, pump, reconcile, review,
     hasInFlight: () => Boolean(pumping.size || releasing.size || submitting.size),
     isBusy(key) { return pumping.has(key); },
+    isSettling(key) { return submitting.has(key) || pumping.has(key) || releasing.has(key); },
     isReleasing(key) { return releasing.has(key); },
   });
 }

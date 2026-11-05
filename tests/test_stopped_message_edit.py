@@ -20,8 +20,13 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', type=Path, default=ROOT / '.build/host/xs.exe')
+    parser.add_argument('--browser-script', type=Path, default=ROOT / 'tests/fixtures/stopped-message-edit-browser.cjs')
+    parser.add_argument('--evidence-name', default='stopped-message-edit-qa')
+    parser.add_argument('--expected-calls', type=int, default=3)
+    parser.add_argument('--no-model-hold', action='store_true')
     args = parser.parse_args()
-    evidence = ROOT / '.build/stopped-message-edit-qa'
+    evidence = ROOT / '.build' / args.evidence_name
+    assert evidence.resolve().parent == (ROOT / '.build').resolve()
     evidence.mkdir(exist_ok=True)
     (evidence / 'browser.json').unlink(missing_ok=True)
     with tempfile.TemporaryDirectory(prefix='stopped-edit-', dir=ROOT / '.build') as raw:
@@ -50,7 +55,8 @@ def main():
             with log.open('wb') as out:
                 process = subprocess.Popen([str(args.host.resolve()), str(config)],
                     cwd=ROOT / 'app', stdout=out, stderr=out,
-                    env={**os.environ, 'MDO_HOME': str(home), 'MDO_EDIT_WORKSPACE': str(workspace)},
+                    env={**os.environ, 'MDO_HOME': str(home), 'MDO_EDIT_WORKSPACE': str(workspace),
+                         'MDO_EDIT_NO_HOLD': '1' if args.no_model_hold else ''},
                     creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             end, text = time.monotonic() + 60, ''
             while process.poll() is None and time.monotonic() < end:
@@ -59,10 +65,10 @@ def main():
                     break
                 time.sleep(.1)
             assert 'EDIT_FIXTURE_READY=1' in text, text[-8000:]
-            subprocess.run(['node', str(ROOT / 'tests/fixtures/stopped-message-edit-browser.cjs'),
+            subprocess.run(['node', str(args.browser_script.resolve()),
                 f'http://127.0.0.1:{port}', str(evidence)], cwd=ROOT, check=True, timeout=120)
             text = log.read_text(encoding='utf-8', errors='replace')
-            assert text.count('EDIT_MODEL_CALL=') == 3, text[-5000:]
+            assert text.count('EDIT_MODEL_CALL=') == args.expected_calls, text[-5000:]
             (evidence / 'failure.png').unlink(missing_ok=True)
             print('PASS native stop/edit/resend, immediate bubble, metadata rebase, original history conflict fence, exactly one replacement run')
         finally:

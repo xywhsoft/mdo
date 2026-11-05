@@ -2,9 +2,10 @@
 #include "generated/mdo_unity.c"
 #undef ServiceInit
 static unsigned ModelCalls;
+static bool HoldFirst = true;
 static xllm_result EditQaModel(void* User,const xllm_request* Request,const xllm_stream_callbacks* Stream,xllm_response** Out,xllm_error* Error){
     (void)User;(void)Stream;unsigned Call=++ModelCalls;printf("EDIT_MODEL_CALL=%u\n",Call);fflush(stdout);
-    if(Call==1){
+    if(Call==1 && HoldFirst){
         uint64 End=MdoDeadlineAfterUs(30000000);
         while(!xrtCancelRequested(Request->pCancel)&&!MdoDeadlineExpired(End))xrtSleep(5);
         xrtSleep(500); /* Deliberately exercise the acknowledged-stop window. */
@@ -14,6 +15,7 @@ static xllm_result EditQaModel(void* User,const xllm_request* Request,const xllm
     R->sFinishReason=strdup("stop");R->eFinish=XLLM_FINISH_STOP;*Out=R;xllmErrorInit(Error);return XLLM_RESULT_OK;
 }
 void ServiceInit(XS_HostInfo* Host){
+    char* NoHold=xrtEnvGet("MDO_EDIT_NO_HOLD");HoldFirst=!(NoHold&&NoHold[0]);xrtFree(NoHold);
     EditQaProductInit(Host);if(!MdoBootstrapRuntime())return;
     (void)MdoConfigImport(MDO_CONFIG_SETTINGS,XRT_STR_LITERAL("{\"schema_version\":1,\"patch\":{\"agent\":{\"memory\":false,\"web_search\":false}}}"));
     void(*Observer)(void*)=g_MdoRuns.Observer;void* Data=g_MdoRuns.ObserverData;

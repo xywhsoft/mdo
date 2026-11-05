@@ -105,7 +105,7 @@ static inline size_t MdoSessionFileLimit(const char* Path, bool Directory)
     if ( strncmp(Path, "queue-cancellations/", 20u) == 0 ) {
         Name = Path + 20u;
         return strlen(Name) == 37u && MdoSessionFileDigits(Name, 32u, true) &&
-            strcmp(Name + 32u, ".json") == 0 ? 96u : 0u;
+            strcmp(Name + 32u, ".json") == 0 ? 160u : 0u;
     }
     if ( strncmp(Path, "queue-withdrawn/", 16u) == 0 ) {
         Name = Path + 16u;

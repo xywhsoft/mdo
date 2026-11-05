@@ -178,6 +178,6 @@ test("a paused later message cannot label an earlier visible submission as faile
   f.active(true); f.data.items = [message("b")];
   f.data.paused = true; f.data.error = "profile_model_missing"; await f.load();
   assert.equal(f.view.isPresented(id("a")), true);
-  assert.equal(f.conversation.children[1].dataset.state, "preparing");
+  assert.equal(f.conversation.children[1].dataset.state, "unconfirmed", "an absent input is confirmed independently of the next head");
   assert.deepEqual(f.shown(), [id("b")]);
 });

@@ -76,6 +76,7 @@ bool MdoQueueString(const xvalue* Object, cstr Key,
     xstrview* Text);
 bool MdoQueueText(xstrview Text, bool AllowEmpty);
 bool MdoQueueBool(const xvalue* Object, cstr Key, bool* Result);
+bool MdoQueueUInt(const xvalue* Object, const char* Key, uint64* Number);
 bool MdoQueueParseState(xstrview State, bool AllowStaged,
     MdoQueueState* Result);
 size_t MdoQueueFind(const MdoQueue* Queue, const char* Id);

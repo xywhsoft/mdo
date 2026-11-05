@@ -57,7 +57,7 @@ test("a failed provisional message can be retried with its original admission id
     assert.equal(f.container.children[1].dataset.state, "error");
     assert.equal(f.view.begin(f.value("new-click-id")), "a");
     assert.equal(f.container.children.length, 2, "retry reuses the visible message");
-    assert.equal(f.container.children[1].dataset.state, "preparing");
+    assert.equal(f.container.children[1].dataset.state, "saving");
     assert.equal(f.view.begin(f.value("double-click")), false, "a running retry still suppresses double clicks");
   } finally { f.view.destroy(); }
 });

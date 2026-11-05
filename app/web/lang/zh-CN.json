@@ -3584,5 +3584,13 @@
   "error.sessionHistoryChanged": "编辑期间对话出现了新变化，内容已保留。请核对后重新编辑，或创建会话分支。",
   "timeline.turnActions": "本轮对话操作",
   "timeline.copyMainReply": "复制主要回复",
-  "timeline.forkTurn": "从本轮对话结束处分叉会话"
+  "timeline.forkTurn": "从本轮对话结束处分叉会话",
+  "submission.stopping": "正在停止…",
+  "submission.cancelled": "已停止，内容已保留，可编辑后重新发送。",
+  "submission.failed": "消息未能执行，可编辑后重新发送。",
+  "submission.confirming": "正在确认消息状态…",
+  "submission.syncing": "正在同步回复…",
+  "submission.edit": "编辑",
+  "submission.cancel": "停止",
+  "submission.draftOccupied": "请先发送或清空输入框中的草稿，再恢复这条消息。"
 }

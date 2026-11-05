@@ -5,10 +5,18 @@ static bool MdoQueueStatusReply(MdoApiContext* Context, const char* Project,
 {
     bool Exists = false, Cancelled = false, Ok;
     char Run[MDO_RUN_ID_CAPACITY] = {0}, Reserved[MDO_RUN_ID_CAPACITY] = {0};
+    uint64 Anchor = 0u;
+    bool Retained = false;
     xrtMutexLock(g_MdoQueueLock);
     Ok = MdoQueueCancelled(Project, Session, Id, &Cancelled) &&
         MdoQueueReceiptResolve(Project, Session, Id, &Exists, Run) &&
-        MdoQueueReceiptReadEx(Project, Session, Id, &Exists, Run, Reserved, NULL);
+        MdoQueueReceiptReadEx(Project, Session, Id, &Exists, Run, Reserved, NULL) &&
+        (!Cancelled || MdoQueueCancellationAnchor(Project, Session, Id, &Anchor));
+    if (Ok && Cancelled) {
+        char Path[MDO_SESSION_PATH_CAPACITY]; MdoQueue Queue;
+        Ok = MdoQueueRunPath(Path, Project, Session) && MdoQueueRead(Path, Project, Session, &Queue);
+        if (Ok) { Retained = MdoQueueFind(&Queue, Id) != SIZE_MAX; MdoQueueRelease(&Queue); }
+    }
     xrtMutexUnlock(g_MdoQueueLock);
     if ( !Ok ) return MdoApiReplyError(Context, 503u, "queue_unavailable",
         "The message status could not be read", NULL);
@@ -33,6 +41,8 @@ static bool MdoQueueStatusReply(MdoApiContext* Context, const char* Project,
         MdoApiValueSetBool(Data, "executed", Executed) &&
         MdoApiValueSetBool(Data, "terminal", Terminal) &&
         MdoApiValueSetBool(Data, "cancel_requested", Cancelled || (Live && Info.CancelRequested)) &&
+        (!Cancelled || MdoApiValueSetUInt(Data, "after_event_id", Anchor)) &&
+        (!Cancelled || MdoApiValueSetBool(Data, "retained_input", Retained)) &&
         (!Identity[0] || MdoApiValueSetString(Data, "run_id", Identity));
     if ( !Ok ) { xrtValueRelease(Data); return MdoApiReplyError(Context,
         503u, "queue_unavailable", "The message status could not be built", NULL); }

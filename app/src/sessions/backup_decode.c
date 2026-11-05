@@ -115,8 +115,11 @@ static bool MdoDecodeSidecar(MdoDecode* Decode, const MdoBackupOwnedFile* File)
         xvalue* Value = xrtJsonParse(Json); xstrview Id;
         uint64 Schema = 0u;
         const xvalue* Version = xrtValueObjectGet(Value, XRT_STR_LITERAL("schema_version"));
-        Ok = xrtValueType(Value) == XVALUE_OBJECT && xrtValueCount(Value) == 2u &&
-            xrtValueGetUInt(Version, &Schema) && Schema == 1u &&
+        uint64 Anchor = 0u;
+        const xvalue* After = xrtValueObjectGet(Value, XRT_STR_LITERAL("after_event_id"));
+        Ok = xrtValueType(Value) == XVALUE_OBJECT && xrtValueCount(Value) == (After ? 3u : 2u) &&
+            (!After || (MdoQueueUInt(Value, "after_event_id", &Anchor) && Anchor <= UINT64_C(9007199254740991))) &&
+            MdoQueueUInt(Value, "schema_version", &Schema) && Schema == 1u &&
             MdoQueueString(Value, "id", &Id) && Id.Size == 32u &&
             !memcmp(Id.Data, File->Path + 20u, 32u);
         xrtValueRelease(Value);

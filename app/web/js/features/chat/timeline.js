@@ -1070,7 +1070,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
 
 export function createTimelineView({ container, welcome, toBottom, store, sessionStore = null,
   onFork, onEdit, onRetry, onSearchCount, onLoadOlder, onLoadIndex, onRevealTurn, onReload, onOpenChanges,
-  showReadError = true }) {
+  showReadError = true, getSubmissions = () => [] }) {
   const busySessions = new Set();
   const renderedRows = new Map();
   let retryTimer = 0;
@@ -1169,6 +1169,11 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     };
     let cursor = container.firstChild;
     for (const { item, writable } of entries) {
+      if (item.kind === "submission-slot") {
+        if (item.node !== cursor) container.insertBefore(item.node, cursor);
+        cursor = item.node.nextSibling;
+        continue;
+      }
       retainMarkdown(item);
       retained.add(item.key);
       // Run completion affects process defaults, not already settled body rows.
@@ -1321,6 +1326,13 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       if (!previewKeys.has(key)) previewExpanded.delete(key);
     for (const key of previewScroll.keys())
       if (!previewKeys.has(key)) previewScroll.delete(key);
+    const submissions = getSubmissions();
+    // Pending inputs participate in the same chronological DOM. Their
+    // insertion anchor remains fixed while later runs and history arrive.
+    for (const slot of submissions) {
+      const index = projected.findIndex(item => Number(item.sourceEventId || item.items?.[0]?.sourceEventId) > slot.afterEventId);
+      if (index < 0) projected.push(slot); else projected.splice(index, 0, slot);
+    }
     const visible = searchQuery ? items.filter((item) =>
       `${item.role} ${item.inputText ?? ""} ${item.text} ${item.meta ?? ""}`
         .toLocaleLowerCase().includes(searchQuery)) : projected;
@@ -1328,7 +1340,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     // A replacement can briefly contain only its hidden history boundary.
     // Keep this conversation open instead of flashing new-task examples.
     welcome.hidden = Boolean(data?.sessionId &&
-      (items.length > 0 || data?.events?.length > 0 || data?.initializing));
+      (items.length > 0 || data?.events?.length > 0 || data?.initializing)) || submissions.length > 0;
     const entries = [];
     if (state.status === "error" && showReadError) {
       entries.push({ item: { key: "load-error", kind: "error",
@@ -1445,6 +1457,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     queueRender(store.get());
   });
   return Object.freeze({
+    refresh() { queueRender(store.get()); },
     follow() { followTail = true; },
     restorePreviewScroll() {
       for (const details of container.querySelectorAll("details.timeline-artifact-preview")) {

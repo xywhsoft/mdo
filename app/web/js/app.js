@@ -50,8 +50,9 @@ import { createTimelineView } from "./features/chat/timeline.js";
 import { createQueueGate } from "./features/chat/queue-gate.js";
 import { runAwaitingRelease } from "./features/chat/run-finishing.js";
 import { createResourceRefresh } from "./features/shell/resource-refresh.js";
-import { createRunStopController, resolvesRunStopError } from "./features/chat/run-stop-controller.js";
+import { createRunStopController, resolvesRunStopError, createRunObservation } from "./features/chat/run-stop-controller.js";
 import { createRunPollRead } from "./features/chat/run-poll-read.js";
+import { createSubmissionCoordinator } from "./features/chat/submission-coordinator.js";
 import { createMessageEditDialog } from "./features/chat/message-edit-dialog.js";
 import { runMessageReplacement } from "./features/chat/message-replacement.js";
 import { createConversationSearch } from "./features/chat/conversation-search.js";
@@ -196,6 +197,8 @@ export async function boot() {
   const send = $("#send");
   let sendBlockedByState = true;
   let submissionTimeline = null;
+  let submissionCoordinator = null;
+  const observeRun = createRunObservation(() => JSON.stringify([targetState().selected, currentPageWriteToken()]));
   const composerError = $("#composer-error");
   let composerErrorState = null;
   const composerHint = $("#composer-hint");
@@ -479,7 +482,7 @@ export async function boot() {
 
   function assertReplacementIdle(selected) {
     const key = `${selected.projectId}/${selected.sessionId}`;
-    if ((activeRun && !(activeRun.cancel_requested || runStops.has(activeRun.id))) ||
+    if ((activeRun && !(activeRun.cancel_requested || runStops.has(activeRun.id) || submissionCoordinator?.hasSession(selected.projectId, selected.sessionId))) ||
         submittingCurrent() || composerImages?.isUploading() || composerFileImports?.isBusy())
       throw new Error(t("messageAction.waitForRun", {}, "请在当前运行结束后操作消息"));
     if (!draftStore.isLoaded(key))
@@ -532,7 +535,7 @@ export async function boot() {
         waitForIdle: async ({signal})=>{
           const running=activeRun;
           if(!running||running.project_id!==session.project_id||running.session_id!==session.id)return;
-          if(!running.cancel_requested&&!runStops.has(running.id))throw new Error(t("messageAction.waitForRun"));
+           if(!running.cancel_requested&&!runStops.has(running.id)&&!submissionCoordinator?.hasSession(session.project_id,session.id))throw new Error(t("messageAction.waitForRun"));
           const current=await readRun(running.id,{signal});
           if(stillSelected()&&activeRun?.id===current.id)setRun(current);
           if(!current.terminal)throw new ApiError(t("messageEdit.waiting"),{code:"session_runtime_busy",status:409});
@@ -651,6 +654,7 @@ export async function boot() {
       selectedKey === `${owner.projectId}/${owner.sessionId}`;
   }
   const timelineView = createTimelineView({
+    getSubmissions: () => submissionTimeline?.projection() ?? [],
     container: $("#timeline"), welcome: $("#welcome"),
     toBottom: $("#to-bottom"), store: timelineStore,
     sessionStore: sessionDetailStore,
@@ -1241,6 +1245,11 @@ export async function boot() {
     agentId: () => composerAgent.selection(),
     isWritePaused: purgeRecovery.isPaused,
     draftStore, newId: () => promptQueue.newId(), createSession,
+    async cancelInput(task, input) {
+      try { await promptQueue.stage(task.project_id, task.session_id, input); }
+      catch (error) { if (error.code !== "queue_item_consumed") throw error; }
+      await promptQueue.cancel(task.project_id, task.session_id, input.id);
+    },
     async findSession(projectId, sessionId) {
       return (await api.get(`/projects/${projectId}/sessions/${sessionId}`)).data;
     },
@@ -1433,10 +1442,18 @@ export async function boot() {
   });
   const resourcePanels = createResourcePanels();
   const submissionRows = element("ol", { className: "timeline submission-timeline", attrs: { "aria-label": uiMessage("submission.pending", {}, "正在提交的消息") } });
-  $("#timeline").after(submissionRows);
   submissionTimeline = createSubmissionTimeline({ container: submissionRows, host: $(".conversation"),
     scope: () => promptQueue.stamp(),
     onPresentationChange: () => promptQueue.render(),
+    onProjectionChange: () => { timelineView.refresh(); submissionCoordinator?.schedule(); syncSendDisabled(); },
+    onCancel: row => {
+      if (row.cancelEdit && !row.durable) { row.cancelEdit(); return; }
+      void submissionCoordinator.stop(row);
+    },
+    onEdit: row => {
+      if (row.cancelEdit && !row.durable) { row.cancelEdit(); return; }
+      void submissionCoordinator.stop(row, true);
+    },
     snapshot() {
       const route = navigation.get(), projectId = route.projectId || "default";
       const task = draftStore.newTask();
@@ -1450,9 +1467,61 @@ export async function boot() {
         events: history?.projectId === projectId && history?.sessionId === sessionId ? history.events : [] };
     },
   });
+  submissionCoordinator = createSubmissionCoordinator({
+    scope: () => promptQueue.stamp(), rows: () => submissionTimeline.pending(),
+    status: (id, value) => { submissionTimeline.status(id, value); syncSendDisabled(); },
+    read: row => promptQueue.status(row.projectId, row.sessionId, row.id),
+    cancel: row => promptQueue.cancel(row.projectId, row.sessionId, row.id),
+    async prepareCancel(row, assert) {
+      newTaskController.cancelIntent(row.id);
+      const recovery = createRequestRecovery();
+      try {
+        await recovery.request(async () => {
+          assert();
+          if (!row.sessionId) throw new ApiError("Waiting for session admission", { code: "session_runtime_busy", status: 409 });
+          return (await api.get(`/projects/${row.projectId}/sessions/${row.sessionId}`)).data;
+        }, { retryable: error => error?.code === "session_runtime_busy" || error?.status === 404 || isTransientReadError(error) });
+        assert();
+        await promptQueue.select(row.projectId, row.sessionId); assert();
+        if (!promptQueue.find(row.projectId, row.sessionId, row.id) &&
+            !await promptQueue.status(row.projectId, row.sessionId, row.id)) {
+          assert();
+          try { await promptQueue.stage(row.projectId, row.sessionId,
+            { id: row.id, text: row.text, attachments: row.attachments || [], interrupt: Boolean(row.interrupt || row.priority), profile: row.profile }); }
+          catch (error) { if (error.code !== "queue_item_consumed") throw error; }
+        }
+      } finally { recovery.dispose(); }
+    },
+    async restore(row, manual) {
+      const key = `${row.projectId}/${row.sessionId}`;
+      if (!selectedOwnsDraft(key)) return false;
+      if (submissionController.isSettling(key)) return "deferred";
+      await submissionController.reconcile(key);
+      if (!await draftStore.ensureLoaded(key)) return false;
+      const draft = draftStore.snapshot(key);
+      if (draft.text || draft.attachments.length || draftStore.submissions(key).length) {
+        if (manual) toast(uiMessage("submission.draftOccupied"), "error");
+        return false;
+      }
+      if (!promptQueue.find(row.projectId, row.sessionId, row.id)) {
+        await promptQueue.select(row.projectId, row.sessionId);
+        if (!promptQueue.find(row.projectId, row.sessionId, row.id)) return false;
+      }
+      const restored = await promptQueue.withdraw(row.projectId, row.sessionId, row.id);
+      if (restored) submissionTimeline.forget(row.id);
+      return restored;
+    },
+    changed(row, value) {
+      if (value.cancel_requested && activeRun?.project_id === row.projectId && activeRun?.session_id === row.sessionId &&
+          (!value.run_id || value.run_id === activeRun.id)) setRun({ ...activeRun, cancel_requested: true });
+      if (value.executed && selectedOwnsDraft(`${row.projectId}/${row.sessionId}`)) void refreshSelectedTimeline();
+      void loadRuns();
+    },
+    failure(row, error) { if (error.code !== "session_runtime_busy") toast(errorMessage(error), "error"); },
+  });
   timelineStore.subscribe(() => submissionTimeline.render());
   navigation.subscribe(() => submissionTimeline.render());
-  window.addEventListener("pagehide", () => submissionTimeline.destroy(), { once: true });
+  window.addEventListener("pagehide", () => { submissionCoordinator.destroy(); submissionTimeline.destroy(); }, { once: true });
 
   function syncSendDisabled() {
     const localCommand = slashCommands.isExact(prompt.value.trim());
@@ -1467,7 +1536,7 @@ export async function boot() {
       : phase || activeRun?.cancel_requested
         ? uiMessage("task.stopping", {}, "正在停止…") : uiMessage("shell.stop");
     renderComposerAction(send, {
-      running: Boolean(activeRun || slashCommands.pendingCount()),
+      running: Boolean(activeRun || slashCommands.pendingCount() || submissionTimeline?.busy()),
       hasDraft: Boolean(prompt.value.trim() || composerContext?.hasContexts() ||
         composerAttachments.length || composerImages?.isUploading() || composerFileImports?.isBusy()),
       sendDisabled: sendBlockedByState || extractingQueue || composerAgent?.isBusy() ||
@@ -1487,6 +1556,7 @@ export async function boot() {
   }
 
   function setRun(run) {
+    run = observeRun(run);
     if (!run || terminalState(run) || activeRun?.id !== run.id) runPollReads.cancel();
     if (resolvesRunStopError(composerErrorState?.error, run)) hideComposerError();
     const wasActive = Boolean(activeRun);
@@ -2508,7 +2578,7 @@ export async function boot() {
     const unsupportedAttachments = fromComposer && attachments.length &&
       !composerImages.supportsCurrentModel();
     const submissionId = submissionTimeline.begin({ id: promptQueue.newId(), projectId: origin.projectId || "default",
-      sessionId: origin.sessionId || "", text: rawInput, attachments: [...attachments] });
+      sessionId: origin.sessionId || "", text: rawInput, attachments: [...attachments], profile, interrupt });
     if (!submissionId) return;
     hideComposerError();
     const showFailure = error => {
@@ -2523,6 +2593,11 @@ export async function boot() {
       if (draftStore.isRunUncertain(selectedDraftKey)) { showFailure(uncertainRunError()); return; }
       if (routeVersion !== originVersion) { submissionTimeline.forget(submissionId); return; }
       if (unsupportedAttachments) { showFailure(unsupportedModelError()); return; }
+      if (origin.sessionId) {
+        const queue = promptQueue.snapshot(origin.projectId, origin.sessionId);
+        if (queue.paused && queue.error === "queue_stopped") await promptQueue.resume(origin.projectId, origin.sessionId);
+        queueBlocked.unblock(`${origin.projectId}/${origin.sessionId}`);
+      }
       if (!origin.sessionId && !attachments.length) {
         hideComposerError();
         await newTaskController.submit({ projectId: origin.projectId || "default",
@@ -2566,6 +2641,14 @@ export async function boot() {
   function stopComposer() {
     if (composerStopDisabled()) return;
     void slashCommands.cancel().catch(error => toast(errorMessage(error), "error"));
+    const preparing = submissionTimeline?.pending().find(row =>
+      !["cancelled", "completed", "failed"].includes(row.displayPhase) && !row.error);
+    if (preparing) {
+      if (preparing.cancelEdit && !preparing.durable) preparing.cancelEdit();
+      else void submissionCoordinator.stop(preparing);
+      return;
+    }
+    if (activeRun) queueBlocked.block(`${activeRun.project_id}/${activeRun.session_id}`);
     if (activeRun) runStops.request(activeRun, document.activeElement === send);
   }
   send.addEventListener("click", event => {

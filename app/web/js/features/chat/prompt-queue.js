@@ -49,7 +49,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
   });
 
   function canChange(item) {
-    return item.state === "pending" && (!item.priority || metadata.get(selectedKey())?.paused) &&
+    return ["pending", "cancelled"].includes(item.state) && (!item.priority || metadata.get(selectedKey())?.paused) &&
       !item.start_claimed && !item.run_id;
   }
 
@@ -299,6 +299,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
           "aria-label": uiMessage("queue.drag", {}, "拖动排序，或按上下方向键调整顺序"),
           title: uiMessage("queue.drag", {}, "拖动排序，或按上下方向键调整顺序") } });
       handle.disabled = locked;
+      if (entry.state === "cancelled") handle.disabled = true;
       const remove = element("button", {
         text: uiMessage("queue.remove"),
         attrs: { type: "button", "aria-label": uiMessage("queue.removeNumber", { number: index + 1 }),
@@ -338,6 +339,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         return button;
       }
       const steer = action("queue.steer", uiMessage("queue.steer", {}, "引导"), "steer", () => performAction(key, "steer", entry.id));
+      if (entry.state === "cancelled") steer.hidden = true;
       writeUiAttribute(steer, "title", uiMessage("queue.steerHint", {}, "停止当前执行并优先发送此消息"));
       if (onWithdraw) action("queue.edit", uiMessage("queue.edit", {}, "撤回编辑"), "edit", () =>
         onWithdraw(key, entry, draftRevision => performAction(key, "withdraw", entry.id, "", draftRevision)), "✎");
@@ -469,6 +471,19 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     },
     receipt(projectId, sessionId, id) {
       return transport.readReceipt(sessionKey(projectId, sessionId), id);
+    },
+    status(projectId, sessionId, id) { return transport.readStatus(sessionKey(projectId, sessionId), id); },
+    async cancel(projectId, sessionId, id) {
+      const key = sessionKey(projectId, sessionId);
+      const result = await transport.cancel(key, id);
+      await load(key, true); return result;
+    },
+    async withdraw(projectId, sessionId, id) {
+      const key = sessionKey(projectId, sessionId);
+      const item = queues.get(key)?.find(entry => entry.id === id);
+      if (!item) return false;
+      await onWithdraw(key, item, revision => performAction(key, "withdraw", id, "", revision));
+      return true;
     },
     hasStaged(projectId, sessionId) {
       return queues.get(sessionKey(projectId, sessionId))?.some((item) =>

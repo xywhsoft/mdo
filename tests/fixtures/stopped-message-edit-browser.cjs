@@ -59,6 +59,7 @@ const assert=require('node:assert/strict');const fs=require('node:fs');
   const readGate=new Promise(resolve=>releaseRead=resolve),reading=new Promise(resolve=>readEntered=resolve);
   await page.route('**/history',async route=>{readEntered();await readGate;await route.continue();});
   const baseReady=page.waitForResponse(response=>response.url().endsWith('/history')&&response.status()===200);
+  void baseReady.catch(()=>{});
   await edited.getByRole('button',{name:'编辑此消息并重新发送',exact:true}).click();
   await reading;await page.locator('#message-edit-input').fill('cancelled pending edit');
   await page.locator('#message-edit-form button[type="submit"]').click();
@@ -66,6 +67,7 @@ const assert=require('node:assert/strict');const fs=require('node:fs');
   await page.getByRole('button',{name:'取消重发',exact:true}).click();
   await page.locator('#message-edit-input').waitFor();assert.equal(await page.locator('#message-edit-input').inputValue(),'cancelled pending edit');
   assert.equal(await page.locator('#message-edit-error').isVisible(),false);
+  await page.waitForFunction(()=>document.querySelectorAll('.submission-user').length===0);
   assert.equal(await page.locator('.submission-user').count(),0);
   releaseRead();await page.unroute('**/history');
   await page.locator('#message-edit-input').fill('preserve this conflicted edit');
@@ -87,6 +89,6 @@ const assert=require('node:assert/strict');const fs=require('node:fs');
   await page.screenshot({path:dir+'/conflict.png',fullPage:true});
   assert.deepEqual(errors,[]);fs.writeFileSync(dir+'/browser.json',JSON.stringify({passed:true,immediate:true,oneBubble:true,metadataRebase:true,historyConflictRetained:true,cancelPendingRetainsInput:true,invalidTokensRejected:true,lostCutAcknowledgementRecovered:true,legacyRevisionFence:true,staleReceiptRejected:true,errors},null,2));
   console.log('PASS actual stop/edit/resend, pending before gated cut, metadata rebase, queue/event deduplication, genuine history conflict retained');
- }catch(error){release?.();console.error((await page.locator('body').innerText()).slice(-5000));await page.screenshot({path:dir+'/failure.png',fullPage:true});throw error;}
+ }catch(error){release?.();console.error(error);console.error((await page.locator('body').innerText()).slice(-5000));await page.screenshot({path:dir+'/failure.png',fullPage:true});throw error;}
  finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
