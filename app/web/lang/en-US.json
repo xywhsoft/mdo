@@ -3570,5 +3570,10 @@
   "directory.scanLimit": "The directory exceeds the scan time or entry limit. Retry or enter the full path of a subdirectory.",
   "project.openDirectory": "Open in file manager",
   "project.directoryOpened": "Opened the project folder on the device running mdo",
-  "error.desktopUnavailable": "Could not open the file manager. Check that the target device supports this action."
+  "error.desktopUnavailable": "Could not open the file manager. Check that the target device supports this action.",
+  "modelSetup.emptyTitle": "No models added yet",
+  "modelSetup.emptyDescription": "Add a provider and configure its API key, then choose a model to start chatting.",
+  "modelSetup.providerEmptyTitle": "This provider has no models yet",
+  "modelSetup.providerEmptyDescription": "Add models by fetching the available list or entering model IDs manually.",
+  "modelSetup.noDefaultModel": "No default model selected"
 }

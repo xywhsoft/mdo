@@ -3570,5 +3570,10 @@
   "directory.scanLimit": "此目录的读取超过时间或数量限制，请重试，或直接输入目标子目录的完整路径。",
   "project.openDirectory": "在资源管理器中打开",
   "project.directoryOpened": "已在运行 mdo 的设备上打开项目目录",
-  "error.desktopUnavailable": "无法打开文件管理器，请确认目标设备支持此操作。"
+  "error.desktopUnavailable": "无法打开文件管理器，请确认目标设备支持此操作。",
+  "modelSetup.emptyTitle": "还没有添加模型",
+  "modelSetup.emptyDescription": "添加供应商并配置 API Key，选择模型后即可开始对话。",
+  "modelSetup.providerEmptyTitle": "此供应商还没有模型",
+  "modelSetup.providerEmptyDescription": "添加模型，可自动获取模型列表，也可以手动填写模型 ID。",
+  "modelSetup.noDefaultModel": "尚未设置默认模型"
 }

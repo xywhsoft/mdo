@@ -10,7 +10,11 @@
   const layout=()=>assert(document.documentElement.scrollWidth<=innerWidth+1,'No horizontal overflow at '+innerWidth);
   try {
     await until(()=>globalThis.__qaReady,'settings ready');
-    click('添加供应商');await until(()=>button('Fixture'),'supplier catalog');click('Fixture');
+    const empty=document.querySelector('.supplier-empty');
+    assert(empty?.textContent.includes('还没有添加模型'),'Empty model management explains that no models have been added');
+    assert(!document.querySelector('.supplier-list'),'An empty supplier list does not leave a blank bordered sidebar');
+    assert(document.querySelector('.supplier-toolbar').textContent.includes('尚未设置默认模型'),'Empty configuration has a clear default-model status');
+    layout();empty.querySelector('button').click();await until(()=>button('Fixture'),'supplier catalog');click('Fixture');
     assert(!document.querySelector('.supplier-connection-advanced').open,'Advanced connection settings start collapsed');
     const groups=[...document.querySelectorAll('.model-proxy-inline h4')].map(n=>n.textContent);
     assert(groups[0].includes('供应商')&&groups[1].includes('新模型'),'Supplier and model proxy settings share one advanced group in order');
@@ -53,6 +57,8 @@
     assert(saved.items.some(n=>n.wire_model==='alpha')&&!saved.items.some(n=>n.wire_model==='beta'),'Only successful model committed');
     assert(document.querySelectorAll('[name="selected-model"]').length===1&&document.querySelector('[name="selected-model"]').value==='beta','Retry page retains only failed model');
     assert(Boolean(document.querySelector('.resource-error')?.textContent),'Failed model displays its error');
+    const alphaCallsBeforeRetry=(await(await fetch(globalThis.__qaSupplier+'/stats')).json()).calls.filter(c=>c.model==='alpha').length;
+    assert(alphaCallsBeforeRetry>0,'Successful model was verified before retry');
     await fetch(globalThis.__qaSupplier+'/allow-beta');
     click('添加并验证（1）');await until(()=>document.querySelectorAll('.supplier-model').length===2,'successful retry');
     assert(!document.querySelector('.model-setup-layer'),'Successful wizard closes and returns to model cards');
@@ -64,8 +70,15 @@
     layout();
     const stats=await(await fetch(globalThis.__qaSupplier+'/stats')).json();
     assert(stats.models===2,'Exactly one model-list request per automatic tab activation');
-    assert(stats.calls.filter(c=>c.model==='alpha').length===2,'Successful model never verified again on retry');
+    assert(stats.calls.filter(c=>c.model==='alpha').length===alphaCallsBeforeRetry,'Successful model never verified again on retry');
     assert(stats.catalog_credentials===false,'Public parameter catalog receives no supplier credential');
+    const {api}=await import('/js/api/client.js');
+    const snapshot=await api.get('/models/config');
+    await api.put('/settings/models',{schema_version:1,patch:{providers:snapshot.data.providers,items:[],default_model:''}},{ifMatch:snapshot.etag});
+    click('刷新');await until(()=>document.querySelector('.supplier-empty')?.textContent.includes('此供应商还没有模型'),'existing provider without models');
+    assert(document.querySelector('.supplier-list')&&document.querySelectorAll('.supplier-body .supplier-empty button').length===1,'An empty existing provider retains navigation and a direct add-model action');
+    assert(!document.querySelectorAll('.supplier-model').length,'Empty provider guidance does not render phantom model cards');
+    layout();
     document.querySelector('#result').textContent=JSON.stringify({passed:true,checks,stats});
   }catch(error){document.querySelector('#result').textContent=JSON.stringify({passed:false,checks,error:String(error),body:document.body.innerText.slice(-2000)});}
 })();

@@ -313,8 +313,24 @@ export function createModelConfigPanel(container) {
     finally { verificationController = null; render(); setBusy(false); }
     return results;
   }
+  function emptyModels(onAdd, existing = false) {
+    const card = element("section", { className: "supplier-empty" }, [
+      element("span", { className: "supplier-empty-icon icon", attrs: { "data-icon": "spark", "aria-hidden": "true" } }),
+      element("h3", { text: existing ? text("providerEmptyTitle", "此供应商还没有模型") : text("emptyTitle", "还没有添加模型") }),
+      element("p", { text: existing ? text("providerEmptyDescription", "添加模型，可自动获取模型列表，也可以手动填写模型 ID。")
+        : text("emptyDescription", "添加供应商并配置 API Key，选择模型后即可开始对话。") }),
+      button(text("addModels", "添加模型"), onAdd, true),
+    ]);
+    mountIcons(card); return card;
+  }
   function renderDetail(body) {
     const entry = provider(); if (!entry) return;
+    const models = config.items.filter((item) => item.provider === entry.id);
+    const addModels = () => {
+      if (blocked()) return;
+      const preset = providerPresets.find((item) => item.id === entry.template_id) || providerPresets.find((item) => item.id === "custom");
+      choose(preset, presetVariant(preset.id, entry.template_variant), entry);
+    };
     body.append(element("header", { className: "supplier-detail-heading" }, [element("h3", { text: providerDisplayName(entry) }),
       entry.builtin ? element("span", { text: uiMessage("modelConfig.builtinTag") }) : button(text("advancedEditor", "编辑"), () => showAdvanced("provider", entry.id))]));
     if (entry.builtin) body.append(element("p", { className: "model-config-status", text: uiMessage("modelConfig.builtinModelNote") }));
@@ -329,13 +345,12 @@ export function createModelConfigPanel(container) {
       keyForm.addEventListener("submit", (event) => { event.preventDefault(); keyForm.querySelector("button").click(); });
       const credentials = element("details", { className: "supplier-connection-advanced", attrs: { open: key ? "" : null } }, [
         element("summary", { text: entry.credential?.secret_ref ? text("keyConfigured", "凭据已配置 · 更换 API Key") : text("configureKey", "设置 API Key") }), keyForm]);
-      body.append(credentials, button(text("addModels", "添加模型"), () => {
-        if (blocked()) return;
-        const preset = providerPresets.find((item) => item.id === entry.template_id) || providerPresets.find((item) => item.id === "custom");
-        choose(preset, presetVariant(preset.id, entry.template_variant), entry);
-      }));
+      body.append(credentials);
+      if (models.length) body.append(button(text("addModels", "添加模型"), addModels));
     }
-    const models = config.items.filter((item) => item.provider === entry.id);
+    if (!models.length) {
+      body.append(emptyModels(entry.builtin ? add : addModels, true)); return;
+    }
     body.append(element("p", { className: "model-config-status", text: text("testHelp", "测试会消耗 Token；工具测试携带本机已注册工具定义，使用指定探针，不执行任何工具，也不读取会话历史。") }));
     const list = element("div", { className: "supplier-models" });
     for (const model of models) {
@@ -373,7 +388,7 @@ export function createModelConfigPanel(container) {
     const hadFocus = container.contains(active), focusName = active?.name;
     const selection = hadFocus && typeof active.selectionStart === "number" ? [active.selectionStart, active.selectionEnd] : null;
     clear(container);
-    const header = element("div", { className: "supplier-toolbar" }, [element("p", { className: "model-config-status", text: config ? text("default", "默认模型：{model}", { model: config.items.find((item) => item.id === config.default_model)?.name || config.default_model }) : uiMessage("resource.loading") }),
+    const header = element("div", { className: "supplier-toolbar" }, [element("p", { className: "model-config-status", text: config ? (config.default_model ? text("default", "默认模型：{model}", { model: config.items.find((item) => item.id === config.default_model)?.name || config.default_model }) : text("noDefaultModel", "尚未设置默认模型")) : uiMessage("resource.loading") }),
       button(uiMessage("modelConfig.refresh"), () => void reload()), button(text("addSupplier", "添加供应商"), add, true)]);
     container.append(header, element("p", { className: `supplier-notice ${failed ? "resource-error" : "model-config-status"}`, text: notice, attrs: { role: failed ? "alert" : "status", hidden: notice ? null : "" } }));
     if (verificationController) {
@@ -402,10 +417,13 @@ export function createModelConfigPanel(container) {
     if (view !== "list") body.append(button(view === "advanced" ? text("backSuppliers", "返回供应商") : text("back", "返回"), () => {
       void back();
     }));
-    if (view === "parameters") renderParameterEdit(body);
+    if (!config.providers.length) body.append(emptyModels(add));
+    else if (view === "parameters") renderParameterEdit(body);
     else if (view === "advanced") body.append(element("div", { className: "supplier-advanced-host" }));
     else renderDetail(body);
-    layout.append(list, body); container.append(layout);
+    if (config.providers.length) layout.append(list, body);
+    else { layout.classList.add("supplier-layout-empty"); layout.append(body); }
+    container.append(layout);
     if (config.runtime_override || needsRead) for (const node of container.querySelectorAll("button"))
       if (node !== header.children[1]) node.disabled = true;
     // The expert editor owns its revision and drafts until the user returns.
