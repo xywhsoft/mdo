@@ -147,3 +147,25 @@ test("the download window tracks and cancels native installation jobs without ow
  dialog.querySelector(".mdo-layer-controls").lastChild.click();assert.equal(registry.list("local")[0].state,"installing");assert(!doc.body.querySelector("dialog"));
  registry.install("local",id,{state:"failed",error:"Store HTTP 503"});center.open();assert(doc.body.querySelector("dialog").textContent.includes("Store HTTP 503"));
 });
+
+test("an extension has one download row and count, with transfer controls and operation-owned cancellation", async t => {
+ const previous=globalThis.document,doc=testDocument(),entry=new TestElement("button");
+ for(const name of ["label","count"]){const span=new TestElement("span");span.setAttribute(`data-downloads-${name}`,"");entry.append(span);}doc.querySelector=name=>name==="#open-downloads"?entry:null;globalThis.document=doc;
+ const registry=createDownloadRegistry(),id="sdk-"+"8".repeat(32),task="A".repeat(32),nativeId="N".repeat(32),calls=[];
+ registry.install("local",id,{name:"Computer Use",versionIds:["version"],state:"installing",total:100});
+ const native={id:nativeId,source:"extension",identity:"version",archive_id:task,name:"Computer Use",state:"downloading",active:true,received:40,bytes:100,speed:20,eta_seconds:3,engine:"native",fallback_reason:"aria2_failed"};
+ registry.observe("/extension-tasks",[{id:task,purpose:"install",state:"receiving",received:10,bytes:100,store:{version_id:"version"}}]);registry.observe("/download-tasks",[native]);
+ const center=createDownloadCenter({registry,installer:{refresh:async()=>{},cancel:async row=>{calls.push(["cancel-operation",row.operationId]);}},transport:{get:async()=>({data:[]}),post:async path=>{calls.push([path]);},delete:async()=>assert.fail("no direct archive deletion while its installation owns it")}});
+ t.after(()=>{center.destroy();globalThis.document=previous;});center.open();await flush();
+ const dialog=doc.body.querySelector("dialog"),button=label=>descendants(dialog).find(n=>n.tagName==="BUTTON"&&n.textContent===label);
+ assert.equal(dialog.querySelectorAll(".download-row").length,1);assert.equal(entry.querySelector("[data-downloads-count]").textContent,"1");
+ assert.equal(dialog.querySelector("progress").value,40);assert(dialog.textContent.includes("Download engine: Built-in"));assert(dialog.textContent.includes("Speed: 20 B/s"));assert(dialog.textContent.includes("Switched automatically"));
+ assert(!button("Clear finished")||button("Clear finished").disabled);assert(!button("Cancel and delete"));
+ button("Pause").click();await flush();assert.deepEqual(calls.at(-1),[`/download-tasks/${nativeId}/pause`]);
+ registry.observe("/download-tasks",[{...native,state:"paused",active:false,speed:0}]);assert(dialog.textContent.includes("Paused"));
+ button("Resume").click();await flush();assert.deepEqual(calls.at(-1),[`/download-tasks/${nativeId}/resume`]);
+ button("Cancel").click();await flush();assert.deepEqual(calls.at(-1),["cancel-operation",id]);
+ registry.observe("/download-tasks",[{...native,state:"ready",active:false,received:100,speed:0}]);assert(!button("Install"));assert.equal(dialog.querySelectorAll(".download-row").length,1);
+ registry.install("local",id,{state:"unknown"});assert(button("Cancel"));assert(button("Clear finished").disabled,"an unverified SDK job must be cancelled before clearing");
+ registry.install("local",id,{state:"complete"});button("Clear finished").click();await flush();assert.equal(dialog.querySelectorAll(".download-row").length,0);assert.equal(calls.filter(([path])=>path.includes("/forget")).length,0);
+});

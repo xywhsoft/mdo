@@ -25,11 +25,41 @@ export function createDownloadRegistry(storage = null) {
   }
   const list = target => {
     const all = [...records.values()].filter(r => r.target === target);
+    const installs = all.filter(row => row.source === "install").sort((a, b) =>
+      Number(downloadActive(b) || b.state === "unknown") - Number(downloadActive(a) || a.state === "unknown") || b.started - a.started);
+    const archives = new Map(all.filter(row => row.source === "archive").map(row => [row.taskId, row]));
+    const version = row => row.source === "archive" ? row.store?.version_id
+      : row.source === "native" && row.nativeSource === "extension" ? row.versionId || archives.get(row.archiveId)?.store?.version_id : null;
+    // Installation, archive staging and native transfer are three receipts for
+    // one user action. Join by the pinned version/ archive identity, never name.
+    const owners = new Map();
+    for (const row of all) {
+      const id = version(row), owner = id && installs.find(job => job.versionIds?.includes(id));
+      if (owner) owners.set(row.key, owner.key);
+    }
+    function installation(row) {
+      const children = all.filter(child => owners.get(child.key) === row.key);
+      const transfers = children.filter(child => child.source === "native");
+      const progress = new Map(Object.entries(row.transferProgress || {}));
+      for (const child of children.filter(child => child.source === "archive")) progress.set(version(child), child.done || 0);
+      // Native progress includes aria2 bytes that have not reached the archive
+      // staging file yet. It wins regardless of API response ordering.
+      for (const child of transfers) progress.set(version(child), child.done || 0);
+      const current = transfers.find(child => downloadActive(child) || child.state === "paused");
+      const phase = downloadActive(row) && row.state !== "cancelling" && current ? current.state : row.state;
+      const speed = transfers.filter(downloadActive).reduce((sum, child) => sum + (child.speed || 0), 0);
+      const done = progress.size ? [...progress.values()].reduce((sum, bytes) => sum + bytes, 0) : row.done;
+      const transfer = current || transfers.at(-1);
+      return { ...row, transfers, phase, done, speed,
+        eta: speed > 0 && row.total > done ? (row.total - done) / speed : null,
+        engine: transfer?.engine, fallbackReason: transfer?.fallbackReason };
+    }
     return all.filter(r => !r.hidden &&
+      !owners.has(r.key) &&
       !(r.source === "archive" && all.some(n => n.source === "native" && n.archiveId === r.taskId)) &&
-      !(r.source === "update" && all.some(n => n.source === "native" && n.nativeSource === "update" && n.hash === r.hash)) &&
-      !(r.source === "archive" && r.store?.version_id && all.some(job => job.source === "install" && job.versionIds?.includes(r.store.version_id))))
+      !(r.source === "update" && all.some(n => n.source === "native" && n.nativeSource === "update" && n.hash === r.hash)))
       .map(row => {
+        if (row.source === "install") return installation(row);
         if(row.source === "native" && row.nativeSource === "transfer" && row.state === "ready") return { ...row, state: "complete" };
         if(row.source === "native" && row.nativeSource === "update" && row.state === "ready") {
           if(row.buildId && installedBuilds.get(target) >= row.buildId) return { ...row, state: "complete" };
@@ -56,6 +86,7 @@ export function createDownloadRegistry(storage = null) {
         if(!/^[A-Za-z0-9_-]{32}$/.test(task.id || "") || typeof task.state !== "string") continue;
         const key = `${target}:native:${task.id}`;live.add(key);
         put(key,{target,source:"native",nativeSource:task.source,taskId:task.id,archiveId:task.archive_id || "",kind:task.kind,
+          versionId:task.source === "extension" ? task.identity || "" : "",
           name:task.name,state:task.state,done:task.received || 0,total:task.bytes || 0,hash:task.sha256,buildId:task.build_id || 0,
           speed:task.speed || 0,eta:task.eta_seconds,error:task.error || "",errorCode:task.error_code || "",cleanupPending:task.cleanup_pending === true,engine:task.engine || "native",fallbackReason:task.fallback_reason || "",active:task.active === true});
       }

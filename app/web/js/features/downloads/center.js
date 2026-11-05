@@ -19,7 +19,7 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
   let layer = null, pending = false, error = "", readError = "", timer = 0, destroyed = false, polling = false, signature = "";
   const target = () => targetState().selected?.id || "local";
   const writable = () => { const s = targetState(); return !readError && (!s.selected || s.connected && !s.runtimeChanged && s.selected.mode !== "view"); };
-  const clearable = row => !downloadActive(row) && !["ready","paused"].includes(row.state);
+  const clearable = row => !downloadActive(row) && !["ready","paused"].includes(row.state) && !(row.source === "install" && row.state === "unknown");
   async function refresh() {
     if (destroyed || polling) return; polling = true; const owner=target();
     try {
@@ -60,8 +60,8 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
     for (const row of rows) {
       const item = node("article", null, "download-row"), top = node("div", null, "download-row-heading");
       const kind = row.source === "cli" ? text(`cli.${row.action}`) : text(row.nativeSource === "transfer" ? "file" : row.source === "update" || row.nativeSource === "update" ? "app" : row.source === "legacy" ? "legacy" : "extension");
-      top.append(node("strong", row.name || kind), node("span", text(`state.${row.state}`))); item.append(top, node("small", `${kind}${row.buildId ? ` · ${row.buildId}` : ""}`, "download-meta"));
-      if(row.source === "native") {
+      top.append(node("strong", row.name || kind), node("span", text(`state.${row.phase || row.state}`))); item.append(top, node("small", `${kind}${row.buildId ? ` · ${row.buildId}` : ""}`, "download-meta"));
+      if(row.source === "native" || row.source === "install" && row.transfers?.length) {
         item.append(node("small",text("engine",{engine:row.engine === "aria2" ? "aria2" : text("nativeEngine")}),"download-meta"));
         if(row.fallbackReason) item.append(node("p",text(row.fallbackReason === "aria2_network_policy" ? "networkFallback" : "fallback"),"download-meta"));
       }
@@ -95,7 +95,17 @@ export function createDownloadCenter({ updatePanel, navigation, registry = downl
           await control("forget");registry.hide(row.key);
         }));
       } else if (row.source === "install") {
-        if(downloadActive(row))controls.append(action(row,text("cancel"),()=>installer.cancel(row)));
+        const transfers = row.transfers || [];
+        const pausable = transfers.filter(child => child.active && ["downloading", "retrying"].includes(child.state));
+        const paused = transfers.filter(child => child.state === "paused");
+        const control = async (children, verb) => {
+          for (const child of children) await transport.post(`/download-tasks/${child.taskId}/${verb}`, {});
+        };
+        if(downloadActive(row) && row.state !== "cancelling") {
+          if(pausable.length)controls.append(action(row,text("pause"),()=>control(pausable,"pause")));
+          if(paused.length)controls.append(action(row,text("resume"),()=>control(paused,"resume")));
+        }
+        if(downloadActive(row) || row.state === "unknown")controls.append(action(row,text("cancel"),()=>installer.cancel(row)));
         else controls.append(action(row,text("clear"),()=>registry.hide(row.key)));
       } else if (row.source === "archive") {
         if (!["complete", "cancelled", "expired"].includes(row.state)) controls.append(action(row, text("cancel"), () => transport.delete(`/extension-tasks/${row.taskId}`)));
