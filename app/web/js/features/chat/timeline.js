@@ -22,6 +22,7 @@ import { modelErrorMessage, modelErrorTitle } from "../../utils/model-errors.js"
 import { modelRetryNode, modelRetryInlineNode, updateModelRetryCountdowns } from "./model-retry.js";
 import { createStreamScroll } from "./stream-scroll.js";
 import { appendTurnChanges, createTurnChanges } from "./turn-changes.js";
+import { conversationTurnActions } from "./turn-actions.js";
 
 // Live disclosures keep their interactive shell while their contents change.
 // Replacing a summary between pointer press and release loses the activation.
@@ -118,13 +119,18 @@ export function eventsToTimeline(events, historyLost = false,
   let latestMainPrompt = null;
   const runEpochs = new Map();
   const terminalRuns = new Map();
+  const compactions = new Map();
+  const scopedModelKey = (event, epoch) => {
+    const scope = `${String(event.run_id || event.agent_id || event.event_id)}:${epoch}`;
+    return modelKey(event, epoch) + (compactions.has(scope) ? `-compaction-${compactions.get(scope)}` : "");
+  };
   const finalErrors = new Map();
   const retryNotices = new Map();
   const boundaries = [...new Set(historyNotices.map(notice => notice.before_event_id)
     .filter(id => Number.isSafeInteger(id) && id > 0))].sort((a, b) => a - b);
   let boundary = 0, streamSection = "";
   function clearRetryNotice(event, wholeRun = false) {
-    const key = modelKey(event, runEpochs.get(String(event.run_id || event.agent_id || event.event_id)) ?? 0);
+    const key = scopedModelKey(event, runEpochs.get(String(event.run_id || event.agent_id || event.event_id)) ?? 0);
     const run = String(event.run_id || event.agent_id || event.event_id);
     for (const [id, notice] of retryNotices) {
       if (wholeRun ? notice.runKey === run : id === key) {
@@ -162,13 +168,15 @@ export function eventsToTimeline(events, historyLost = false,
     const itemCount = items.length;
     const runKey = String(event.run_id || event.agent_id || event.event_id);
     const epoch = runEpochs.get(runKey) ?? 0;
+    const scope = `${runKey}:${epoch}`;
+    if (event.kind === "compaction_start") compactions.set(scope, event.event_id);
     if ((["model_text_delta", "model_reasoning_delta"].includes(event.kind) && event.text) ||
         event.kind === "model_done" || event.kind === "tool_start") clearRetryNotice(event);
     if (["error", "agent_done", "agent_start"].includes(event.kind)) clearRetryNotice(event, true);
     switch (event.kind) {
       case "model_retry": {
         if (terminalRuns.has(`${runKey}:${epoch}`)) break;
-        const key = modelKey(event, epoch);
+        const key = scopedModelKey(event, epoch);
         let notice = retryNotices.get(key);
         if (!notice) {
           notice = { key: `retry-${key}`, kind: "retry", state: "running", runKey, runEpoch: epoch };
@@ -248,7 +256,7 @@ export function eventsToTimeline(events, historyLost = false,
       case "model_reasoning_delta": {
         const thought = appendOrCreate(items, streams, event, "reasoning",
           t("timeline.reasoning", {}, "思考"),
-          `reasoning-${modelKey(event, epoch)}`, streamSection);
+          `reasoning-${scopedModelKey(event, epoch)}`, streamSection);
         thought.runKey = runKey;
         thought.runEpoch = epoch;
         break;
@@ -271,7 +279,7 @@ export function eventsToTimeline(events, historyLost = false,
               latestMainPrompt = prompt;
           }
           const answer = appendOrCreate(items, streams, event, "assistant", event.model || "Agent",
-            `assistant-${modelKey(event, epoch)}`, streamSection);
+            `assistant-${scopedModelKey(event, epoch)}`, streamSection);
           answer.runKey = runKey;
           answer.runEpoch = epoch;
           answer.retryPrompt = promptsByRun.get(runKey);
@@ -282,7 +290,7 @@ export function eventsToTimeline(events, historyLost = false,
         if (usage) {
           const input = Number(event.input_tokens);
           const output = Number(event.output_tokens);
-          const startedAt = modelStarts.get(modelKey(event, epoch));
+          const startedAt = modelStarts.get(scopedModelKey(event, epoch));
           const elapsed = (Number(event.time) - Number(startedAt)) / 1e6;
           usage.calls += 1;
           if (!Number.isSafeInteger(input) || input < 0 ||
@@ -299,17 +307,17 @@ export function eventsToTimeline(events, historyLost = false,
         }
         for (const thought of items) {
           if (thought.kind !== "reasoning" ||
-              thought.key !== `reasoning-${modelKey(event, epoch)}`) continue;
+              thought.key !== `reasoning-${scopedModelKey(event, epoch)}`) continue;
           thought.state = event.success ? "done" : "failed";
           thought.durationSeconds = Math.max(0,
             (Number(event.time) - Number(thought.time)) / 1e6);
         }
-        const answer = [...items].reverse().find((item) => item.key === `assistant-${modelKey(event, epoch)}`);
+        const answer = [...items].reverse().find((item) => item.key === `assistant-${scopedModelKey(event, epoch)}`);
         if (answer) {
           answer.state = event.success ? "done" : "failed";
           answer.inputTokens = Number(event.input_tokens || 0);
           answer.outputTokens = Number(event.output_tokens || 0);
-          const startedAt = modelStarts.get(modelKey(event, epoch));
+          const startedAt = modelStarts.get(scopedModelKey(event, epoch));
           const elapsed = (Number(event.time) - Number(startedAt ?? answer.time)) / 1e6;
           if (startedAt != null && Number.isFinite(Number(startedAt)) && elapsed > 0)
             answer.modelDurationSeconds = elapsed;
@@ -470,7 +478,7 @@ export function eventsToTimeline(events, historyLost = false,
         terminalRuns.set(`${runKey}:${epoch}`, terminalState);
         settleStreams(runKey, epoch, terminalState);
         let answer = [...items].reverse().find((item) => item.kind === "assistant" &&
-          item.runKey === runKey && item.runEpoch === epoch);
+          item.runKey === runKey && item.runEpoch === epoch && !item.executionDetail);
         if (!answer && (event.text || !event.success)) {
           answer = {
             key: `done-${event.event_id}`, kind: "assistant",
@@ -544,7 +552,7 @@ export function eventsToTimeline(events, historyLost = false,
         if (event.text === "stream_restart") {
           // A failed generation has not committed a response or dispatched
           // tools. Replace only its transient draft, keeping earlier work.
-          const key = modelKey(event, epoch);
+          const key = scopedModelKey(event, epoch);
           for (const prefix of ["reasoning-", "assistant-"]) {
             const draft = streams.get(prefix + key);
             if (draft) {
@@ -553,7 +561,7 @@ export function eventsToTimeline(events, historyLost = false,
               streams.delete(prefix + key);
             }
           }
-        } else modelStarts.set(modelKey(event, epoch), event.time);
+        } else modelStarts.set(scopedModelKey(event, epoch), event.time);
         break;
       default:
         items.push({ key: `event-${event.event_id}`, kind: "system",
@@ -566,8 +574,12 @@ export function eventsToTimeline(events, historyLost = false,
       items[index].runKey ??= runKey;
       items[index].runEpoch ??= event.kind === "agent_start" ? Number(event.event_id) || 0 : epoch;
       items[index].agentDepth ??= event.agent_depth || 0;
+      if (compactions.has(scope) && ["assistant", "reasoning"].includes(items[index].kind))
+        items[index].executionDetail = true;
       if (event.source?.member) items[index].executionSource ??= { ...event.source };
     }
+    if (["compaction_done", "compaction_rejected", "agent_done", "error"].includes(event.kind))
+      compactions.delete(scope);
     if (latestMainPrompt) promptsBySource.set(sourceKey, latestMainPrompt);
     else promptsBySource.delete(sourceKey);
   }
@@ -586,7 +598,7 @@ export function eventsToTimeline(events, historyLost = false,
     const item = items[index];
     if (item.kind === "user" && Number.isSafeInteger(item.userMessageSequence) &&
         item.userMessageSequence > 0) nextUserSequence = item.userMessageSequence;
-    if (item.kind === "assistant" && item.retryPrompt &&
+    if (["assistant", "error"].includes(item.kind) && item.retryPrompt &&
         Number.isSafeInteger(item.retryPrompt.sequence) &&
         item.retryPrompt.sequence > 0 &&
         (nextUserSequence === null || nextUserSequence > item.retryPrompt.sequence))
@@ -787,8 +799,75 @@ function commandButton(label, description, iconName, actionRef, handlers, sessio
   return button;
 }
 
+function timelineActionsNode(item, handlers, projectId, sessionId, writable) {
+  const owner = { projectId, sessionId }, sessionKey = `${projectId ?? ""}/${sessionId ?? ""}`;
+  const wholeTurn = item.kind === "turn-actions";
+  const actions = element("div", { className: "timeline-actions", attrs: wholeTurn ? {
+    role: "group", "aria-label": t("timeline.turnActions", {}, "本轮对话操作") } : {} });
+  const copyTarget = wholeTurn ? item.primaryReply : item;
+  if (copyTarget?.text) {
+    const copyLabel = wholeTurn ? t("timeline.copyMainReply", {}, "复制主要回复")
+      : t("timeline.copyMessage", {}, "复制消息");
+    const copy = element("button", { className: "timeline-action-button", attrs: {
+      type: "button", "aria-label": copyLabel, title: copyLabel,
+      "data-timeline-action": `${item.key}/copy` },
+    }, [actionIcon("copy")]);
+    let copying = false;
+    copy.addEventListener("click", async () => {
+      if (copying) return;
+      copying = true; copy.setAttribute("aria-disabled", "true");
+      try {
+        const resolved = await resolveTimelineCopyText(copyTarget, owner);
+        await copyText(promptContextText(resolved.text));
+        toast(resolved.complete ? t("timeline.messageCopied", {}, "消息已复制")
+          : t("timeline.visibleMessageCopied", {}, "已复制可见部分"));
+      } catch (error) {
+        if (error?.name !== "AbortError") toast(t("timeline.messageCopyFailed", {}, "无法复制消息"), "error");
+      } finally { copying = false; copy.setAttribute("aria-disabled", "false"); }
+    });
+    actions.append(copy);
+  }
+  if (writable && !item.historyReadOnly) {
+    if (item.kind === "user" && Number.isSafeInteger(item.userMessageSequence) && item.userMessageSequence > 0)
+      actions.append(commandButton(t("timeline.edit", {}, "编辑"),
+        t("timeline.editResend", {}, "编辑此消息并重新发送"), "compose", `${item.key}/edit`,
+        handlers, sessionKey, opener => handlers.onEdit(item.userMessageSequence, item.text,
+          item.attachments ?? [], owner, opener, () => resolveTimelineActionText(item, owner), item.sourceEventId)));
+    if (wholeTurn && "forkThroughSequence" in item)
+      actions.append(commandButton(t("timeline.fork", {}, "分叉"),
+        t("timeline.forkTurn", {}, "从本轮对话结束处分叉会话"), "branch", `${item.key}/fork`,
+        handlers, sessionKey, () => handlers.onFork(item.forkThroughSequence, owner)));
+    const retryPrompt = item.retryPrompt;
+    if (wholeTurn && Number.isSafeInteger(retryPrompt?.sequence) && retryPrompt.sequence > 0 &&
+        (retryPrompt.text || retryPrompt.attachments?.length))
+      actions.append(commandButton(t("timeline.retry", {}, "重试"),
+        t("timeline.retryTurn", {}, "重试此回合"), "retry", `${item.key}/retry`,
+        handlers, sessionKey, () => handlers.onRetry(retryPrompt.sequence, retryPrompt.text,
+          retryPrompt.attachments ?? [], owner, () => resolveTimelineActionText(retryPrompt, owner), retryPrompt.sourceEventId)));
+  }
+  if (wholeTurn) {
+    const stats = [];
+    if (item.runUsage) stats.push(t("timeline.runUsage", item.runUsage,
+      `本轮 ${item.runUsage.calls} 次模型调用 · ${item.runUsage.input} 输入 / ${item.runUsage.output} 输出 tokens`));
+    else if (item.inputTokens || item.outputTokens) stats.push(t("timeline.usage", {
+      input: item.inputTokens || 0, output: item.outputTokens || 0 },
+      `${item.inputTokens || 0} 输入 / ${item.outputTokens || 0} 输出 tokens`));
+    if (Number.isFinite(item.modelDurationSeconds) && item.modelDurationSeconds > 0)
+      stats.push(`LLM ${durationLabel(item.modelDurationSeconds)}`);
+    if (Number.isFinite(item.toolStageSeconds) && item.toolStageSeconds > 0)
+      stats.push(t("timeline.toolStageTime", { duration: durationLabel(item.toolStageSeconds) },
+        `工具和等待合计 ${durationLabel(item.toolStageSeconds)}`));
+    if (Number.isFinite(item.tokensPerSecond)) stats.push(`${item.tokensPerSecond.toFixed(1)} tok/s`);
+    if (stats.length) actions.append(element("span", { className: "timeline-stats", text: stats.join(" · ") }));
+  }
+  return actions;
+}
+
 function timelineNode(item, handlers, projectId, sessionId, writable,
   openState, previewOpen, previewScroll, toolTextCache, folds = null) {
+  if (item.kind === "turn-actions") return element("li", {
+    className: "timeline-item timeline-turn-actions", attrs: { "data-kind": item.kind, "data-state": item.state },
+  }, [timelineActionsNode(item, handlers, projectId, sessionId, writable)]);
   if (item.kind === "changes") return handlers.changes.node(item, { projectId, sessionId });
   if (item.kind === "history-notice") return element("p", {
     className: "timeline-item timeline-history-notice", text: item.text,
@@ -981,83 +1060,8 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
     if (images.childElementCount) children.push(images);
   }
   if (item.meta) children.push(element("div", { className: "timeline-meta", text: item.meta }));
-  if ((item.kind === "assistant" && item.text) ||
-      (item.kind === "error" && item.retryPrompt) ||
-      (item.kind === "user" && (item.text || item.attachments?.length))) {
-    const actions = element("div", { className: "timeline-actions" });
-    if (item.text) {
-      const copyLabel = t("timeline.copyMessage", {}, "复制消息");
-      const copy = element("button", { className: "timeline-action-button", attrs: {
-        type: "button", "aria-label": copyLabel,
-        title: item.textTruncated ? copyLabel : uiMessage("timeline.copy", {}, "复制"),
-        "data-timeline-action": `${item.key}/copy` },
-      }, [actionIcon("copy")]);
-      let copying = false;
-      copy.addEventListener("click", async () => {
-        if (copying) return;
-        copying = true;
-        copy.setAttribute("aria-disabled", "true");
-        try {
-          const resolved = await resolveTimelineCopyText(item, owner);
-          await copyText(promptContextText(resolved.text));
-          toast(resolved.complete
-            ? t("timeline.messageCopied", {}, "消息已复制")
-            : t("timeline.visibleMessageCopied", {}, "已复制可见部分"));
-        }
-        catch (error) {
-          if (error?.name !== "AbortError") toast(t("timeline.messageCopyFailed", {}, "无法复制消息"), "error");
-        }
-        finally { copying = false; copy.setAttribute("aria-disabled", "false"); }
-      });
-      actions.append(copy);
-    }
-    if (writable && !item.historyReadOnly && item.kind === "user" &&
-        Number.isSafeInteger(item.userMessageSequence) &&
-        item.userMessageSequence > 0) {
-      const edit = commandButton(t("timeline.edit", {}, "编辑"),
-        t("timeline.editResend", {}, "编辑此消息并重新发送"), "compose", `${item.key}/edit`,
-        handlers, sessionKey, (opener) => handlers.onEdit(
-          item.userMessageSequence, item.text, item.attachments ?? [], owner,
-          opener, () => resolveTimelineActionText(item, owner), item.sourceEventId));
-      actions.append(edit);
-    }
-    if (item.kind === "assistant" || item.kind === "error") {
-      if (item.kind === "assistant" && writable && !item.historyReadOnly && "forkThroughSequence" in item) {
-        const fork = commandButton(t("timeline.fork", {}, "分叉"),
-          t("timeline.forkFromReply", {}, "从此回复分叉会话"), "branch", `${item.key}/fork`,
-          handlers, sessionKey, () => handlers.onFork(item.forkThroughSequence, owner));
-        actions.append(fork);
-      }
-      const retryPrompt = item.retryPrompt;
-      if (writable && !item.historyReadOnly && retryPrompt && Number.isSafeInteger(retryPrompt.sequence) &&
-          retryPrompt.sequence > 0 && (retryPrompt.text || retryPrompt.attachments?.length)) {
-        const retry = commandButton(t("timeline.retry", {}, "重试"),
-          t("timeline.retryTurn", {}, "重试此回合"), "retry", `${item.key}/retry`,
-          handlers, sessionKey, () => handlers.onRetry(
-            retryPrompt.sequence, retryPrompt.text,
-            retryPrompt.attachments ?? [], owner,
-            () => resolveTimelineActionText(retryPrompt, owner), retryPrompt.sourceEventId));
-        actions.append(retry);
-      }
-      const stats = [];
-      if (item.runUsage)
-        stats.push(t("timeline.runUsage", item.runUsage,
-          `本轮 ${item.runUsage.calls} 次模型调用 · ${item.runUsage.input} 输入 / ${item.runUsage.output} 输出 tokens`));
-      else if (item.inputTokens || item.outputTokens)
-        stats.push(t("timeline.usage", { input: item.inputTokens || 0,
-          output: item.outputTokens || 0 },
-        `${item.inputTokens || 0} 输入 / ${item.outputTokens || 0} 输出 tokens`));
-      if (Number.isFinite(item.modelDurationSeconds) && item.modelDurationSeconds > 0) {
-        stats.push(`LLM ${durationLabel(item.modelDurationSeconds)}`);
-      }
-      if (Number.isFinite(item.toolStageSeconds) && item.toolStageSeconds > 0)
-        stats.push(t("timeline.toolStageTime", { duration: durationLabel(item.toolStageSeconds) },
-          `工具和等待合计 ${durationLabel(item.toolStageSeconds)}`));
-      if (Number.isFinite(item.tokensPerSecond)) stats.push(`${item.tokensPerSecond.toFixed(1)} tok/s`);
-      if (stats.length) actions.append(element("span", { className: "timeline-stats", text: stats.join(" · ") }));
-    }
-    children.push(actions);
-  }
+  if (item.kind === "user" && (item.text || item.attachments?.length))
+    children.push(timelineActionsNode(item, handlers, projectId, sessionId, writable));
   return element("li", {
     className: "timeline-item",
     attrs: { "data-kind": item.kind, "data-state": item.state },
@@ -1292,7 +1296,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     const groups = conversationGroups(items);
     const projected = [];
     let previousTurn = 0;
-    for (const group of groups) {
+    for (const [groupIndex, group] of groups.entries()) {
       const skipped = (data?.turns ?? []).filter(turn => turn.first_event_id > previousTurn &&
         turn.first_event_id < group.firstEventId && !groups.some(loaded => loaded.firstEventId === turn.first_event_id));
       if (previousTurn && skipped.length) projected.push({ key: `gap-${group.firstEventId}`,
@@ -1302,6 +1306,8 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       for (const entry of group.entries) {
         projected.push(entry);
       }
+      const actions = conversationTurnActions(group, groups[groupIndex + 1]);
+      if (actions) projected.push(actions);
     }
     const foldKeys = new Set([...items.filter((item) =>
       item.kind === "reasoning" || item.kind === "tool").map((item) => item.key),

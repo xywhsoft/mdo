@@ -3581,5 +3581,8 @@
   "messageEdit.sending": "正在保存并提交消息…",
   "messageEdit.cancelPending": "取消重发",
   "error.sessionRuntimeBusy": "会话仍在处理上一项操作，请稍候重试；编辑内容已保留。",
-  "error.sessionHistoryChanged": "编辑期间对话出现了新变化，内容已保留。请核对后重新编辑，或创建会话分支。"
+  "error.sessionHistoryChanged": "编辑期间对话出现了新变化，内容已保留。请核对后重新编辑，或创建会话分支。",
+  "timeline.turnActions": "本轮对话操作",
+  "timeline.copyMainReply": "复制主要回复",
+  "timeline.forkTurn": "从本轮对话结束处分叉会话"
 }

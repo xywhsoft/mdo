@@ -3581,5 +3581,8 @@
   "messageEdit.sending": "Saving and submitting the message…",
   "messageEdit.cancelPending": "Cancel resend",
   "error.sessionRuntimeBusy": "The session is finishing another operation. Try again shortly; your edit is retained.",
-  "error.sessionHistoryChanged": "The conversation changed during editing. Your input is retained. Review it before editing again, or create a branch."
+  "error.sessionHistoryChanged": "The conversation changed during editing. Your input is retained. Review it before editing again, or create a branch.",
+  "timeline.turnActions": "Turn actions",
+  "timeline.copyMainReply": "Copy main reply",
+  "timeline.forkTurn": "Fork after this entire turn"
 }

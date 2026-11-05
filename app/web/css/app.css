@@ -827,6 +827,8 @@ select:focus-visible,
 .timeline-artifact-content pre { margin: 0; padding: 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-raised); color: var(--ink); font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 .timeline-artifact-note { color: var(--faint); font-size: 10px; overflow-wrap: anywhere; }
 .timeline-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 28px; margin-top: 6px; }
+.timeline > .timeline-item:has(+ .timeline-turn-actions),
+.timeline > .timeline-item:has(+ .turn-changes[hidden] + .timeline-turn-actions) { margin-bottom: 0; }
 .timeline-item[data-kind="user"] .timeline-actions { justify-content: flex-end; }
 .timeline-actions button { display: inline-grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
 .timeline-actions .icon { width: 16px; height: 16px; }
