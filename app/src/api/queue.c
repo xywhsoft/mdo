@@ -12,6 +12,26 @@
 
 static xmutex* g_MdoQueueLock;
 
+/* Cancellation is a durable fence independent of a run's admission receipt.
+ * It also prevents a late queue POST or a second tab from reviving the ID. */
+static bool MdoQueueCancelled(const char* Project, const char* Session,
+    const char* Id, bool* Cancelled)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY]; xfileinfo Info;
+    int n = snprintf(Path, sizeof(Path), "sessions/%s/%s/queue-cancellations/%s.json", Project, Session, Id);
+    return n > 0 && (size_t)n < sizeof(Path) && MdoHomeExternalStat(Path, Cancelled, &Info) &&
+        (!*Cancelled || Info.Type == XFILE_TYPE_FILE);
+}
+
+static bool MdoQueueCancelFence(const char* Project, const char* Session, const char* Id)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY], Json[96];
+    int n = snprintf(Path, sizeof(Path), "sessions/%s/%s/queue-cancellations/%s.json", Project, Session, Id);
+    int bytes = snprintf(Json, sizeof(Json), "{\"schema_version\":1,\"id\":\"%s\"}", Id);
+    return n > 0 && (size_t)n < sizeof(Path) && bytes > 0 && (size_t)bytes < sizeof(Json) &&
+        MdoHomeAtomicWrite(Path, Json, (size_t)bytes, false);
+}
+
 bool MdoApiQueueInit(void)
 {
     if ( g_MdoQueueLock != NULL ) return true;
@@ -70,7 +90,7 @@ static bool MdoQueueReceiptReadEx(const char* ProjectId,
     if ( File != NULL && !xrtClose(File) ) Ok = false;
     if ( !Ok ) return false;
     if ( Receipt.Schema == 1u ) memcpy(RunId, Receipt.RunId, MDO_RUN_ID_CAPACITY);
-    if ( Receipt.Schema == 3u ) {
+    if ( Receipt.Schema == 3u || Receipt.Schema == 4u ) {
         if ( PreparedRunId != NULL ) memcpy(PreparedRunId, Receipt.RunId, MDO_RUN_ID_CAPACITY);
         if ( AgentRunId != NULL ) *AgentRunId = Receipt.AgentRunId;
     }
@@ -119,7 +139,7 @@ static bool MdoQueueReceiptResolve(const char* ProjectId,
     bool Seen = false;
     if ( !MdoQueueReceiptReadEx(ProjectId, SessionId, Id, Exists,
             RunId, PreparedRunId, &AgentRunId) ) return false;
-    if ( !*Exists || PreparedRunId[0] == '\0' ) return true;
+    if ( !*Exists || PreparedRunId[0] == '\0' || !AgentRunId ) return true;
     if ( !MdoSessionEventQueueStartSeen(ProjectId, SessionId, Id,
             AgentRunId, &Seen) ) return false;
     if ( !Seen ) return true;
@@ -127,6 +147,25 @@ static bool MdoQueueReceiptResolve(const char* ProjectId,
             PreparedRunId) ) return false;
     memcpy(RunId, PreparedRunId, MDO_RUN_ID_CAPACITY);
     return true;
+}
+
+bool MdoApiQueueRunRecordReserved(const char* ProjectId,
+    const char* SessionId, const char* Id, const char* RunId)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY], Json[MDO_QUEUE_RECEIPT_FILE_MAX];
+    char Existing[MDO_RUN_ID_CAPACITY], Prepared[MDO_RUN_ID_CAPACITY];
+    bool Exists = false, Cancelled = false, Ok = false;
+    xrtMutexLock(g_MdoQueueLock);
+    if ( MdoQueueCancelled(ProjectId, SessionId, Id, &Cancelled) && !Cancelled &&
+         MdoQueueReceiptReadEx(ProjectId, SessionId, Id, &Exists, Existing, Prepared, NULL) &&
+         Exists && !Existing[0] && (!Prepared[0] || !strcmp(Prepared, RunId)) &&
+         MdoQueueReceiptPath(Path, ProjectId, SessionId, Id) ) {
+        int n = snprintf(Json, sizeof(Json),
+            "{\"schema_version\":4,\"id\":\"%s\",\"state\":\"starting\",\"run_id\":\"%s\"}", Id, RunId);
+        Ok = n > 0 && (size_t)n < sizeof(Json) && MdoHomeAtomicWrite(Path, Json, (size_t)n, false);
+    }
+    xrtMutexUnlock(g_MdoQueueLock);
+    return Ok;
 }
 
 bool MdoApiQueueRunRecordPrepared(const char* ProjectId,
@@ -151,13 +190,15 @@ bool MdoApiQueueRunRecordPrepared(const char* ProjectId,
         MDO_PROJECT_LEASE_SHARED, NULL);
     if ( Lease == NULL ) return false;
     xrtMutexLock(g_MdoQueueLock);
-    if ( MdoQueueReceiptReadEx(ProjectId, SessionId, Id, &Exists,
+    bool Cancelled = false;
+    if ( MdoQueueCancelled(ProjectId, SessionId, Id, &Cancelled) && !Cancelled &&
+         MdoQueueReceiptReadEx(ProjectId, SessionId, Id, &Exists,
             ExistingRun, PreparedRun, &ExistingAgent) && Exists &&
          ExistingRun[0] == '\0' ) {
-        if ( PreparedRun[0] != '\0' )
+        if ( PreparedRun[0] != '\0' && ExistingAgent )
             Ok = strcmp(PreparedRun, RunId) == 0 &&
                 ExistingAgent == AgentRunId;
-        else {
+        else if ( !PreparedRun[0] || !strcmp(PreparedRun, RunId) ) {
             Written = snprintf(Bytes, sizeof(Bytes),
                 "{\"schema_version\":3,\"id\":\"%s\","
                 "\"state\":\"starting\",\"run_id\":\"%s\","
@@ -211,12 +252,36 @@ static bool MdoQueueRead(const char* Path, const char* ProjectId,
                 bool ReceiptExists;
                 char ReceiptRunId[MDO_RUN_ID_CAPACITY];
                 MdoQueueItem* Item = &Queue->Items[i];
+                bool Cancelled = false;
+                if ( !MdoQueueCancelled(ProjectId, SessionId, Item->Id, &Cancelled) ) { Ok = false; break; }
+                if ( Cancelled ) {
+                    /* Once history owns this input, it must not also survive
+                     * as an editable pre-start draft. */
+                    if ( !MdoQueueReceiptResolve(ProjectId, SessionId, Item->Id, &ReceiptExists, ReceiptRunId) ) { Ok = false; break; }
+                    if ( ReceiptRunId[0] ) { MdoQueueRemove(Queue, i--); continue; }
+                    if ( Item->State != MDO_QUEUE_EDITING ) Item->State = MDO_QUEUE_CANCELLED;
+                    Item->StartClaimed = false; Item->RunId[0] = '\0'; Item->Priority = false;
+                    continue;
+                }
                 if ( !MdoQueueReceiptResolve(ProjectId, SessionId, Item->Id, &ReceiptExists, ReceiptRunId) ||
                      !MdoQueueReceiptApply(Item, ReceiptExists, ReceiptRunId) ) { Ok = false; break; }
             }
         }
     }
     xrtFree(Bytes);
+    if ( Ok ) {
+        /* Recover a crash between the fence and the queue rewrite. Cancelled
+         * drafts never block a newer pending input at the dispatch head. */
+        for ( size_t a = 0u; a < Queue->Count; ++a )
+            if ( Queue->Items[a].State == MDO_QUEUE_CANCELLED ) {
+                size_t b = a + 1u;
+                while ( b < Queue->Count && Queue->Items[b].State == MDO_QUEUE_CANCELLED ) ++b;
+                if ( b == Queue->Count ) break;
+                MdoQueueItem Item = Queue->Items[b];
+                memmove(&Queue->Items[a+1u], &Queue->Items[a], (b-a)*sizeof(Item));
+                Queue->Items[a] = Item;
+            }
+    }
     if ( File != NULL && !xrtClose(File) ) Ok = false;
     if ( !Ok ) { MdoQueueRelease(Queue); }
     return Ok;
@@ -283,7 +348,7 @@ static xvalue* MdoQueueValue(const MdoQueue* Queue, bool IncludeClaim)
             MdoApiValueSetStringView(Item, "text",
                 xrtStrViewN(Source->Text, Source->TextSize)) &&
             MdoApiValueSetString(Item, "state",
-                Source->State == MDO_QUEUE_EDITING ? "editing" : Source->State == MDO_QUEUE_STAGED ? "staged" :
+                Source->State == MDO_QUEUE_CANCELLED ? "cancelled" : Source->State == MDO_QUEUE_EDITING ? "editing" : Source->State == MDO_QUEUE_STAGED ? "staged" :
                 (Source->State == MDO_QUEUE_SENDING ? "sending" :
                 "pending")) &&
             MdoAttachmentIdsWriteValue(Item, Source->Attachments,
@@ -625,7 +690,7 @@ bool MdoApiQueueRunBind(const char* ProjectId, const char* SessionId,
              MdoQueueReceiptWrite(ProjectId, SessionId, Id, RunId) ) {
             memcpy(Queue.Items[Index].RunId, RunId, strlen(RunId) + 1u);
             Ok = MdoQueueWrite(Path, &Queue);
-        } else if ( Index == SIZE_MAX ) {
+        } else if ( Index == SIZE_MAX || Queue.Items[Index].State == MDO_QUEUE_CANCELLED ) {
             /* A second page may remove the item while its run starts. The
              * durable claim still belongs to this start and must acquire
              * the resulting run ID. */
@@ -749,8 +814,11 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
     xrtMutexLock(g_MdoQueueLock);
     Ok = MdoQueueRead(Path, ProjectId, SessionId, &Queue);
     if ( Ok && Add ) {
+        bool Cancelled = false;
+        Ok = MdoQueueCancelled(ProjectId, SessionId, Id, &Cancelled);
+        Consumed = Cancelled;
         Index = MdoQueueFind(&Queue, Id);
-        if ( Index != SIZE_MAX ) {
+        if ( Ok && !Consumed && Index != SIZE_MAX ) {
             Duplicate = Queue.Items[Index].TextSize != Text.Size ||
                 (Text.Size != 0u &&
                  memcmp(Queue.Items[Index].Text, Text.Data, Text.Size) != 0) ||
@@ -760,7 +828,7 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
                     sizeof(Attachments)) != 0 ||
                 !MdoApiProfileEqual(&Queue.Items[Index].Profile,
                     &Profile);
-        } else {
+        } else if ( Ok && !Consumed ) {
             char RunId[MDO_RUN_ID_CAPACITY];
             Ok = MdoQueueReceiptRead(ProjectId, SessionId, Id,
                 &Consumed, RunId);
@@ -776,6 +844,10 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
                     Queue.CancelRunId[0] = '\0';
                 }
                 Queue.Managed = Queue.Managed || Managed;
+                if ( Managed && Queue.Paused && !strcmp(Queue.Error, "queue_stopped") ) {
+                    Queue.Paused = false; Queue.Error[0] = '\0';
+                    Queue.LastRunId[0] = '\0'; Queue.CancelRunId[0] = '\0';
+                }
                 if ( !Full ) Ok = MdoQueueInsert(&Queue, Id, Text,
                     Attachments, AttachmentCount, First, Priority,
                     Stage ? MDO_QUEUE_STAGED : MDO_QUEUE_PENDING,
@@ -847,6 +919,8 @@ bool MdoApiQueueDiscardRoute(MdoApiContext* Context)
     return MdoQueueReply(Context, 200u, &Queue);
 }
 
+#include "queue_lifecycle.inc.c"
+
 bool MdoApiQueueItemRoute(MdoApiContext* Context)
 {
     char Path[MDO_SESSION_PATH_CAPACITY];
@@ -874,31 +948,7 @@ bool MdoApiQueueItemRoute(MdoApiContext* Context)
         return MdoApiReplyError(Context, 404u, "queue_item_not_found",
             "The queue item does not exist", NULL);
     if ( Read ) {
-        bool Exists;
-        char RunId[MDO_RUN_ID_CAPACITY];
-        xvalue* Data;
-        xrtMutexLock(g_MdoQueueLock);
-        Ok = MdoQueueReceiptResolve(ProjectId, SessionId, Id,
-            &Exists, RunId);
-        xrtMutexUnlock(g_MdoQueueLock);
-        if ( !Ok ) return MdoApiReplyError(Context, 503u,
-            "queue_unavailable", "The queue receipt could not be read", NULL);
-        if ( !Exists ) return MdoApiReplyError(Context, 404u,
-            "queue_receipt_not_found", "The queue receipt does not exist",
-            NULL);
-        Data = xrtValueObject();
-        if ( Data == NULL ||
-             !MdoApiValueSetString(Data, "id", Id) ||
-             !MdoApiValueSetString(Data, "state",
-                RunId[0] != '\0' ? "accepted" : "starting") ||
-             (RunId[0] != '\0' &&
-              !MdoApiValueSetString(Data, "run_id", RunId)) ) {
-            xrtValueRelease(Data);
-            return MdoApiReplyError(Context, 503u,
-                "queue_unavailable", "The queue receipt could not be read",
-                NULL);
-        }
-        return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
+        return MdoQueueStatusReply(Context, ProjectId, SessionId, Id);
     }
     if ( Change ) {
         if ( SessionStatus != MDO_SESSION_ACTIVE )

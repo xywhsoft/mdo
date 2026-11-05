@@ -111,6 +111,15 @@ static bool MdoDecodeSidecar(MdoDecode* Decode, const MdoBackupOwnedFile* File)
         MdoQueueReceipt Receipt;
         memcpy(Id, File->Path + 15u, 32u); Id[32] = '\0';
         Ok = MdoQueueReceiptParse(Json, Id, &Receipt);
+    } else if ( strncmp(File->Path, "queue-cancellations/", 20u) == 0 ) {
+        xvalue* Value = xrtJsonParse(Json); xstrview Id;
+        uint64 Schema = 0u;
+        const xvalue* Version = xrtValueObjectGet(Value, XRT_STR_LITERAL("schema_version"));
+        Ok = xrtValueType(Value) == XVALUE_OBJECT && xrtValueCount(Value) == 2u &&
+            xrtValueGetUInt(Version, &Schema) && Schema == 1u &&
+            MdoQueueString(Value, "id", &Id) && Id.Size == 32u &&
+            !memcmp(Id.Data, File->Path + 20u, 32u);
+        xrtValueRelease(Value);
     } else if ( strncmp(File->Path, "queue-withdrawn/", 16u) == 0 ) {
         xvalue* Value = xrtJsonParse(Json);
         MdoQueueAction Action;

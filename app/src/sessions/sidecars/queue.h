@@ -16,7 +16,9 @@ typedef enum MdoQueueState {
     MDO_QUEUE_STAGED,
     MDO_QUEUE_PENDING,
     MDO_QUEUE_SENDING,
-    MDO_QUEUE_EDITING
+    MDO_QUEUE_EDITING,
+    /* Retains an unexecuted cancelled input until it is restored or deleted. */
+    MDO_QUEUE_CANCELLED
 } MdoQueueState;
 
 typedef struct MdoQueueAction {

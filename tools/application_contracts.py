@@ -227,6 +227,9 @@ def attach_defs(schema):
     return {**schema,'$defs':needed} if needed else schema
 
 NO_BODY.add('MarkdownResourceRoute')
+NO_BODY.add('QueueCancelRoute')
+RESULT['QueueCancelRoute'] = 'QueueItem'
+DEFS['QueueItem']['properties'].update(fields('phase:s executed:b terminal:b cancel_requested:b'))
 QUERY['MarkdownResourceRoute']='path:s mode:s'
 
 def contract(row):

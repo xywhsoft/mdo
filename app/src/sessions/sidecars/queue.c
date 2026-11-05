@@ -93,6 +93,9 @@ bool MdoQueueBool(const xvalue* Object, cstr Key, bool* Result)
 bool MdoQueueParseState(xstrview State, bool AllowStaged,
     MdoQueueState* Result)
 {
+    if ( AllowStaged && State.Size == 9u && !memcmp(State.Data, "cancelled", 9u) ) {
+        *Result = MDO_QUEUE_CANCELLED; return true;
+    }
     if ( AllowStaged && State.Size == 6u &&
          memcmp(State.Data, "staged", 6u) == 0 ) {
         *Result = MDO_QUEUE_STAGED;
@@ -201,6 +204,7 @@ bool MdoQueueInsert(MdoQueue* Queue, const char* Id,
     size_t Position = First && Queue->Count != 0u &&
         Queue->Items[0].State == MDO_QUEUE_SENDING ? 1u :
         (First ? 0u : Queue->Count);
+    while ( Position && Queue->Items[Position - 1u].State == MDO_QUEUE_CANCELLED ) --Position;
     if ( Queue->Count >= MDO_QUEUE_MAX_ITEMS ||
          Text.Size > MDO_QUEUE_MAX_TOTAL_TEXT - Queue->TextBytes )
         return false;
@@ -387,8 +391,8 @@ bool MdoQueueReceiptParse(xstrview Json, const char* ExpectedId, MdoQueueReceipt
         Schema = (uint64)Signed;
     } else goto done;
     if ( xrtValueType(Root) != XVALUE_OBJECT ||
-         xrtValueCount(Root) != (Schema == 3u ? 5u : 3u) ||
-         (Schema != 1u && Schema != 2u && Schema != 3u) ||
+         xrtValueCount(Root) != (Schema == 3u ? 5u : Schema == 4u ? 4u : 3u) ||
+         (Schema != 1u && Schema != 2u && Schema != 3u && Schema != 4u) ||
          !MdoQueueString(Root, "id", &StoredId) ||
          StoredId.Size != MDO_QUEUE_ID_SIZE || strlen(ExpectedId) != MDO_QUEUE_ID_SIZE ||
          memcmp(StoredId.Data, ExpectedId, MDO_QUEUE_ID_SIZE) != 0 ) goto done;
@@ -399,10 +403,11 @@ bool MdoQueueReceiptParse(xstrview Json, const char* ExpectedId, MdoQueueReceipt
         if ( !MdoQueueString(Root, "state", &StoredState) ||
              StoredState.Size != 8u ||
              memcmp(StoredState.Data, "starting", 8u) != 0 ) goto done;
-        if ( Schema == 3u ) {
+        if ( Schema == 3u || Schema == 4u ) {
             char CheckedRun[MDO_RUN_ID_CAPACITY];
             if ( !MdoQueueString(Root, "run_id", &StoredRun) ||
                  !MdoQueueRunId(StoredRun, CheckedRun) ) goto done;
+            if ( Schema == 3u ) {
             AgentRun = xrtValueObjectGet(Root,
                 XRT_STR_LITERAL("agent_run_id"));
             if ( xrtValueType(AgentRun) == XVALUE_UINT ) {
@@ -414,6 +419,7 @@ bool MdoQueueReceiptParse(xstrview Json, const char* ExpectedId, MdoQueueReceipt
                 PreparedAgentRunId = (uint64)Signed;
             } else goto done;
             if ( PreparedAgentRunId == 0u ) goto done;
+            }
             memcpy(Receipt->RunId, CheckedRun, sizeof(CheckedRun));
             Receipt->AgentRunId = PreparedAgentRunId;
         }

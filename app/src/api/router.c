@@ -379,6 +379,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiQueueDiscardRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/queue/actions",
       XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiQueueActionsRoute, true },
+    { "/api/v1/projects/{project}/sessions/{session}/queue/{item}/cancel",
+      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiQueueCancelRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/queue/{item}",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT |
           XHTTP_METHOD_DELETE,

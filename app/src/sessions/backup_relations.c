@@ -304,6 +304,8 @@ static bool MdoBackupQueueRelations(MdoBackupHistoryIndex* Index)
             MdoBackupReceiptFact* Receipt = MdoBackupReceiptFind(Index, Item->Id);
             char Run[MDO_RUN_ID_CAPACITY] = {0};
             if ( !MdoBackupHistoryTime(Index) ) { MdoQueueRelease(&Queue); return false; }
+            char Fence[80]; snprintf(Fence, sizeof(Fence), "queue-cancellations/%s.json", Item->Id);
+            if ( MdoBackupFind(Index->Backup, Fence) != NULL ) continue;
             if ( Receipt != NULL && (Receipt->Value.Schema == 1u ||
                     (Receipt->Value.Schema == 3u && Receipt->Seen)) )
                 memcpy(Run, Receipt->Value.RunId, sizeof(Run));
@@ -360,6 +362,9 @@ bool MdoBackupClassifyInputs(const MdoSessionBackup* Backup,
         Admission[i] = Receipt == NULL ? MDO_BACKUP_NOT_ACCEPTED :
             ((Receipt->Value.Schema == 1u || Receipt->Seen) ? MDO_BACKUP_ACCEPTED :
                 MDO_BACKUP_ADMISSION_UNCERTAIN);
+        char Fence[80]; snprintf(Fence, sizeof(Fence), "queue-cancellations/%s.json", Ids[i]);
+        if ( Admission[i] != MDO_BACKUP_ACCEPTED && MdoBackupFind(Backup, Fence) )
+            Admission[i] = MDO_BACKUP_NOT_ACCEPTED;
     }
     xrtFree(Index.Events); xrtFree(Index.Removed); xrtFree(Index.Receipts);
     return Ok;

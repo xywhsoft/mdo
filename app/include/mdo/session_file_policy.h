@@ -61,6 +61,7 @@ static inline size_t MdoSessionFileLimit(const char* Path, bool Directory)
              strcmp(Path, "attachments/events") == 0 ||
              strcmp(Path, "attachments/runs") == 0 ||
              strcmp(Path, "queue-receipts") == 0 || strcmp(Path, "queue-withdrawn") == 0 ||
+             strcmp(Path, "queue-cancellations") == 0 ||
              strcmp(Path, "artifacts") == 0 || strcmp(Path, "uploads") == 0 )
             return 1u;
         return strncmp(Path, "artifacts/run-", 14u) == 0 && strlen(Path) == 34u &&
@@ -100,6 +101,11 @@ static inline size_t MdoSessionFileLimit(const char* Path, bool Directory)
         Name = Path + 15u;
         return strlen(Name) == 37u && MdoSessionFileDigits(Name, 32u, true) &&
             strcmp(Name + 32u, ".json") == 0 ? 512u : 0u;
+    }
+    if ( strncmp(Path, "queue-cancellations/", 20u) == 0 ) {
+        Name = Path + 20u;
+        return strlen(Name) == 37u && MdoSessionFileDigits(Name, 32u, true) &&
+            strcmp(Name + 32u, ".json") == 0 ? 96u : 0u;
     }
     if ( strncmp(Path, "queue-withdrawn/", 16u) == 0 ) {
         Name = Path + 16u;

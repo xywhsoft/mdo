@@ -214,7 +214,40 @@ def check(host):
             assert status == 200 and resumed["data"]["cancel_run_id"] == "", resumed
             assert all(not row["priority"] for row in resumed["data"]["items"]), resumed
             wait(lambda: not call("GET", q)["items"])
-            print("Queue runtime: ordering, conflict, idempotency, extraction, steer, headless drain, stop/resume, restart: PASS")
+            # Cancellation owns the input identity before any native run exists.
+            # Its text/images remain recoverable, including across a restart.
+            wait(lambda: all(row["terminal"] for row in call("GET", "/api/v1/runs")["items"]))
+            session = call("POST", "/api/v1/sessions", {"project_id": "default", "title": "Preflight cancel",
+                "agent_id": "mdo.default", "model_id": "queue-fixture", "protocol": "openai-chat-completions",
+                "reasoning_effort": "none"}, 201)
+            path = f'/api/v1/projects/default/sessions/{session["id"]}'
+            q = path + "/queue"
+            cancelled = "a" * 32
+            calls_before = len(Model.calls)
+            call("POST", q, {"id": cancelled, "text": "cancel before preparation", "first": False,
+                "stage": True, "managed": True, "profile": profile}, 201)
+            outcome = call("POST", q + "/" + cancelled + "/cancel")
+            assert outcome["state"] == "cancelled" and outcome["terminal"] and not outcome["executed"], outcome
+            assert call("GET", q)["items"][0]["state"] == "cancelled"
+            assert call("POST", q, {"id": cancelled, "text": "cancel before preparation", "first": False}, 409)["error"]["code"] == "queue_item_consumed"
+            stop(); start()
+            assert call("GET", q + "/" + cancelled)["phase"] == "cancelled"
+            assert len(Model.calls) == calls_before
+            backup_status, _, backup = request(port, "GET", path + "/backup")
+            assert backup_status == 200 and b"queue-cancellations/" in backup, (backup_status, backup[:500])
+            newer = "b" * 32
+            call("POST", q, {"id": newer, "text": "after preflight cancel", "first": False,
+                "managed": True, "profile": profile}, 201)
+            wait(lambda: len(Model.calls) == calls_before + 1)
+            wait(lambda: len(call("GET", q)["items"]) == 1)
+            assert call("GET", q)["items"][0]["id"] == cancelled
+            status, restored, _ = action("withdraw", cancelled, draft_revision=call("GET", path + "/draft")["revision"])
+            assert status == 200 and not restored["data"]["items"], restored
+            assert call("GET", path + "/draft")["text"] == "cancel before preparation"
+            early = "c" * 32
+            assert call("POST", q + "/" + early + "/cancel")["state"] == "cancelled"
+            assert call("POST", q, {"id": early, "text": "late arrival", "first": False}, 409)["error"]["code"] == "queue_item_consumed"
+            print("Queue runtime: ordering, extraction, headless dispatch, cancellation fences, draft recovery, backup and restart: PASS")
         except BaseException:
             if process and process.poll() is None:
                 print("QUEUE", call("GET", q))

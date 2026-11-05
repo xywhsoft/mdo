@@ -308,6 +308,13 @@ static bool MdoApiRunRecordPrepared(void* UserData, const char* RunId,
         Prepared->SessionId, Prepared->QueueItemId, RunId, AgentRunId);
 }
 
+static bool MdoApiRunRecordReserved(void* UserData, const char* RunId)
+{
+    const MdoApiRunPreparedContext* Prepared = (const MdoApiRunPreparedContext*)UserData;
+    return MdoApiQueueRunRecordReserved(Prepared->ProjectId,
+        Prepared->SessionId, Prepared->QueueItemId, RunId);
+}
+
 bool MdoApiRunStartRoute(MdoApiContext* Context)
 {
     MdoApiJsonBody Body;
@@ -464,6 +471,7 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
         Prepared.QueueItemId = QueueItemId;
         Options.QueueItemId = QueueItemId;
         Options.OnPrepared = MdoApiRunRecordPrepared;
+        Options.OnReserved = MdoApiRunRecordReserved;
         Options.PreparedUserData = &Prepared;
         MdoApiQueueRunStatus QueueStatus = MdoApiQueueRunClaim(Project,
             SessionId, QueueItemId, Prompt, AttachmentIds,

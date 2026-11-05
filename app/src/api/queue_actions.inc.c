@@ -117,9 +117,17 @@ bool MdoApiQueueActionsRoute(MdoApiContext* Context)
                     Queue.LastRunId[0] = '\0'; Queue.CancelRunId[0] = '\0';
                     for ( size_t i = 0u; i < Queue.Count; ++i ) Queue.Items[i].Priority = false;
                 }
-            } else if ( !Item || Item->State != MDO_QUEUE_PENDING ||
+            } else if ( !Item || (Item->State != MDO_QUEUE_PENDING &&
+                        !(Item->State == MDO_QUEUE_CANCELLED && !strcmp(Action.Kind, "withdraw"))) ||
                         Item->StartClaimed || Item->RunId[0] || Item->Priority ) Conflict = "queue_state_conflict";
             else if ( !strcmp(Action.Kind, "withdraw") ) {
+                if ( Item->State == MDO_QUEUE_CANCELLED ) {
+                    bool Exists; char Run[MDO_RUN_ID_CAPACITY], Reserved[MDO_RUN_ID_CAPACITY];
+                    if ( !MdoQueueReceiptReadEx(Project, Session, Item->Id, &Exists, Run, Reserved, NULL) ) Ok = false;
+                    MdoRunInfo Info = {0}; Info.Size = sizeof(Info);
+                    if ( Ok && Reserved[0] && MdoRunGetInfo(Reserved, &Info) && !Info.Terminal )
+                        Conflict = "session_runtime_busy";
+                }
                 for ( size_t i = 0u; i < Queue.Count; ++i )
                     if ( Queue.Items[i].State == MDO_QUEUE_EDITING ) Conflict = "queue_state_conflict";
                 if ( !Conflict ) { Item->State = MDO_QUEUE_EDITING; Item->Edit = Action; Edit = true; }

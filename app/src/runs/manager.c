@@ -728,6 +728,12 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
     Reserved = Entry->Info;
     (void)xrtMutexUnlock(g_MdoRuns.Lock);
 
+    if ( Options->OnReserved != NULL &&
+         !Options->OnReserved(Options->PreparedUserData, Reserved.Id) ) {
+        MdoRunsError(Error, XWORK_ERROR_CANCELLED,
+            "queued message was cancelled before session preparation");
+        goto publish;
+    }
     Deadline = Options->TimeoutMilliseconds != 0u ?
         MdoDeadlineAfterUs((uint64)Options->TimeoutMilliseconds *
             UINT64_C(1000)) : MDO_DEADLINE_NEVER;

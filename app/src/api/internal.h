@@ -236,6 +236,9 @@ bool MdoApiQueueDiscardRoute(MdoApiContext* pContext);
 bool MdoApiQueueInit(void);
 void MdoApiQueueUnit(void);
 bool MdoApiQueueActionsRoute(MdoApiContext* Context);
+bool MdoApiQueueCancelRoute(MdoApiContext* Context);
+bool MdoApiQueueRunRecordReserved(const char* ProjectId,
+    const char* SessionId, const char* Id, const char* RunId);
 bool MdoApiQueueStart(void);
 void MdoApiQueueStop(void);
 int MdoApiDraftQueueRestore(const char* Project, const char* Session,
