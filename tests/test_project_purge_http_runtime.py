@@ -91,17 +91,28 @@ def run_probe(host: Path) -> None:
             for tag, status in (('W/"mdo-project-purge-probe-1"', 400),
                     ('"mdo-project-purge-other-1"', 412), ('"mdo-project-purge-probe-2"', 412)):
                 send(probe, "POST", PURGE, body, status, {"If-Match": tag})
-            duplicate = http.client.HTTPConnection("127.0.0.1", probe.port, timeout=5)
             encoded = json.dumps(body).encode()
-            duplicate.putrequest("POST", PURGE)
-            duplicate.putheader("Content-Type", "application/json")
-            duplicate.putheader("Content-Length", str(len(encoded)))
-            duplicate.putheader("If-Match", headers["If-Match"])
-            duplicate.putheader("If-Match", headers["If-Match"])
-            duplicate.endheaders(encoded)
-            response = duplicate.getresponse()
-            assert response.status == 400, response.read()
-            response.read(); duplicate.close()
+            for attempt in range(6):
+                duplicate = http.client.HTTPConnection("127.0.0.1", probe.port, timeout=5)
+                try:
+                    duplicate.putrequest("POST", PURGE)
+                    duplicate.putheader("Content-Type", "application/json")
+                    duplicate.putheader("Content-Length", str(len(encoded)))
+                    duplicate.putheader("If-Match", headers["If-Match"])
+                    duplicate.putheader("If-Match", headers["If-Match"])
+                    duplicate.endheaders(encoded)
+                    response = duplicate.getresponse()
+                    duplicate_status, duplicate_body = response.status, response.read()
+                finally:
+                    duplicate.close()
+                # Match send(): only an explicit refusal to admit the write
+                # may be retried, while a previous response releases its lease.
+                if duplicate_status != 409 or json.loads(duplicate_body).get(
+                        "error", {}).get("code") != "write_admission_busy":
+                    break
+                if attempt < 5:
+                    time.sleep(.05)
+            assert duplicate_status == 400, (duplicate_status, duplicate_body)
             send(probe, "GET", RESULT, expected=404)
             assert probe.files() == before
             probe.control("hold-session")
