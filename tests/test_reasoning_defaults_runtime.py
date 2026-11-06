@@ -8,7 +8,8 @@ def check(host):
     with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='reasoning-defaults-') as raw:
         base=Path(raw);site=base/'site';shutil.copytree(ROOT/'app',site);home=base/'home';port=free_port()
         catalog=model_catalog('no-thinking')
-        for name,efforts,default in [('adaptive',['low','high'],'high'),('supported',['medium','high'],'high')]:
+        for name,efforts,default in [('adaptive',['low','high'],'high'),('supported',['medium','high'],'high'),
+                ('generic',['default','medium','high'],'default')]:
             model=copy.deepcopy(catalog['items'][0]);model.update(id=name,wire_model=name,reasoning_efforts=efforts,default_reasoning_effort=default)
             model['capabilities']+=['reasoning-output','reasoning-control'];catalog['items'].append(model)
         (home/'config').mkdir(parents=True)
@@ -33,12 +34,13 @@ def check(host):
                     assert data['error']['code']=='model_profile_reasoning_unsupported',data
                 assert create('no-thinking',201)=='none'
                 assert create('adaptive',201)=='high'
-                assert create('supported',201)=='medium'
+                assert create('supported',201)=='high'
+                assert create('generic',201)=='medium'
                 create('no-thinking',422,'medium')
                 assert create('adaptive',201,'low')=='low'
                 create('no-thinking',422,agent='agent.strict')
                 assert create('no-thinking',201,'none','agent.strict')=='none'
-                print('PASS implicit global fallback, supported global preference, strict caller/role override and explicit precedence; no model calls')
+                print('PASS per-model default over global preference, generic global fallback, strict caller/role override and explicit precedence; no model calls')
             except Exception:
                 print((base/'host.log').read_text(encoding='utf-8',errors='replace')[-4000:]);raise
             finally:
