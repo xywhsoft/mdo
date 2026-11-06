@@ -72,6 +72,7 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
         for(const [name,field]of Object.entries(old?.record.fields||{}))if(field.source==="manual")value.record.fields[name]=clone(field);
         if(old?.budgetEdited){value.output=old.output;value.budgetEdited=true;}
         if(old?.effortEdited){value.effort=old.effort;value.effortEdited=true;}
+        if(old?.temperatureEdited){value.temperature=old.temperature;value.temperatureEdited=true;}
         records.set(record.id,value);
       }
     }catch(error){if(!disposed&&token===epoch&&error.name!=="AbortError")notice=errorMessage(error);}
@@ -87,7 +88,7 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
   function updateSourceNext(){const next=actions.querySelector('[data-wizard-next]');if(next)next.disabled=!sourceReady();}
   async function resolve() {
     requestController?.abort();const control=new AbortController();requestController=control;const token=++epoch;
-    const missing=ids.filter(id=>["context_tokens","max_output_tokens","reasoning"].some(field=>!records.get(id)?.record.fields[field]));
+    const missing=ids.filter(id=>["context_tokens","max_output_tokens","reasoning","temperature"].some(field=>!records.get(id)?.record.fields[field]));
     parameterLoading=new Set(missing);render();
     try {
       for(let offset=0;offset<missing.length;offset+=32){
@@ -102,6 +103,7 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
           const merged=normalized(record);
           if(old?.budgetEdited) {merged.output=old.output;merged.budgetEdited=true;}
           if(old?.effortEdited){merged.effort=old.effort;merged.effortEdited=true;}
+          if(old?.temperatureEdited){merged.temperature=old.temperature;merged.temperatureEdited=true;}
           records.set(row.id,merged);parameterLoading.delete(row.id);
         }
         for(const id of batch)parameterLoading.delete(id);render();
@@ -110,19 +112,19 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
     finally{if(!disposed&&token===epoch){parameterLoading.clear();render();}}
   }
   function canVerify(){return chosen().length>0&&chosen().every(id=>!parameterLoading.has(id)&&!parameterIssues(records.get(id)).length);}
-  function updatePrimary(){const node=actions.querySelector('[data-wizard-submit]');if(node){node.disabled=!canVerify();node.textContent=text("addVerify","添加并验证（{count}）",{count:chosen().length});}}
+  function updatePrimary(){for(const node of actions.querySelectorAll('[data-wizard-submit], [data-wizard-skip]'))node.disabled=!canVerify();const node=actions.querySelector('[data-wizard-submit]');if(node)node.textContent=text("addVerify","添加并验证（{count}）",{count:chosen().length});}
   async function readCurrent(signal,adopt=false) {
     const response=await api.get("/models/config",{signal});current=response.data;revision=response.etag;
     const saved=current.providers.find(p=>p.id===connection.id);
     if(saved&&adopt){connection=clone(saved);existing=true;key="";ref="";}
     onCommit(response);return response;
   }
-  function installed(model) {
+  function installed(model,shouldVerify=true) {
     const found=current.items.find(item=>item.id===model.id);
-    return found&&["provider","wire_model","default_protocol","default_reasoning_effort","window","proxy","capabilities","reasoning_efforts","attachments"]
-      .every(key=>JSON.stringify(found[key])===JSON.stringify(model[key]))&&current.verification?.[model.id]?.verified===true;
+    return found&&["provider","wire_model","default_protocol","default_reasoning_effort","temperature","window","proxy","capabilities","reasoning_efforts","attachments"]
+      .every(key=>JSON.stringify(found[key])===JSON.stringify(model[key]))&&(!shouldVerify||current.verification?.[model.id]?.verified===true);
   }
-  async function verify() {
+  async function verify(shouldVerify=true) {
     if(running||!canVerify())return;
     requestController?.abort();++epoch;parameterLoading.clear();running=true;stage=4;notice="";
     const control=new AbortController();runController=control;
@@ -133,9 +135,9 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
       if((!existing&&already)||(existing&&JSON.stringify(already)!==JSON.stringify(connection)))
         throw new Error(text("connectionChanged","供应商连接已变化，请返回列表重新选择。"));
       for(const [index,id]of work.entries()){
-        control.signal.throwIfAborted();progress=text("progress","正在验证并添加 {index}/{total}：{model}",{index:index+1,total:work.length,model:id});render();
+        control.signal.throwIfAborted();progress=text(shouldVerify?"progress":"progressSkip",shouldVerify?"正在验证并添加 {index}/{total}：{model}":"正在添加 {index}/{total}：{model}",{index:index+1,total:work.length,model:id});render();
         const model=applyParameters(presetModel(connection,id,current.items),records.get(id));model.proxy=clone(modelProxy);
-        const body={provider:endpoint(),model,make_default:defaultRequested&&!defaultApplied};if(key.trim())body.key=key.trim();
+        const body={provider:endpoint(),model,make_default:defaultRequested&&!defaultApplied,verify:shouldVerify};if(key.trim())body.key=key.trim();
         let acknowledged=false;
         try {
           const result=await api.post("/models/add",body,{ifMatch:revision,signal:control.signal});
@@ -143,13 +145,13 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
           if(!acknowledged)throw new Error(text("notAdded","服务未确认模型已添加，请刷新列表。"));
           completed.add(id);++added;key="";
           if(body.make_default&&result.data.agent_ready)defaultApplied=true;
-          if(!result.data.verification_saved)notice=text("evidenceWarning","模型已添加，但验证记录未保存；可稍后在列表重新验证。");
+          if(shouldVerify&&!result.data.verification_saved)notice=text("evidenceWarning","模型已添加，但验证记录未保存；可稍后在列表重新验证。");
           await readCurrent(control.signal,true);
         }catch(error){
           // A lost reply can follow a committed write. Read first; do not
           // automatically repeat a billed probe or add the same model again.
           try {await readCurrent();refreshed=true;}catch {refreshed=false;}
-          if(!acknowledged&&installed(model)){completed.add(id);++added;connection=clone(current.providers.find(p=>p.id===connection.id));existing=true;key="";if(current.default_model===model.id)defaultApplied=true;}
+          if(!acknowledged&&installed(model,shouldVerify)){completed.add(id);++added;connection=clone(current.providers.find(p=>p.id===connection.id));existing=true;key="";if(current.default_model===model.id)defaultApplied=true;}
           else if(!acknowledged&&!control.signal.aborted)errors.set(id,errorMessage(error));
           if(control.signal.aborted||!refreshed||[409,412].includes(error.status))break;
         }
@@ -283,6 +285,7 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
       if(stage===3){primary.setAttribute("data-wizard-submit","");primary.disabled=!canVerify();}
       else if(stage===2){primary.setAttribute("data-wizard-next","");primary.disabled=!sourceReady();}
       actions.append(primary);
+      if(stage===3){const skip=button(text("addWithoutVerify","不验证添加"),()=>verify(false));skip.setAttribute("data-wizard-skip","");skip.disabled=!canVerify();actions.append(skip);}
     }
     root.append(form);(footerHost||root).append(actions);
     if(renderedStage!==stage){const body=root.closest(".mdo-layer-body");if(body)body.scrollTop=0;renderedStage=stage;}

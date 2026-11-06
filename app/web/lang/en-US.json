@@ -3596,5 +3596,10 @@
   "submission.cancel": "Stop",
   "submission.draftOccupied": "Send or clear your current draft before restoring this message.",
   "submission.editSaved": "This message edit is incomplete. Your input is saved; stop and restore it to continue.",
-  "submission.remove": "Remove"
+  "submission.remove": "Remove",
+  "modelWizard.addWithoutVerify": "Add without verification",
+  "modelWizard.progressSkip": "Adding {index}/{total}: {model}",
+  "modelParameters.temperature": "Default temperature",
+  "modelParameters.temperatureDefault": "Use provider default",
+  "modelParameters.defaultsHelp": "Verification and conversations use these temperature and reasoning defaults. Leave temperature empty to omit it."
 }

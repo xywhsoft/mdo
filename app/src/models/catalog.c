@@ -5,6 +5,7 @@
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/models.h"
+#include "../../include/mdo/model_sampling.h"
 #include "../../include/mdo/secrets.h"
 #include "../../include/mdo/version.h"
 
@@ -42,6 +43,8 @@ typedef struct MdoModelEntry {
     char** ReasoningEfforts;
     size_t ReasoningEffortCount;
     char* DefaultReasoningEffort;
+    bool HasTemperature;
+    double Temperature;
     xvalue* Proxy;
     MdoModelProtocolFlags Protocols;
     MdoModelProtocol DefaultProtocol;
@@ -334,6 +337,16 @@ static const MdoModelEntry* MdoModelsLookup(const MdoModelCatalog* Catalog, cstr
     return NULL;
 }
 
+bool MdoModelApplyRequestDefaults(const MdoModelCatalog* Catalog,cstr Id,xllm_request* Request)
+{
+    if(!Catalog||!Request)return false;
+    const MdoModelEntry* Model=Id&&*Id?MdoModelsLookup(Catalog,Id):
+        Catalog->DefaultModelIndex<Catalog->ModelCount?&Catalog->Models[Catalog->DefaultModelIndex]:NULL;
+    if(!Model)return false;
+    if(!Request->bHasTemperature&&Model->HasTemperature){Request->bHasTemperature=true;Request->fTemperature=Model->Temperature;}
+    return true;
+}
+
 static bool MdoModelsParseProvider(const xvalue* pValue,
     MdoProviderEntry* pProvider)
 {
@@ -532,6 +545,9 @@ static bool MdoModelsParseModel(const xvalue* pValue,
             &pModel->DefaultReasoningEffort, true) ||
          !MdoModelsParseAttachments(xrtValueObjectGet(pValue,
             MdoModelsKey("attachments")), &pModel->Attachments) ) return false;
+    const xvalue* Temperature=xrtValueObjectGet(pValue,MdoModelsKey("temperature"));
+    pModel->HasTemperature=Temperature!=NULL;
+    if(Temperature&&!MdoModelTemperatureRead(Temperature,&pModel->Temperature))return false;
     const xvalue* Proxy = xrtValueObjectGet(pValue, MdoModelsKey("proxy"));
     if (Proxy) {
         if (!MdoConfigModelProxyValid(Proxy, true)) return false;

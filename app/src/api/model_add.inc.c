@@ -1,5 +1,5 @@
-/* Validate an unpublished profile with the production transport, then commit
- * only that profile. Failed/cancelled probes never install model or key files. */
+/* Commit one structurally valid profile. Verification is the default; an
+ * explicit skip never performs a model call or creates verification evidence. */
 static bool MdoApiModelAddRun(MdoApiContext* Context, MdoApiJsonBody Body, uint64 Revision)
 {
     MdoConfigSnapshot Snapshot = {0}; MdoConfigPreview Preview = {0};
@@ -9,6 +9,7 @@ static bool MdoApiModelAddRun(MdoApiContext* Context, MdoApiJsonBody Body, uint6
     char *Json = NULL; size_t Bytes = 0u; uint64 ReplyMs = 0u, ToolMs = 0u;
     char Reference[MDO_SECRET_VAULT_REFERENCE_CAPACITY] = {0}, Fingerprint[65], Current[65], FailureCode[96];
     bool Committed = false, MakeDefault = false, NeedsTools = false, EvidenceSaved = false;
+    bool Verify = true;
     cstr Code = "configuration_invalid", Message = "Invalid model draft"; uint16 Status = 422u;
     const xvalue* InputProvider = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("provider"));
     const xvalue* Model = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("model"));
@@ -17,11 +18,13 @@ static bool MdoApiModelAddRun(MdoApiContext* Context, MdoApiJsonBody Body, uint6
     cstr Id = MdoApiModelText(Model, "id", 128u), ProviderId = MdoApiModelText(InputProvider, "id", 128u);
     Snapshot.Size = sizeof(Snapshot); Preview.Size = sizeof(Preview); Result.Size = sizeof(Result);
     Settings.Size = sizeof(Settings); Info.Size = sizeof(Info);
-    if (!Id || !ProviderId || xrtValueType(Body.Value) != XVALUE_OBJECT || xrtValueCount(Body.Value) > 4u ||
+    if (!Id || !ProviderId || xrtValueType(Body.Value) != XVALUE_OBJECT || xrtValueCount(Body.Value) > 5u ||
         (KeyValue && !Key)) goto done;
     const xvalue* DefaultValue = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("make_default"));
+    const xvalue* VerifyValue = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("verify"));
+    if (VerifyValue && !xrtValueGetBool(VerifyValue, &Verify)) goto done;
     if (DefaultValue && !xrtValueGetBool(DefaultValue, &MakeDefault)) goto done;
-    if (xrtValueCount(Body.Value) != 2u + (KeyValue != NULL) + (DefaultValue != NULL)) goto done;
+    if (xrtValueCount(Body.Value) != 2u + (KeyValue != NULL) + (DefaultValue != NULL) + (VerifyValue != NULL)) goto done;
     if (Key) for (size_t n = 0u; Key[n]; ++n) if ((unsigned char)Key[n] < 33u || (unsigned char)Key[n] > 126u) goto done;
     if (!MdoSettingsServiceGetSnapshot(&Settings) || !Settings.Initialized || Settings.Degraded ||
         !MdoConfigGetSnapshot(&Snapshot) || Snapshot.RuntimeOverride || Snapshot.Revision != Revision) {
@@ -67,10 +70,10 @@ static bool MdoApiModelAddRun(MdoApiContext* Context, MdoApiJsonBody Body, uint6
     Catalog = MdoModelCatalogDraft(Provider, Model, Key);
     if (!Catalog || !MdoModelCatalogModelFind(Catalog, Id, &Info)) goto done;
     const xvalue* Transport = xrtValueObjectGet(xrtValueObjectGet(Root, XRT_STR_LITERAL("settings")), XRT_STR_LITERAL("transport"));
-    if (!MdoModelVerificationKey(Patch, Transport, Id, Fingerprint)) goto done;
+    if (Verify && !MdoModelVerificationKey(Patch, Transport, Id, Fingerprint)) goto done;
     NeedsTools = (Info.Capabilities & XLLM_CAP_TOOL_CALL_OUT) != 0u;
-    bool Ok = MdoApiModelProbeExecute(Context, Catalog, Id, Info.MaxOutputTokens, false, &ReplyMs, &Error);
-    bool ToolPhase = Ok && NeedsTools;
+    bool Ok = !Verify || MdoApiModelProbeExecute(Context, Catalog, Id, Info.MaxOutputTokens, false, &ReplyMs, &Error);
+    bool ToolPhase = Verify && Ok && NeedsTools;
     if (ToolPhase && MdoApiDownloadLive(Context))
         Ok = MdoApiModelProbeExecute(Context, Catalog, Id, Info.MaxOutputTokens, true, &ToolMs, &Error);
     else if (ToolPhase) Ok = false;
@@ -83,7 +86,7 @@ static bool MdoApiModelAddRun(MdoApiContext* Context, MdoApiJsonBody Body, uint6
     }
     if (!MdoApiDownloadLive(Context)) { Code = "model_verification_cancelled"; Message = "Verification stopped before saving"; Status = 409u; goto done; }
     if (!MdoConfigGetSnapshot(&Snapshot) || Snapshot.Revision != Revision ||
-        !MdoModelVerificationKey(Patch, Transport, Id, Current) || strcmp(Current, Fingerprint)) {
+        (Verify && (!MdoModelVerificationKey(Patch, Transport, Id, Current) || strcmp(Current, Fingerprint)))) {
         Code = "model_config_changed"; Message = "Configuration changed during verification; review before retrying"; Status = 409u; goto done;
     }
     if (Key) {
@@ -98,13 +101,14 @@ static bool MdoApiModelAddRun(MdoApiContext* Context, MdoApiJsonBody Body, uint6
     }
     Committed = true;
     MdoApiLiveChanged(NULL);
-    if (MdoModelVerificationKey(Patch, Transport, Id, Fingerprint) && MdoApiModelVerificationSnapshot(Id, Current) && !strcmp(Fingerprint, Current)) {
+    if (Verify && MdoModelVerificationKey(Patch, Transport, Id, Fingerprint) && MdoApiModelVerificationSnapshot(Id, Current) && !strcmp(Fingerprint, Current)) {
         Evidence = MdoApiModelVerificationUpdate(Id, Fingerprint, false, NeedsTools, "passed", ReplyMs, "");
         if (Evidence && NeedsTools) { xrtValueRelease(Evidence); Evidence = MdoApiModelVerificationUpdate(Id, Fingerprint, true, true, "passed", ToolMs, ""); }
         EvidenceSaved = Evidence != NULL;
     }
     xrtValueRelease(Data); Data = xrtValueObject();
-    Ok = Data && MdoApiValueSetBool(Data, "added", true) && MdoApiValueSetBool(Data, "verified", true) &&
+    Ok = Data && MdoApiValueSetBool(Data, "added", true) && MdoApiValueSetBool(Data, "verified", Verify) &&
+        MdoApiValueSetBool(Data, "verification_skipped", !Verify) &&
         MdoApiValueSetBool(Data, "agent_ready", NeedsTools) && MdoApiValueSetBool(Data, "verification_saved", EvidenceSaved) &&
         MdoApiValueSetString(Data, "model_id", Id) && MdoApiValueSetUInt(Data, "revision", Result.Revision) &&
         (!Evidence || xrtValueObjectSet(Data, XRT_STR_LITERAL("verification"), Evidence));

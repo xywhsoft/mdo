@@ -425,6 +425,9 @@ static xllm_result MdoAgentsRouteComplete(MdoAgentOwner* Owner,
     if ( Owner->ExternalComplete != NULL )
         return Owner->ExternalComplete(Owner->ExternalModelData, Request,
             Callbacks, Response, Error);
+    xllm_request Defaulted=*Request;
+    MdoModelApplyRequestDefaults(Owner->Models,Match->ModelId,&Defaulted);
+    Request=&Defaulted;
     if(MdoModelIsOnline(Owner->Models,Match->ModelId)){
         MdoModelClientOptionsInit(&Options);Options.ModelId=Match->ModelId;Options.Protocol=Match->Protocol;
         Options.ReasoningEffort=Match->ReasoningEffort;Options.MaxOutputTokens=Match->MaxOutputTokens;
@@ -1343,16 +1346,16 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         (AgentInfo.ReasoningEffort != NULL &&
          AgentInfo.ReasoningEffort[0] != '\0' ? AgentInfo.ReasoningEffort :
          Settings.ReasoningEffort);
-    /* Global preferences are soft defaults across different providers. An
-     * explicit caller/role choice remains strict, but an unsupported shared
-     * preference must fall back to the selected model's own default. */
+    /* A concrete per-model default wins over a generic shared preference.
+     * Explicit caller/session/role choices still take precedence. */
     if ((!Options->ReasoningEffort || !Options->ReasoningEffort[0]) &&
         (!AgentInfo.ReasoningEffort || !AgentInfo.ReasoningEffort[0])) {
         MdoModelInfo Preferred = {0}; Preferred.Size = sizeof(Preferred);
         bool Found = ModelId && ModelId[0] ?
             MdoModelCatalogModelFind(Owner->Models, ModelId, &Preferred) :
             MdoModelCatalogDefault(Owner->Models, &Preferred);
-        if (Found && !MdoAgentsReasoningSupported(&Preferred, Reasoning)) Reasoning = NULL;
+        if (Found && ((!MdoAgentsReasoningSupported(&Preferred, Reasoning)) ||
+            (Preferred.DefaultReasoningEffort && strcmp(Preferred.DefaultReasoningEffort,"default")))) Reasoning = NULL;
     }
     MaxOutput = Options->MaxOutputTokens != 0u ? Options->MaxOutputTokens :
         AgentInfo.MaxOutputTokens;

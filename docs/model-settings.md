@@ -2,6 +2,32 @@
 
 模型设置分为供应商引导和高级编辑。中文界面统一使用“供应商”；配置文件中的 `provider` 字段和协议标识保持不变。
 
+## 添加方式与请求默认值
+
+向导最后提供“添加并验证”和“不验证添加”。后者仍检查配置格式、修订号和凭据安全保存，
+但不向模型供应商发送验证请求，不生成通过记录；模型列表显示尚未验证，可稍后验证。
+API `/api/v1/models/add` 使用可选布尔值 `verify`，省略为 true；返回的 `verified` 与
+`verification_skipped` 明确区分两种结果。默认模型选择对两种添加方式均有效。
+
+公共模型参数目录可按接口、模型声明 `fields.temperature` 数字及
+`fields.reasoning={kind,efforts,default}`。向导自动填入推荐值，用户可以在参数编辑器中修改。
+保存后的 `items[].temperature` 与 `default_reasoning_effort` 是实际请求默认值；
+`parameters.fields` 则保留能力、来源与推荐值。温度为 0 是有效设置，留空表示不发送温度。
+验证、普通 Agent、子智能体及 Application SDK 模型调用共用捕获的模型默认值；
+显式的会话/角色思考设置或请求温度优先。更改实际默认值会使原验证记录失效。
+仅更新参数来源日期不会改变请求默认值或验证状态。
+
+温度的通用数值范围是 0..2；供应商可能进一步限制或忽略某个模式下的温度参数。
+未发布推荐温度的模型不会被臆造一个统一数值。DeepSeek 当前推荐温度 1、思考 high，
+可选择 none/low/high/max；上下文由其 API 的 `context_window` 读取。
+
+工具验证采用自动工具选择和明确提示词，仍核对测试工具名、参数、工具结果回传和最终可见回复。
+不再强制指定一个思考模式不支持的工具。DeepSeek Chat 的思考内容随助手历史回传，
+使思考模式下的工具调用能够继续；不修改显式请求钩子已有的 reasoning_content。
+
+新客户端通过 `?sampling_defaults=1` 请求温度推荐字段；服务器对旧客户端省略该新增字段，
+避免旧版本配置校验拒绝。此兼容措施不改变用户的供应商 Key 或已有模型配置。
+
 ## 账号模型与启动
 
 原生 `MdoModelInfo.RequiresLogin` 和 `/api/v1/models` 的 `requires_login` 标识需要账号的模型。

@@ -66,13 +66,34 @@ def check(host,packed=False):
                 assert name not in after.get('verification',{})
                 checks.append(mode+' leaves model, provider and verification unchanged')
             Supplier.mode='ok';body=draft('first-success');body['make_default']=True
+            body['model'].update(wire_model='deepseek-flash',temperature=0.35,reasoning_efforts=['default','none','high'],default_reasoning_effort='high')
+            body['model']['capabilities']=list(dict.fromkeys(body['model']['capabilities']+['reasoning-control','reasoning-output']))
+            sample_start=len(Supplier.calls)
             status,_,data=call('POST','models/add',body,etag);assert status==201,data
             assert data['data']['added'] and data['data']['verification_saved'],data
             saved,etag=current();assert saved['default_model']=='first-success'
             assert saved['verification']['first-success']['verified']
+            samples=Supplier.calls[sample_start:];assert len(samples)==3
+            assert all(r.get('temperature')==0.35 and r.get('reasoning_effort')=='high' for r in samples),samples
+            assert samples[1]['tool_choice']=='auto'
+            checks.append('reply, automatic tool call and tool replay share configured temperature and reasoning')
             p=next(p for p in saved['providers'] if p['id']=='onboarding')
             assert p['credential']['secret_ref'].startswith('vault:') and 'onboarding-fixture-only' not in json.dumps(saved)
             checks.append('successful reply and tools atomically add profile and sealed key with persisted evidence')
+            normal_start=len(Supplier.calls)
+            status,_,session=call('POST','sessions',dict(project_id='default',title='Sampling defaults',model_id='first-success'));assert status==201,session
+            session_path='projects/default/sessions/'+session['data']['id']
+            status,_,run=call('POST',session_path+'/runs',dict(prompt='sampling-default-normal',timeout_ms=5000));assert status==202,run
+            until=time.monotonic()+8
+            while time.monotonic()<until:
+                status,_,done=call('GET','runs/'+run['data']['id']);assert status==200,done
+                if done['data']['terminal']:break
+                time.sleep(.05)
+            assert done['data']['state']=='succeeded',done
+            normal=[r for r in Supplier.calls[normal_start:] if r.get('model')=='deepseek-flash'];assert normal
+            assert all(r.get('temperature')==0.35 and r.get('reasoning_effort')=='high' for r in normal),normal
+            checks.append('normal Agent conversation uses the same per-model sampling defaults as verification')
+            saved,etag=current()
             before_calls=len(Supplier.calls)
             status,_,data=call('POST','models/add',body,etag);assert status==409,data
             assert len(Supplier.calls)==before_calls
@@ -112,6 +133,20 @@ def check(host,packed=False):
             status,_,data=call('POST','models/discover',{'provider':draft('x')['provider']});assert status==200,data
             assert any(row['id']=='metadata-effort' and row['fields']['context_tokens']['value']==64000 for row in data['data']['parameters'])
             checks.append('discovery preserves supplier parameter metadata')
+            skip=draft('skip-validation');skip['provider']['id']='skip-provider';skip['model']['provider']='skip-provider'
+            skip.update(verify=False,key='fixture-bad-key',make_default=True);skip['model']['temperature']=0
+            before=len(Supplier.calls)
+            invalid=copy.deepcopy(skip);invalid['verify']='false'
+            assert call('POST','models/add',invalid,etag)[0]==422
+            invalid=copy.deepcopy(skip);invalid['model']['temperature']=3
+            assert call('POST','models/add',invalid,etag)[0]==422
+            status,_,data=call('POST','models/add',skip,etag);assert status==201,data
+            assert data['data']['verification_skipped'] and not data['data']['verified'] and not data['data']['verification_saved']
+            assert len(Supplier.calls)==before
+            saved,etag=current();assert saved['default_model']=='skip-validation' and 'skip-validation' not in saved['verification']
+            assert next(r for r in saved['items'] if r['id']=='skip-validation')['temperature']==0
+            assert 'fixture-bad-key' not in json.dumps(saved)
+            checks.append('explicit skip saves structurally valid profiles and sealed credentials without upstream calls or false evidence')
             stop(proc)
             proc=start();restarted,_=current();assert restarted['verification']['protocol-0']['verified']
             checks.append('successful verification and profile survive native restart')

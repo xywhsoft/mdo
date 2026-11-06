@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../../include/mdo/config.h"
+#include "../../include/mdo/model_sampling.h"
 #include "../../include/mdo/http_url.h"
 #include "../../include/mdo/home.h"
 
@@ -724,7 +725,8 @@ static bool MdoConfigModelParametersValid(const xvalue* Parameters)
         if (Url && (!MdoConfigString(Url, &Text) || Text.Size > 2048u)) return false;
         if (MdoConfigViewEqual(Key,"context_tokens") || MdoConfigViewEqual(Key,"max_input_tokens") || MdoConfigViewEqual(Key,"max_output_tokens")) {
             uint64 Limit; if (!MdoConfigUnsigned(xrtValueObjectGet(Field,MdoConfigKey("value")),&Limit) || !Limit || Limit > UINT32_MAX) return false;
-        } else if (!MdoConfigViewEqual(Key,"reasoning") && !MdoConfigViewEqual(Key,"tools") && !MdoConfigViewEqual(Key,"window_mode")) return false;
+        } else if (MdoConfigViewEqual(Key,"temperature")) {double N;if(!MdoModelTemperatureRead(xrtValueObjectGet(Field,MdoConfigKey("value")),&N))return false;}
+        else if (!MdoConfigViewEqual(Key,"reasoning") && !MdoConfigViewEqual(Key,"tools") && !MdoConfigViewEqual(Key,"window_mode")) return false;
     }
     char* Json = xrtJsonStringify(Parameters, false, &Size);
     bool Ok = Json && Size <= 32768u; xrtFree(Json); return Ok;
@@ -779,6 +781,8 @@ static bool MdoConfigModelItemValidate(const xvalue* pItem,
          !MdoConfigBool(pItem, "editable") ||
          !MdoConfigBool(pItem, "removable") ) return false;
     if (xrtValueObjectHas(pItem, MdoConfigKey("enabled")) && !MdoConfigBool(pItem, "enabled")) return false;
+    const xvalue* Temperature=xrtValueObjectGet(pItem,MdoConfigKey("temperature"));
+    if(Temperature){double N;if(!MdoModelTemperatureRead(Temperature,&N))return false;}
     pProvider = MdoConfigFindById(pProviders, ProviderId);
     if ( pProvider == NULL ) return false;
     pEndpoints = xrtValueObjectGet(pProvider, MdoConfigKey("endpoints"));

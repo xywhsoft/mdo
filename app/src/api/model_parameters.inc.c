@@ -38,6 +38,7 @@ static xvalue* MdoParameterApiFields(const xvalue* Row)
     const xvalue* Top = xrtValueObjectGet(Row, XRT_STR_LITERAL("top_provider"));
     const xvalue* Context = xrtValueObjectGet(Top, XRT_STR_LITERAL("context_length"));
     if (!MdoParameterPositive(Context)) Context = xrtValueObjectGet(Row, XRT_STR_LITERAL("context_length"));
+    if (!MdoParameterPositive(Context)) Context = xrtValueObjectGet(Row, XRT_STR_LITERAL("context_window"));
     const xvalue* Input = xrtValueObjectGet(Row, XRT_STR_LITERAL("max_input_tokens"));
     const xvalue* Output = xrtValueObjectGet(Top, XRT_STR_LITERAL("max_completion_tokens"));
     if (!MdoParameterPositive(Output)) Output = xrtValueObjectGet(Row, XRT_STR_LITERAL("max_tokens"));

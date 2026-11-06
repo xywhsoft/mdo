@@ -10,7 +10,8 @@ export function parameterDraft(record, model) {
   const result = structuredClone(record || { id: model?.wire_model, protocol: model?.default_protocol, fields: {} });
   result.fields ||= {};
   return { record: result, output: model?.window?.max_output_tokens || Math.min(8192, parameterValue(result, "max_output_tokens") || 8192),
-    effort: model?.default_reasoning_effort || parameterValue(result, "reasoning")?.default || "default" };
+    effort: model?.default_reasoning_effort || parameterValue(result, "reasoning")?.default || "default",
+    temperature: model?.temperature ?? parameterValue(result, "temperature") ?? null };
 }
 
 export function availableEfforts(record) {
@@ -31,6 +32,7 @@ export function parameterIssues(draft) {
         !reasoning.efforts.every(level => effortNames.includes(level))))) issues.push("reasoning");
   if (!positive(draft.output) || draft.output > (fields.max_output_tokens?.value || Infinity) ||
       draft.output >= (fields.context_tokens?.value || Infinity)) issues.push("output_budget");
+  if (draft.temperature != null && (!Number.isFinite(draft.temperature) || draft.temperature < 0 || draft.temperature > 2)) issues.push("temperature");
   return issues;
 }
 
@@ -46,6 +48,7 @@ export function applyParameters(model, draft) {
     max_output_tokens: output, output_reserve_tokens: Math.floor(output / 2), summary_tokens: Math.min(2048, Math.floor(output / 4)) };
   result.reasoning_efforts = availableEfforts(record);
   result.default_reasoning_effort = result.reasoning_efforts.includes(draft.effort) ? draft.effort : "default";
+  if(draft.temperature==null)delete result.temperature;else result.temperature=draft.temperature;
   result.capabilities = result.capabilities.filter(cap => !["reasoning-control", "reasoning-output"].includes(cap));
   if (result.reasoning_efforts.length > 1) result.capabilities.push("reasoning-control");
   if (!["none", "provider-default"].includes(parameterValue(record, "reasoning").kind)) result.capabilities.push("reasoning-output");
@@ -77,7 +80,7 @@ export function createParameterEditor(draft, { onChange = () => {}, index = 0 } 
   }));
   const warning = element("p", { className: "model-parameter-warning", attrs: { role: "status" } });
   root.append(warning);
-  const labels = { context_tokens: text("context", "上下文长度（tokens）"), max_output_tokens: text("maxOutput", "模型最大输出（tokens）"), reasoning: text("reasoning", "思考控制"), output_budget: text("budget", "每次请求输出预算（tokens）") };
+  const labels = { context_tokens: text("context", "上下文长度（tokens）"), max_output_tokens: text("maxOutput", "模型最大输出（tokens）"), reasoning: text("reasoning", "思考控制"), output_budget: text("budget", "每次请求输出预算（tokens）"),temperature:text("temperature","默认温度") };
   function update(notify = true) {
     const issues = parameterIssues(draft);
     warning.hidden = !issues.length;
@@ -137,6 +140,11 @@ export function createParameterEditor(draft, { onChange = () => {}, index = 0 } 
   budget.value = draft.output; budget.addEventListener("input", () => { draft.output = Number(budget.value); update(); });
   root.append(element("label", { className: "model-field" }, [element("span", { text: labels.output_budget }), budget]),
     element("small", { text: text("budgetHelp", "输出预算与模型最大输出分开保存，不会自动请求模型的全部输出额度。") }));
+  const temperature=element("input",{attrs:{type:"number",name:`parameter-${index}-temperature`,min:"0",max:"2",step:"any",placeholder:text("temperatureDefault","使用供应商默认")}});
+  temperature.value=draft.temperature??"";
+  temperature.addEventListener("input",()=>{draft.temperature=temperature.value===""?null:Number(temperature.value);draft.temperatureEdited=true;update();});
+  const ts=element("small");provenance("temperature",ts);
+  root.append(element("label",{className:"model-field"},[element("span",{text:labels.temperature}),temperature,ts]),element("small",{text:text("defaultsHelp","验证和对话默认使用这些温度与思考配置；留空温度表示不发送该参数。") }));
   if (record.lookup_state && !["ok", "not_exposed"].includes(record.lookup_state)) root.append(element("p", { className: "model-parameter-warning", text: text("unavailable", "本次未能读取供应商参数，已尝试服务器参数表；请确认网络、接口权限或手动补全。") }));
   refreshEfforts(); update(false); return root;
 }

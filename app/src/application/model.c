@@ -1,5 +1,6 @@
 #include "internal.h"
 #include "../../include/mdo/models.h"
+#include "../../include/mdo/model_sampling.h"
 #include "../../include/mdo/time.h"
 static xvalue* SdkUsageValue(const xllm_usage* U){
     xvalue* V=xrtValueObject();SdkPutUInt(V,"input_tokens",U->uInputTokens);SdkPutUInt(V,"output_tokens",U->uOutputTokens);SdkPutUInt(V,"total_tokens",U->uTotalTokens);SdkPutUInt(V,"cached_input_tokens",U->uCachedInputTokens);SdkPutUInt(V,"cache_write_tokens",U->uCacheWriteTokens);SdkPutUInt(V,"reasoning_tokens",U->uReasoningTokens);return V;
@@ -68,6 +69,9 @@ static bool SdkModelCall(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,
     if(!MdoModelCatalogProfile(Catalog,Options.ModelId,Options.Protocol,&Profile,&Error)){Ok=false;goto done;}
     MdoModelInfo Info={0};Info.Size=sizeof(Info);Ok=MdoModelCatalogModelFind(Catalog,Profile.sId,&Info)&&xllmRequestSetModel(&Request,Info.WireModel)&&xllmRequestSetReasoningEffort(&Request,Options.ReasoningEffort?Options.ReasoningEffort:Info.DefaultReasoningEffort);
     Request.uMaxOutputTokens=Options.MaxOutputTokens?Options.MaxOutputTokens:Info.MaxOutputTokens;
+    const xvalue* Temperature=SdkGet(P,"temperature");double Number=0;
+    if(Temperature){if(!MdoModelTemperatureRead(Temperature,&Number)){Ok=false;MdoApplicationError(E,"sdk_arguments_invalid","Temperature must be between 0 and 2","model",400,false);goto done;}Request.bHasTemperature=true;Request.fTemperature=Number;}
+    MdoModelApplyRequestDefaults(Catalog,Info.Id,&Request);
     MdoApplicationInvocation* Invocation=C->Opaque;xllmRequestSetCancel(&Request,Invocation?Invocation->Cancel:NULL);xllmRequestSetDeadline(&Request,C->Deadline?C->Deadline:MdoDeadlineAfterUs(600000000));
     SdkModelStream Stream={C,Handle,false};xllm_stream_callbacks Callbacks={&Stream,SdkModelEvent};
     if(Ok&&!MdoModelIsOnline(Catalog,Info.Id)){Client=MdoModelClientCreate(Catalog,&Options,NULL,&Error);Ok=Client!=NULL;}

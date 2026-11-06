@@ -280,7 +280,7 @@ static bool MdoApiModelProbeAddTools(xllm_request* Request)
     xworkToolCatalogRelease(Catalog);
     return Ok && xllmRequestAddTool(Request, "mdo_connection_probe", "Return a connection check. This tool is never executed.",
         "{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}", false) &&
-        xllmRequestSetToolChoice(Request, XLLM_TOOL_CHOICE_NAMED, "mdo_connection_probe");
+        xllmRequestSetToolChoice(Request, XLLM_TOOL_CHOICE_AUTO, NULL);
 }
 
 static bool MdoApiModelProbeExecute(MdoApiContext* Context, MdoModelCatalog* Catalog,
@@ -292,12 +292,13 @@ static bool MdoApiModelProbeExecute(MdoApiContext* Context, MdoModelCatalog* Cat
     bool Online = MdoModelIsOnline(Catalog, Id);
     xllm_client* Client = Online ? NULL : MdoModelClientCreate(Catalog, &Options, NULL, Error);
     xllmRequestInit(&Request); Request.bStream = true; Request.bParallelToolCalls = false;
+    MdoModelApplyRequestDefaults(Catalog,Id,&Request);
     Request.uDeadline = Context->SendDeadline; xllmRequestSetCancel(&Request, Context->SendCancel);
     bool Prepared = !Tools || MdoApiModelProbeAddTools(&Request), Ok = false;
     if (!Prepared) { Error->eCode = XLLM_ERROR_OUT_OF_MEMORY;
         snprintf(Error->sMessage, sizeof(Error->sMessage), "Model verification tool descriptors are unavailable"); }
     if (Prepared && (Client || Online) && xllmRequestAddTextMessage(&Request, XLLM_ROLE_USER,
-        Tools ? "Call mdo_connection_probe once." : "Reply briefly with OK."))
+        Tools ? "Call only mdo_connection_probe exactly once with empty arguments {}. Do not call other tools or answer in text before this call." : "Reply briefly with OK."))
         Ok = (Online ? MdoModelOnlineComplete(Catalog, &Options, &Request, NULL, &Response, Error) :
             MdoModelComplete(Client, &Request, NULL, &Response, Error)) == XLLM_RESULT_OK;
     Ok = Ok && (Tools ? MdoApiModelProbeToolReply(Response) : MdoApiModelProbeVisibleReply(Response));

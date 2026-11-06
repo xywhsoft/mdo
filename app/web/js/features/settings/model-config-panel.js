@@ -229,6 +229,7 @@ export function createModelConfigPanel(container) {
         models: [parameterEdit.model.wire_model] }, { signal: controller.signal });
       if (disposed) return;
       const detected = parameterDraft(response.data.items[0], parameterEdit.model);
+        if(parameterEdit.draft.temperatureEdited){detected.temperature=parameterEdit.draft.temperature;detected.temperatureEdited=true;}
       for (const [key, field] of Object.entries(parameterEdit.draft.record.fields))
         if (field.source === "manual") detected.record.fields[key] = clone(field);
       parameterEdit.draft = detected; render();

@@ -83,6 +83,10 @@ typedef struct MdoModelClientOptions {
     const MdoModelRetryObserver* RetryObserver;
 } MdoModelClientOptions;
 
+/* Apply captured model defaults only where a request has no explicit value.
+ * Agent, Application SDK and verification use this same allocation-free seam. */
+bool MdoModelApplyRequestDefaults(const MdoModelCatalog*, const char*, xllm_request*);
+
 typedef struct MdoModelClientInfo {
     uint32 Size;
     uint64 ModelGeneration;

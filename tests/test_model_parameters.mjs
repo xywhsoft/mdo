@@ -8,6 +8,14 @@ const record = (reasoning = { kind: "effort", efforts: ["low", "high", "max"], d
   }, registry_version: "server-1",
 });
 const model = { protocols: ["openai-responses"], capabilities: ["text-input", "text-output", "streaming", "tool-call-output"] };
+test("sampling defaults persist independently of advisory metadata and allow zero or omission",()=>{
+  const r=record();r.fields.temperature=field(0.35);
+  const draft=parameterDraft(r);assert.equal(draft.temperature,0.35);assert.equal(draft.effort,"high");
+  const result=applyParameters(model,draft);assert.equal(result.temperature,0.35);
+  assert.equal(parameterDraft(r,{...result,temperature:0}).temperature,0);
+  draft.temperature=null;assert(!Object.hasOwn(applyParameters(model,draft),"temperature"));
+  for(const value of [-1,2.1,NaN,Infinity]){draft.temperature=value;assert(parameterIssues(draft).includes("temperature"));}
+});
 test("capacity, request budget and declared effort values remain separate", () => {
   const draft = parameterDraft(record());
   assert.deepEqual(parameterIssues(draft), []);

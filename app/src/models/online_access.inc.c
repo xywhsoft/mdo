@@ -132,6 +132,7 @@ xllm_result MdoModelOnlineComplete(const MdoModelCatalog* Catalog,const MdoModel
     MdoModelOnlineAccess Pinned={0};xllm_result Result=XLLM_RESULT_ERROR;
     MdoModelsOnlineCall Call={Catalog,Options,g_MdoModelsOnline,NULL};
     if(!Request||!Response||!Options||!g_MdoModelsOnline.Acquire||!g_MdoModelsOnline.Release)return Result;
+    xllm_request Defaulted=*Request;MdoModelApplyRequestDefaults(Catalog,Options->ModelId,&Defaulted);Request=&Defaulted;
     Result=MdoModelsScope(Request,Error);if(Result!=XLLM_RESULT_OK)return Result;
     if(!(Call.Authority.Pin?Call.Authority.Pin(Request->pCancel,&Pinned):
             Call.Authority.Acquire(Request->pCancel,Request->uDeadline,&Pinned))){

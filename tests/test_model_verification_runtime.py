@@ -30,7 +30,7 @@ class Supplier(BaseHTTPRequestHandler):
     catalog_mode = 'ok'
     catalog_headers = []
     def do_GET(self):
-        if self.path == '/api/v1/ai/client-catalog':
+        if self.path.split('?')[0] == '/api/v1/ai/client-catalog':
             self.catalog_headers.append(dict(self.headers))
             raw = json.dumps({'code': 0, 'data': self.catalog if self.catalog_mode == 'ok' else {'bad': True}}).encode()
             self.send_response(200 if self.catalog_mode != 'failed' else 503)
@@ -48,9 +48,11 @@ class Supplier(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
         self.calls.append(body)
+        normal_sampling='sampling-default-normal' in json.dumps(body.get('messages',[]))
         has_tools = bool(body.get('tools'))
         followup = any(row.get('role') == 'tool' or row.get('type') == 'function_call_output' or any(part.get('type') == 'tool_result' for part in row.get('content', []) if isinstance(part, dict)) for row in body.get('messages', body.get('input', [])))
         tools = has_tools and not followup
+        if normal_sampling:tools=False
         def strict_object(schema):
             if not isinstance(schema, dict): return True
             if schema.get('type') == 'object' and (schema.get('additionalProperties') is not False or
@@ -59,7 +61,10 @@ class Supplier(BaseHTTPRequestHandler):
                 strict_object(value) for row in schema.values() if isinstance(row, list) for value in row)
         definitions = [tool.get('function', tool) for tool in body.get('tools', [])]
         names = {tool.get('name') for tool in definitions}
-        valid = body.get('stream') is True and (not has_tools or {'skill', 'read', 'exec', 'mdo_connection_probe'} <= names)
+        valid = body.get('stream') is True and (normal_sampling or not has_tools or {'skill', 'read', 'exec', 'mdo_connection_probe'} <= names)
+        if body.get('model','').startswith('deepseek-'):
+            valid &= body.get('tool_choice','auto')=='auto'
+            if followup:valid &= any(m.get('reasoning_content')=='fixture tool reasoning' for m in body.get('messages',[]) if m.get('role')=='assistant')
         if not self.path.endswith('/messages'):
             valid &= all((isinstance(tool.get('strict'), bool) if self.path.endswith('/responses') else
                 'strict' not in tool or isinstance(tool['strict'], bool)) and
@@ -89,6 +94,7 @@ class Supplier(BaseHTTPRequestHandler):
             if tools:
                 message = {'role': 'assistant', 'content': None, 'tool_calls': [{'id': 'probe', 'type': 'function',
                     'function': {'name': 'mdo_connection_probe', 'arguments': args}}]}
+                if body.get('model','').startswith('deepseek-'):message['reasoning_content']='fixture tool reasoning'
             elif self.mode == 'reasoning_only':
                 message = {'role': 'assistant', 'content': None, 'reasoning_content': 'internal thought only'}
             data = {'id': 'fixture', 'object': 'chat.completion', 'model': body['model'],

@@ -237,10 +237,14 @@ def main():
      models=invoke('product.models.config.get');patch={k:v for k,v in models['data'].items() if k!='runtime_override'}
      patch['providers'].append({'id':'qa-local','name':'QA Local','builtin':False,'editable':True,'removable':True,'verify_peer':True,'timeout_ms':5000,'endpoints':{'chat_completions':f'http://127.0.0.1:{mock.server_port}/v1/chat/completions'}})
      model=next(m for m in patch['items'] if m['id']=='ornith-1.5-35b').copy();model.update({'id':'qa-local-model','name':'QA Local','provider':'qa-local','wire_model':'qa-local-model','builtin':False,'free':False,'editable':True,'removable':True,'protocols':['openai-chat-completions'],'default_protocol':'openai-chat-completions'})
+     model.update(temperature=0.25,default_reasoning_effort='high')
      patch['items'].append(model)
      invoke('product.settings.by_domain.put',{'path':{'domain':'models'},'revision':models['revision'],'body':{'schema_version':1,'patch':patch}})
      stream=invoke('stream.open',{'capacity':65536})['handle']
      model_result=invoke('model.complete',{'model':'qa-local-model','messages':[{'role':'user','content':'offline SDK test'}],'stream':stream})
+     assert mock.last_request['temperature']==0.25 and mock.last_request['reasoning_effort']=='high',mock.last_request
+     invoke('model.complete',{'model':'qa-local-model','messages':[{'role':'user','content':'sampling override'}],'temperature':0})
+     assert mock.last_request['temperature']==0
      assert model_result['text']=='sdk-model-ok' and model_result['usage']['input_tokens']==11,model_result
      assert 'sdk-model-ok' in invoke('stream.read',{'handle':stream})['text']
      invoke('stream.release',{'handle':stream})

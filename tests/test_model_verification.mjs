@@ -73,7 +73,7 @@ function fixture({ failTools = false, hold = false, holdCatalog = false, holdDis
     else if (path === "/api/v1/models/add") {
       if (hold) await paused;
       options.signal?.throwIfAborted();
-      if (staleEvidence || (rejectTools && body.model.id.endsWith("alpha"))) {
+      if (body.verify!==false && (staleEvidence || (rejectTools && body.model.id.endsWith("alpha")))) {
         status = staleEvidence ? 409 : 422;
         error = { code: staleEvidence ? "model_config_changed" : "model_tools_test_failed", message: "fixture rejection" };
       } else {
@@ -82,9 +82,9 @@ function fixture({ failTools = false, hold = false, holdCatalog = false, holdDis
         config.items.push(structuredClone(body.model));
         const tools=body.model.capabilities.includes("tool-call-output");
         const record={verified:true,reply:{state:"passed"},...(tools?{tools:{state:"passed"}}:{})};
-        config.verification[body.model.id]=record;
+        if(body.verify!==false)config.verification[body.model.id]=record;
         if(body.make_default&&tools)config.default_model=body.model.id;
-        status=201;data={added:true,verified:true,agent_ready:tools,verification_saved:true,model_id:body.model.id,verification:record};
+        status=201;data={added:true,verified:body.verify!==false,agent_ready:tools,verification_saved:body.verify!==false,model_id:body.model.id,...(body.verify===false?{verification_skipped:true}:{verification:record})};
       }
     } else if (path === "/api/v1/settings/models") {
       if (holdSave) await paused;
@@ -114,13 +114,13 @@ function fixture({ failTools = false, hold = false, holdCatalog = false, holdDis
     const node = descendants(document.body).find(node => node.name === name); assert(node, `Missing input ${name}`);
     node.value = value; node.dispatchEvent(new Event("input")); return node;
   };
-  async function add() {
+  async function add(skip=false) {
     await panel.ensureLoaded(); button("添加供应商").click(); await flush(); button("OpenAI").click(); input("api-key", "fixture-key");
     button("下一步").click(); await flush();
     button("自动获取").click(); await flush();
     button("下一步").click(); await flush();
     const checkbox = input("make-default", ""); checkbox.checked = true; checkbox.dispatchEvent(new Event("change"));
-    button("添加并验证（2）").click(); await flush();
+    button(skip?"不验证添加":"添加并验证（2）").click(); await flush();
   }
   return { panel, container, get surface(){return document.querySelector(".model-setup-layer") || container;}, calls, add, button, input, config: () => config, release, allowTools: () => { rejectTools = false; },
     restore() { panel.destroy(); release(); Object.assign(globalThis, previous); } };
@@ -365,4 +365,12 @@ test("protected profiles and page disposal cannot leave an active supplier remov
     supplierRow(f, "other").querySelector(".supplier-remove").click(); assert(removeLayer());
     f.panel.destroy(); assert(!removeLayer()); assert(!f.calls.some(call => call.method === "PUT"));
   } finally { f.restore(); }
+});
+
+test("skip verification adds selected profiles without claiming verified evidence",async()=>{
+ const f=fixture({failTools:true});try{await f.add(true);
+ const writes=f.calls.filter(c=>c.path==="/api/v1/models/add");assert.equal(writes.length,2);assert(writes.every(c=>c.body.verify===false));
+ assert.equal(f.config().items.length,3);assert.deepEqual(f.config().verification,{});assert.notEqual(f.config().default_model,"existing");
+ assert(!f.surface.textContent.includes("验证记录未保存"));
+ }finally{f.restore();}
 });

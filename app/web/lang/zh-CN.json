@@ -3596,5 +3596,10 @@
   "submission.cancel": "停止",
   "submission.draftOccupied": "请先发送或清空输入框中的草稿，再恢复这条消息。",
   "submission.editSaved": "消息编辑尚未完成，输入已保存。可停止并恢复编辑后继续。",
-  "submission.remove": "移除"
+  "submission.remove": "移除",
+  "modelWizard.addWithoutVerify": "不验证添加",
+  "modelWizard.progressSkip": "正在添加 {index}/{total}：{model}",
+  "modelParameters.temperature": "默认温度",
+  "modelParameters.temperatureDefault": "使用供应商默认",
+  "modelParameters.defaultsHelp": "验证和对话默认使用这些温度与思考配置；留空温度表示不发送该参数。"
 }

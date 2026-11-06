@@ -296,7 +296,8 @@ static xllm_result MdoModelsClientComplete(xllm_client* Client, const xllm_reque
     const xllm_request* Prepared = MdoModelsClientRequest(Client, Request, &View);
     if (!Client || !Request || Prepared != &View)
         return xllmClientComplete(Client, Prepared, Callbacks, Response, Error);
-    MdoModelsRequestHooks(&View, &Context, &Hooks, Request->sReasoningEffort && !strcmp(Request->sReasoningEffort, "default"));
+    xllm_model_profile Profile;bool Replay=xllmClientGetModelProfile(Client,&Profile)&&Profile.eProvider==XLLM_PROVIDER_OPENAI_COMPAT&&Profile.sModel&&!strncmp(Profile.sModel,"deepseek-",9u);
+    MdoModelsRequestHooks(&View, &Context, &Hooks, Request->sReasoningEffort && !strcmp(Request->sReasoningEffort, "default"),Replay);
     return xllmClientComplete(Client, &View, Callbacks, Response, Error);
 }
 

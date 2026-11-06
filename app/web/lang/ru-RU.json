@@ -3596,5 +3596,10 @@
   "submission.cancel": "Остановить",
   "submission.draftOccupied": "Отправьте или очистите текущий черновик перед восстановлением сообщения.",
   "submission.editSaved": "Изменение сообщения не завершено. Текст сохранён; остановите и восстановите его для продолжения.",
-  "submission.remove": "Удалить"
+  "submission.remove": "Удалить",
+  "modelWizard.addWithoutVerify": "Добавить без проверки",
+  "modelWizard.progressSkip": "Добавление {index}/{total}: {model}",
+  "modelParameters.temperature": "Температура по умолчанию",
+  "modelParameters.temperatureDefault": "Настройки поставщика",
+  "modelParameters.defaultsHelp": "Проверка и диалоги используют эти настройки температуры и рассуждений. Пустая температура не передаётся."
 }

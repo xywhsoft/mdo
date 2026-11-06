@@ -57,7 +57,7 @@ static mdo_result Inspect(const mdo_sdk_context_v1* C, xvalue** Result) {
 | --- | --- |
 | 项目、会话、消息 | 完整资源操作、历史、分支、回收站、彻底删除、恢复 |
 | 上下文 | token 状态、请求构造、压缩、检查点、历史与恢复账本 |
-| 模型 | 配置与目录、`model.complete`、多模态部分、工具定义、流、用量、凭据续期和现有重连策略 |
+| 模型 | 配置与目录、`model.complete`、多模态部分、工具定义、流、用量、凭据续期和现有重连策略；默认采用模型温度/思考配置，`temperature` 与 `reasoning_effort` 可显式覆盖 |
 | Agent/SubAgent | 定义、生命周期、委派，以及 `MdoAgentSessionDriveNative` 完整驱动入口 |
 | 工具 | 注册、发现、`tool.call`，沿用受管会话的实时权限、执行器、结果裁剪与附件规则 |
 | Skill、MCP、命令和扩展包 | 现有管理、发现、调用及在线生态资源操作 |

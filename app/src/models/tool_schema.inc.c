@@ -67,7 +67,7 @@ static bool MdoModelsToolStrictCompatible(const xvalue* Schema)
 /* The SDK omits strict:false. Responses may then normalize optional arguments
  * into strict mode. Use its supported wire seam to make false explicit. The
  * replacement belongs to the SDK's libc allocator, not the XRT allocator. */
-static bool MdoModelsStrictBody(xllm_client* Client, xllm_wire* Wire, void* Data)
+static bool MdoModelsStrictBodyEx(xllm_client* Client, xllm_wire* Wire, bool ProviderDefault,const xllm_request* Replay)
 {
     xllm_model_profile Profile;
     if (!xllmClientGetModelProfile(Client, &Profile) ||
@@ -90,13 +90,28 @@ static bool MdoModelsStrictBody(xllm_client* Client, xllm_wire* Wire, void* Data
         if (Enabled && Compatible) continue;
         Ok = xrtValueObjectSetNew(Tool, XRT_STR_LITERAL("strict"), xrtValueBool(false)); Changed = true;
     }
-    if (Ok && Data) {
+    if (Ok && ProviderDefault) {
         if (xrtValueObjectHas(Root, XRT_STR_LITERAL("reasoning_effort"))) {
             Ok = xrtValueObjectRemove(Root, XRT_STR_LITERAL("reasoning_effort")); Changed = true;
         }
         xvalue* Reasoning = xrtValueObjectGet(Root, XRT_STR_LITERAL("reasoning"));
         if (xrtValueObjectHas(Reasoning, XRT_STR_LITERAL("effort"))) {
             Ok = Ok && xrtValueObjectRemove(Reasoning, XRT_STR_LITERAL("effort")); Changed = true;
+        }
+    }
+    /* DeepSeek's thinking/tool protocol requires reasoning_content on prior
+     * assistant turns. The generic Chat serializer omits that vendor field. */
+    if(Ok&&Replay&&Profile.eProvider==XLLM_PROVIDER_OPENAI_COMPAT){
+        xvalue* Messages=xrtValueObjectGet(Root,XRT_STR_LITERAL("messages"));
+        if(xrtValueCount(Messages)==Replay->iMessageCount)for(size_t i=0;Ok&&i<Replay->iMessageCount;i++){
+            const xllm_message* M=&Replay->pMessages[i];
+            if(M->eRole==XLLM_ROLE_ASSISTANT&&M->sReasoningContent&&M->sReasoningContent[0]){
+                xvalue* Row=xrtValueArrayGet(Messages,i);
+                xstrview Role={0};
+                if(xrtValueGetString(xrtValueObjectGet(Row,XRT_STR_LITERAL("role")),&Role)&&Role.Size==9&&!memcmp(Role.Data,"assistant",9)&&!xrtValueObjectHas(Row,XRT_STR_LITERAL("reasoning_content"))){
+                    Ok=xrtValueObjectSetNew(Row,XRT_STR_LITERAL("reasoning_content"),xrtValueString(xrtStrView(M->sReasoningContent)));Changed=true;
+                }
+            }
         }
     }
     if (Ok && Changed) {
@@ -110,6 +125,8 @@ static bool MdoModelsStrictBody(xllm_client* Client, xllm_wire* Wire, void* Data
     }
     xrtValueRelease(Root); return Ok;
 }
+static bool MdoModelsStrictBody(xllm_client* Client,xllm_wire* Wire,void* Data)
+{return MdoModelsStrictBodyEx(Client,Wire,Data!=NULL,NULL);}
 
 static void MdoModelsInstallWireHooks(xllm_client* Client)
 {
@@ -117,11 +134,12 @@ static void MdoModelsInstallWireHooks(xllm_client* Client)
     if (Client) xllmClientSetHooks(Client, &Hooks);
 }
 
-typedef struct MdoModelHooks { xllm_hooks Inner; bool ProviderDefault; } MdoModelHooks;
+typedef struct MdoModelHooks { xllm_hooks Inner; bool ProviderDefault; const xllm_request* Replay; } MdoModelHooks;
 static bool MdoModelsHookRequest(xllm_client* C, xllm_request* R, void* Data)
 {
     MdoModelHooks* H = Data;
     bool Ok = !H->Inner.pOnRequest || H->Inner.pOnRequest(C, R, H->Inner.pUserData);
+    if(Ok&&H->Replay)H->Replay=R;
     if (Ok && R->sReasoningEffort) {
         H->ProviderDefault = !strcmp(R->sReasoningEffort, "default");
         if (H->ProviderDefault) R->sReasoningEffort = NULL;
@@ -132,7 +150,7 @@ static bool MdoModelsHookBody(xllm_client* C, xllm_wire* W, void* Data)
 {
     MdoModelHooks* H = Data; char* Original = W->sBody;
     if (H->Inner.pOnRequestBody && !H->Inner.pOnRequestBody(C, W, H->Inner.pUserData)) return false;
-    char* Inner = W->sBody; bool Ok = MdoModelsStrictBody(C, W, H->ProviderDefault ? H : NULL);
+    char* Inner = W->sBody; bool Ok = MdoModelsStrictBodyEx(C,W,H->ProviderDefault,H->Replay);
     if (Inner != Original && W->sBody != Inner) xllmFree(Inner);
     return Ok;
 }
@@ -145,10 +163,11 @@ static bool MdoModelsHookTool(xllm_client* C, xllm_tool_call* T, uint32 I, void*
 static bool MdoModelsHookResponse(xllm_client* C, xllm_response* R, void* Data)
 { MdoModelHooks* H = Data; return !H->Inner.pOnResponse || H->Inner.pOnResponse(C, R, H->Inner.pUserData); }
 
-static void MdoModelsRequestHooks(xllm_request* View, MdoModelHooks* Context, xllm_hooks* Hooks, bool ProviderDefault)
+static void MdoModelsRequestHooks(xllm_request* View, MdoModelHooks* Context, xllm_hooks* Hooks, bool ProviderDefault,bool Replay)
 {
     memset(Context, 0, sizeof(*Context)); Context->ProviderDefault = ProviderDefault;
-    if (!View->pHooks && !ProviderDefault) return; /* Product clients already own the default seam. */
+    if (!View->pHooks && !ProviderDefault&&!Replay) return; /* Product clients already own the default seam. */
+    Context->Replay=Replay?View:NULL;
     if (View->pHooks) Context->Inner = *View->pHooks;
     memset(Hooks, 0, sizeof(*Hooks));
     Hooks->pOnRequest = Context->Inner.pOnRequest ? MdoModelsHookRequest : NULL;
