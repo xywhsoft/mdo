@@ -3601,5 +3601,10 @@
   "modelWizard.progressSkip": "Добавление {index}/{total}: {model}",
   "modelParameters.temperature": "Температура по умолчанию",
   "modelParameters.temperatureDefault": "Настройки поставщика",
-  "modelParameters.defaultsHelp": "Проверка и диалоги используют эти настройки температуры и рассуждений. Пустая температура не передаётся."
+  "modelParameters.defaultsHelp": "Проверка и диалоги используют эти настройки температуры и рассуждений. Пустая температура не передаётся.",
+  "modelParameters.useRecommendedBudget": "Использовать рекомендуемый бюджет",
+  "modelParameters.recommendedBudgetHelp": "Приоритет у официального значения по умолчанию из каталога; иначе используется подтверждённый лимит вывода. Существующий бюджет сохраняется.",
+  "modelParameters.budgetOfficialDefault": "Основание бюджета: официальное значение по умолчанию",
+  "modelParameters.budgetOfficialRecommendation": "Основание бюджета: официальная рекомендация",
+  "modelParameters.budgetCapabilityLimit": "Основание бюджета: лимит возможностей модели, не значение по умолчанию"
 }

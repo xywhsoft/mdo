@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parameterDraft, parameterIssues, applyParameters, availableEfforts } from "../app/web/js/features/settings/model-parameters.js";
+import { parameterDraft, parameterIssues, applyParameters, availableEfforts, recommendedOutputBudget } from "../app/web/js/features/settings/model-parameters.js";
 const field = value => ({ value, source: "server", checked_at: "2026-10-30" });
 const record = (reasoning = { kind: "effort", efforts: ["low", "high", "max"], default: "high" }) => ({
   id: "exact-id", protocol: "openai-responses", fields: {
@@ -21,7 +21,7 @@ test("capacity, request budget and declared effort values remain separate", () =
   assert.deepEqual(parameterIssues(draft), []);
   const profile = applyParameters(model, draft);
   assert.equal(profile.window.context_tokens, 1050000);
-  assert.equal(profile.window.max_output_tokens, 8192);
+  assert.equal(profile.window.max_output_tokens, 128000);
   assert.equal(profile.parameters.fields.max_output_tokens.value, 128000);
   assert.deepEqual(profile.reasoning_efforts, ["default", "low", "high", "max"]);
   assert.equal(profile.default_reasoning_effort, "high");
@@ -55,4 +55,16 @@ test("an existing request budget survives re-identification and a split input li
   assert.equal(profile.window.max_output_tokens, 2048);
   assert.equal(profile.window.max_input_tokens, 1000000);
   assert.equal(profile.default_reasoning_effort, "low");
+});
+
+test("official per-effort defaults are distinct from model capacity and respect API limits", () => {
+  const r=record();r.request_defaults={basis:"official-default",output_tokens:65536,
+    output_tokens_by_effort:{none:8192,low:65536,high:65536,max:131072}};
+  r.fields.max_output_tokens=field(393216);r.fields.context_tokens=field(1048576);
+  assert.equal(parameterDraft(r).output,65536);
+  assert.equal(recommendedOutputBudget(r,"max"),131072);
+  assert.equal(recommendedOutputBudget(r,"none"),8192);
+  assert.equal(parameterDraft(r,{window:{max_output_tokens:4096}}).output,4096);
+  r.fields.max_output_tokens=field(32768);
+  assert.equal(recommendedOutputBudget(r,"max"),32768);
 });

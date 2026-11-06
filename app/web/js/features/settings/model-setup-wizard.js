@@ -3,7 +3,7 @@ import { t, subscribeLocale } from "../../i18n.js";
 import { api } from "../../api/client.js";
 import { createModelProxyEditor } from "./model-proxy-editor.js";
 import { presetProvider, presetModel, suggestedModels } from "./provider-presets.js";
-import { parameterDraft, parameterIssues, applyParameters, createParameterEditor, parameterValue } from "./model-parameters.js";
+import { parameterDraft, parameterIssues, applyParameters, createParameterEditor } from "./model-parameters.js";
 
 const text=(key,fallback,params={})=>t(`modelWizard.${key}`,params,fallback);
 const clone=value=>structuredClone(value);
@@ -44,9 +44,7 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
   const chosen=()=>ids.filter(id=>selected.has(id));
   const configured=id=>current.items.some(model=>model.provider===connection.id&&model.wire_model===id);
   function normalized(record) {
-    const value=parameterDraft(record);const context=parameterValue(value.record,"context_tokens"),limit=parameterValue(value.record,"max_output_tokens");
-    if(context&&value.output>=context)value.output=Math.max(1,Math.min(limit||8192,8192,Math.floor(context/4)));
-    return value;
+    return parameterDraft(record);
   }
   function sourceIds() {
     return [...new Set((mode==="manual"?manual.split(/[\n,，;；]+/):discovered?.items||[]).map(id=>typeof id==="string"?id.trim():id.id).filter(Boolean))];
@@ -88,7 +86,8 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
   function updateSourceNext(){const next=actions.querySelector('[data-wizard-next]');if(next)next.disabled=!sourceReady();}
   async function resolve() {
     requestController?.abort();const control=new AbortController();requestController=control;const token=++epoch;
-    const missing=ids.filter(id=>["context_tokens","max_output_tokens","reasoning","temperature"].some(field=>!records.get(id)?.record.fields[field]));
+    const missing=ids.filter(id=>!records.get(id)?.record.request_defaults ||
+      ["context_tokens","max_output_tokens","reasoning","temperature"].some(field=>!records.get(id)?.record.fields[field]));
     parameterLoading=new Set(missing);render();
     try {
       for(let offset=0;offset<missing.length;offset+=32){

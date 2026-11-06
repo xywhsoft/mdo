@@ -6,11 +6,21 @@ export const effortNames = ["none", "minimal", "low", "medium", "high", "xhigh",
 export const parameterValue = (record, key) => record?.fields?.[key]?.value;
 const positive = value => Number.isSafeInteger(value) && value > 0 && value <= 0xffffffff;
 
+export function recommendedOutputBudget(record, effort) {
+  const defaults = record?.request_defaults;
+  const selected = effort === "default" ? parameterValue(record, "reasoning")?.default || "default" : effort;
+  const preferred = defaults?.output_tokens_by_effort?.[selected] ?? defaults?.output_tokens;
+  const limit = parameterValue(record, "max_output_tokens"), context = parameterValue(record, "context_tokens");
+  return Math.max(1, Math.min(positive(preferred) ? preferred : positive(limit) ? limit : 8192,
+    positive(limit) ? limit : Infinity, positive(context) ? context - 1 : Infinity));
+}
+
 export function parameterDraft(record, model) {
   const result = structuredClone(record || { id: model?.wire_model, protocol: model?.default_protocol, fields: {} });
   result.fields ||= {};
-  return { record: result, output: model?.window?.max_output_tokens || Math.min(8192, parameterValue(result, "max_output_tokens") || 8192),
-    effort: model?.default_reasoning_effort || parameterValue(result, "reasoning")?.default || "default",
+  const effort = model?.default_reasoning_effort || parameterValue(result, "reasoning")?.default || "default";
+  return { record: result, output: model?.window?.max_output_tokens || recommendedOutputBudget(result, effort), effort,
+    budgetEdited: Boolean(model?.window?.max_output_tokens),
     temperature: model?.temperature ?? parameterValue(result, "temperature") ?? null };
 }
 
@@ -133,13 +143,27 @@ export function createParameterEditor(draft, { onChange = () => {}, index = 0 } 
     provenance("reasoning", source); refreshEfforts(); update();
   }
   kind.addEventListener("change", changeReasoning); levels.addEventListener("input", changeReasoning);
-  effortSelect.addEventListener("change", () => { draft.effort = effortSelect.value; update(); });
+  effortSelect.addEventListener("change", () => {
+    draft.effort = effortSelect.value; draft.effortEdited = true;
+    if (!draft.budgetEdited) { draft.output = recommendedOutputBudget(record, draft.effort); budget.value = draft.output; }
+    update();
+  });
   root.append(element("label", { className: "model-field" }, [element("span", { text: labels.reasoning }), kind, levels, source]), adapter,
     element("label", { className: "model-field" }, [element("span", { text: text("defaultEffort", "默认思考档位") }), effortSelect]));
   const budget = element("input", { attrs: { type: "number", name: `parameter-${index}-output-budget`, min: "1", step: "1" } });
-  budget.value = draft.output; budget.addEventListener("input", () => { draft.output = Number(budget.value); update(); });
+  budget.value = draft.output; budget.addEventListener("input", () => { draft.output = Number(budget.value); draft.budgetEdited = true; update(); });
+  const useRecommended = element("button", { text: text("useRecommendedBudget", "使用推荐预算"), attrs: { type: "button" } });
+  useRecommended.addEventListener("click", () => {
+    draft.output = recommendedOutputBudget(record, draft.effort); draft.budgetEdited = false;
+    budget.value = draft.output; update();
+  });
   root.append(element("label", { className: "model-field" }, [element("span", { text: labels.output_budget }), budget]),
-    element("small", { text: text("budgetHelp", "输出预算与模型最大输出分开保存，不会自动请求模型的全部输出额度。") }));
+    useRecommended, element("small", { text: text("recommendedBudgetHelp", "优先采用服务器记录的官方默认值；未公布默认值时使用已确认的输出上限。已有预算不自动覆盖。") }));
+  if (record.request_defaults?.source_url) {
+    const basis = record.request_defaults.basis;
+    root.append(element("small", { text: text(basis === "official-default" ? "budgetOfficialDefault" : basis === "official-recommendation" ? "budgetOfficialRecommendation" : "budgetCapabilityLimit",
+      basis === "official-default" ? "预算依据：官方默认值" : basis === "official-recommendation" ? "预算依据：官方推荐值" : "预算依据：模型能力上限（非官方默认值）") }));
+  }
   const temperature=element("input",{attrs:{type:"number",name:`parameter-${index}-temperature`,min:"0",max:"2",step:"any",placeholder:text("temperatureDefault","使用供应商默认")}});
   temperature.value=draft.temperature??"";
   temperature.addEventListener("input",()=>{draft.temperature=temperature.value===""?null:Number(temperature.value);draft.temperatureEdited=true;update();});

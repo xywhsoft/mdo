@@ -3601,5 +3601,10 @@
   "modelWizard.progressSkip": "正在添加 {index}/{total}：{model}",
   "modelParameters.temperature": "默认温度",
   "modelParameters.temperatureDefault": "使用供应商默认",
-  "modelParameters.defaultsHelp": "验证和对话默认使用这些温度与思考配置；留空温度表示不发送该参数。"
+  "modelParameters.defaultsHelp": "验证和对话默认使用这些温度与思考配置；留空温度表示不发送该参数。",
+  "modelParameters.useRecommendedBudget": "使用推荐预算",
+  "modelParameters.recommendedBudgetHelp": "优先采用服务器记录的官方默认值；未公布默认值时使用已确认的输出上限。已有预算不自动覆盖。",
+  "modelParameters.budgetOfficialDefault": "预算依据：官方默认值",
+  "modelParameters.budgetOfficialRecommendation": "预算依据：官方推荐值",
+  "modelParameters.budgetCapabilityLimit": "预算依据：模型能力上限（非官方默认值）"
 }

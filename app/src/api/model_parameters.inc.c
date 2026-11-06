@@ -138,6 +138,9 @@ static xvalue* MdoParameterResolve(const xvalue* Registry, cstr Endpoint, cstr P
         MdoApiValueSetString(Result, "lookup_state", LookupState) &&
         MdoApiValueSetString(Result, "registry_version", MdoApiModelText(Registry, "version", 64) ? MdoApiModelText(Registry, "version", 64) : "unavailable") &&
         MdoApiValueSetTake(Result, "fields", &Fields);
+    const xvalue* RequestDefaults = xrtValueObjectGet(Match, XRT_STR_LITERAL("request_defaults"));
+    if (Ok && RequestDefaults)
+        Ok = xrtValueObjectSet(Result, XRT_STR_LITERAL("request_defaults"), (xvalue*)RequestDefaults);
     xrtValueRelease(Api); xrtValueRelease(Now); xrtValueRelease(Fields);
     if (!Ok) { xrtValueRelease(Result); return NULL; } return Result;
 }
