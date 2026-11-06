@@ -7,7 +7,7 @@ from pathlib import Path
 from test_api_runtime import ROOT,free_port,request,wait_ready,write_site
 from test_model_verification_runtime import Supplier
 
-def check(host,packed=False,work_root=None):
+def check(host,packed=False,work_root=None,environment_credential=False):
     Supplier.calls=[];Supplier.contract_errors=[];Supplier.mode='ok'
     supplier=ThreadingHTTPServer(('127.0.0.1',0),Supplier)
     threading.Thread(target=supplier.serve_forever,daemon=True).start()
@@ -21,7 +21,9 @@ def check(host,packed=False,work_root=None):
             nonlocal port
             offset=(base/'host.log').stat().st_size
             args=[str(host),*([] if packed else [str(config_path)]),'--','--home',str(home)]
-            child=subprocess.Popen(args,cwd=site,env={**os.environ,'USE_WEBVIEW':'0'},stdout=log,stderr=log,
+            child=subprocess.Popen(args,cwd=site,env={**os.environ,'USE_WEBVIEW':'0',
+                **({'MDO_ONBOARDING_FIXTURE_KEY':'onboarding-fixture-only',
+                    'MDO_ONBOARDING_BAD_FIXTURE_KEY':'fixture-bad-key'} if environment_credential else {})},stdout=log,stderr=log,
                 creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
             try:
                 if packed:
@@ -61,7 +63,10 @@ def check(host,packed=False,work_root=None):
                 p.pop('credential',None)
                 m=copy.deepcopy(conversation_catalog()['items'][0]);m.update(id=name,name=name,wire_model=name,provider=p['id'],builtin=False,free=False,editable=True,removable=True,
                     protocols=[protocol],default_protocol=protocol,reasoning_efforts=['default'],default_reasoning_effort='default',proxy={'kind':'provider'})
-                return {'provider':p,'model':m,'key':'onboarding-fixture-only','make_default':False}
+                body={'provider':p,'model':m,'make_default':False}
+                if environment_credential:p['credential']={'secret_ref':'env:MDO_ONBOARDING_FIXTURE_KEY'}
+                else:body['key']='onboarding-fixture-only'
+                return body
             for mode,name in [('reasoning_only','reply-fails'),('invalid_tool','tools-fail')]:
                 Supplier.mode=mode;before,_=current();body=draft(name)
                 status,_,data=call('POST','models/add',body,etag);assert status==422,data
@@ -81,8 +86,9 @@ def check(host,packed=False,work_root=None):
             assert samples[1]['tool_choice']=='auto'
             checks.append('reply, automatic tool call and tool replay share configured temperature and reasoning')
             p=next(p for p in saved['providers'] if p['id']=='onboarding')
-            assert p['credential']['secret_ref'].startswith('vault:') and 'onboarding-fixture-only' not in json.dumps(saved)
-            checks.append('successful reply and tools atomically add profile and sealed key with persisted evidence')
+            assert p['credential']['secret_ref'].startswith('env:' if environment_credential else 'vault:') and 'onboarding-fixture-only' not in json.dumps(saved)
+            checks.append('successful reply and tools atomically add profile and '+
+                ('runtime credential reference' if environment_credential else 'sealed key')+' with persisted evidence')
             normal_start=len(Supplier.calls)
             status,_,session=call('POST','sessions',dict(project_id='default',title='Sampling defaults',model_id='first-success'));assert status==201,session
             session_path='projects/default/sessions/'+session['data']['id']
@@ -101,12 +107,12 @@ def check(host,packed=False,work_root=None):
             status,_,data=call('POST','models/add',body,etag);assert status==409,data
             assert len(Supplier.calls)==before_calls
             checks.append('duplicate submission never repeats model calls')
-            body2=draft('existing-provider');body2['provider']=p;body2.pop('key')
+            body2=draft('existing-provider');body2['provider']=p;body2.pop('key',None)
             status,_,data=call('POST','models/add',body2,etag);assert status==201,data
             saved,etag=current();assert saved['verification']['existing-provider']['verified']
             checks.append('existing supplier credentials are reused without replacement')
             Supplier.mode='wait';Supplier.entered.clear();Supplier.release.clear()
-            concurrent=draft('stale-draft');concurrent['provider']=p;concurrent.pop('key')
+            concurrent=draft('stale-draft');concurrent['provider']=p;concurrent.pop('key',None)
             with ThreadPoolExecutor(max_workers=1) as executor:
                 future=executor.submit(call,'POST','models/add',concurrent,etag)
                 assert Supplier.entered.wait(2)
@@ -120,7 +126,7 @@ def check(host,packed=False,work_root=None):
             checks.append('configuration revision changes during verification refuse the commit')
             checks.append('accepted background verification holds the destructive-write gate')
             Supplier.entered.clear();Supplier.release.clear()
-            cancelled=draft('cancelled-draft');cancelled['provider']=next(p for p in saved['providers'] if p['id']=='onboarding');cancelled.pop('key')
+            cancelled=draft('cancelled-draft');cancelled['provider']=next(p for p in saved['providers'] if p['id']=='onboarding');cancelled.pop('key',None)
             _,headers,_=request(port,'GET','/api/v1/bootstrap')
             connection=http.client.HTTPConnection('127.0.0.1',port,timeout=4)
             connection.request('POST','/api/v1/models/add',json.dumps(cancelled),{'Content-Type':'application/json','If-Match':etag,'X-Mdo-Write-Token':headers['x-mdo-write-token']})
@@ -138,6 +144,8 @@ def check(host,packed=False,work_root=None):
             checks.append('discovery preserves supplier parameter metadata')
             skip=draft('skip-validation');skip['provider']['id']='skip-provider';skip['model']['provider']='skip-provider'
             skip.update(verify=False,key='fixture-bad-key',make_default=True);skip['model']['temperature']=0
+            if environment_credential:
+                skip.pop('key');skip['provider']['credential']={'secret_ref':'env:MDO_ONBOARDING_BAD_FIXTURE_KEY'}
             before=len(Supplier.calls)
             invalid=copy.deepcopy(skip);invalid['verify']='false'
             assert call('POST','models/add',invalid,etag)[0]==422
@@ -149,7 +157,8 @@ def check(host,packed=False,work_root=None):
             saved,etag=current();assert saved['default_model']=='skip-validation' and 'skip-validation' not in saved['verification']
             assert next(r for r in saved['items'] if r['id']=='skip-validation')['temperature']==0
             assert 'fixture-bad-key' not in json.dumps(saved)
-            checks.append('explicit skip saves structurally valid profiles and sealed credentials without upstream calls or false evidence')
+            checks.append('explicit skip saves structurally valid profiles and '+
+                ('runtime credential references' if environment_credential else 'sealed credentials')+' without upstream calls or false evidence')
             stop(proc)
             proc=start();restarted,_=current();assert restarted['verification']['protocol-0']['verified']
             checks.append('successful verification and profile survive native restart')
@@ -165,5 +174,6 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser();target=parser.add_mutually_exclusive_group(required=True)
     target.add_argument('--host',type=Path);target.add_argument('--packed',type=Path)
     parser.add_argument('--work-root',type=Path,help='Test data root; use native Linux storage for rooted atomic renames')
+    parser.add_argument('--environment-credential',action='store_true',help='Exercise explicit env references on headless servers without a desktop keyring')
     args=parser.parse_args()
-    check((args.packed or args.host).resolve(),bool(args.packed),args.work_root)
+    check((args.packed or args.host).resolve(),bool(args.packed),args.work_root,args.environment_credential)
