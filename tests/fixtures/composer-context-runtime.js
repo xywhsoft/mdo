@@ -110,6 +110,7 @@
       await wait(() => user()?.textContent.includes("Revised review") && document.querySelector("#send").dataset.action === "send", "edited transcript");
       check(user().querySelectorAll(".prompt-context-chip").length === 5, "resend retains all context");
       reports.inlineResend = true;
+      await wait(() => edit(), "edited message controls restored");
       edit().click(); await wait(() => document.querySelector(".message-inline-editor"), "edit before navigating");
       enter(editor, "Retained edit after navigation");
       location.hash = route(source);
