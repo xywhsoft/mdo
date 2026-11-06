@@ -61,7 +61,7 @@ void ServiceInit(XS_HostInfo* Host) {
     xllm_error Error; xllmErrorInit(&Error);
     xllm_client* Client=MdoModelClientCreate(Catalog,&Options,NULL,&Error);
     if (!Client) {printf("client_failed=%s\nprobe_done=1\n",Error.sMessage); return;}
-    const char* Names[]={"transient","network","daily","balance","quota",
+    const char* Names[]={"transient","network","daily","spending","balance","quota",
         "membership","authentication","service-quota","service-config","invalid","persistent-cancel","retry-after",
         "cancel","deadline","partial","hook-stop","partial-recover",
         "eof-protected","eof-recover","eof-exhausted",
@@ -224,6 +224,7 @@ class Model(BaseHTTPRequestHandler):
             return
         failure = {
             'daily': (429, 'daily_token_limit'),
+            'spending': (429, 'daily_spending_limit'),
             'balance': (402, 'insufficient_balance'),
             'quota': (429, 'insufficient_quota'),
             'membership': (403, 'membership_required'),
@@ -302,6 +303,7 @@ def main():
             assert 'init_failed' not in output and 'client_failed' not in output, output
             expected = {'transient': (0, 'unknown', 3), 'network': (0, 'unknown', 2),
                         'daily': (-1, 'daily_token_limit', 1), 'balance': (-1, 'insufficient_balance', 1),
+                        'spending': (-1, 'daily_spending_limit', 1),
                         'quota': (-1, 'quota_exceeded', 1), 'membership': (-1, 'membership_required', 1),
                         'authentication': (-1, 'authentication_failed', 1),
                         'service-quota': (-1, 'service_quota_exceeded', 1),

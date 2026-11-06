@@ -1,7 +1,7 @@
 import { t } from "../i18n.js";
 
 const kinds = new Set([
-  "daily_token_limit", "insufficient_balance", "quota_exceeded",
+  "daily_token_limit", "daily_spending_limit", "insufficient_balance", "quota_exceeded",
   "membership_required", "login_required", "authentication_failed",
   "permission_denied", "account_restricted", "request_pending", "model_changed",
   "model_unavailable", "context_limit", "request_too_large", "rate_limited",
@@ -24,6 +24,7 @@ export function modelErrorMessage(kind, fallback) {
 const titles = {
   daily_token_limit: "allowance", quota_exceeded: "allowance",
   service_quota_exceeded: "allowance", insufficient_balance: "balance",
+  daily_spending_limit: "spendingLimit",
   login_required: "signIn", authentication_failed: "access",
   profile_login_pending: "pending", profile_login_required: "signIn", profile_login_unavailable: "temporary",
   membership_required: "access", permission_denied: "access",

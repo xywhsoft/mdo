@@ -1954,6 +1954,8 @@
   "account.standardTokensRemaining": "{remaining} / {limit} standard tokens remaining",
   "account.modelEquivalent": "{model} · {weight}× now · up to {count} tokens",
   "model.error.daily_token_limit": "Today's model allowance is exhausted or reserved by unfinished requests. Check account usage; it resets at 00:00 Beijing time.",
+  "model.error.daily_spending_limit": "The account's configured daily spending limit cannot cover this request's maximum reservation. Contact the service administrator to adjust it; this is separate from free Tokens and the wallet balance.",
+  "model.errorTitle.spendingLimit": "Daily spending limit reached",
   "model.error.insufficient_balance": "The account has insufficient available balance for this request. Check the balance or choose another model.",
   "model.error.quota_exceeded": "The model service's request or spending limit has been reached. Check account usage or choose another model.",
   "model.error.membership_required": "Your membership does not include this model. Choose an available model or update your membership.",

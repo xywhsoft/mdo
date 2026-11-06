@@ -82,6 +82,7 @@ const char* MdoModelErrorKind(const xllm_error* Error)
     if (MdoModelsCode(Error, "upstream_quota_exceeded")) return "service_quota_exceeded";
     if (MdoModelsCode(Error, "upstream_configuration_error")) return "service_configuration";
     if (MdoModelsCode(Error, "daily_token_limit")) return "daily_token_limit";
+    if (MdoModelsCode(Error, "daily_spending_limit")) return "daily_spending_limit";
     if (MdoModelsCode(Error, "insufficient_balance")) return "insufficient_balance";
     if (MdoModelsCode(Error, "insufficient_quota") ||
         MdoModelsCode(Error, "quota_exceeded")) return "quota_exceeded";
@@ -132,6 +133,8 @@ const char* MdoModelErrorMessage(const xllm_error* Error)
         "The account has insufficient available balance for this request. Check the account balance or choose another model.";
     if (!strcmp(Kind, "quota_exceeded")) return
         "The model service's request or spending allowance has been reached. Check account usage or choose another model.";
+    if (!strcmp(Kind, "daily_spending_limit")) return
+        "The account's configured daily spending limit cannot cover this request's maximum reservation. Contact the service administrator to adjust the limit.";
     if (!strcmp(Kind, "service_quota_exceeded")) return
         "The upstream model provider's allowance is exhausted. Choose another model or wait for its allowance to reset.";
     if (!strcmp(Kind, "service_configuration")) return

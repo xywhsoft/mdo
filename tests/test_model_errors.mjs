@@ -53,6 +53,10 @@ test("final model errors use the UI language and preserve unknown explanations",
         locale === "ru-RU" ? /лимита вывода/ : /output limit/);
       assert.match(errorMessage({ code: "model_service_quota_exceeded", message: "raw" }),
         locale === "zh-CN" ? /提供方/ : locale === "ru-RU" ? /поставщика/ : /upstream/);
+      const spending = eventsToTimeline([{kind:"error",event_id:15,run_id:"spend",text:"raw",
+        model_error_kind:"daily_spending_limit",model_http_status:429}])[0];
+      assert.match(spending.text,locale === "zh-CN" ? /管理员/ : locale === "ru-RU" ? /администратору/ : /administrator/);
+      assert.match(spending.role,locale === "zh-CN" ? /消费上限/ : locale === "ru-RU" ? /расходов/ : /spending limit/);
       assert.match(errorMessage({ code: "model_service_configuration", message: "raw" }),
         locale === "zh-CN" ? /管理员/ : locale === "ru-RU" ? /администратору/ : /administrator/);
       const compaction = eventsToTimeline([{ kind: "error", event_id: 10,

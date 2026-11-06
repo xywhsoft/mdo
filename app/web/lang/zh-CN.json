@@ -1958,6 +1958,8 @@
   "account.standardTokensRemaining": "剩余 {remaining} / {limit} 基准 token",
   "account.modelEquivalent": "{model} · 当前 {weight} 倍 · 最多可用 {count} token",
   "model.error.daily_token_limit": "今日模型额度已用完，或被尚未结束的请求预占。请查看账号用量；额度于北京时间 00:00 重置。",
+  "model.error.daily_spending_limit": "已达到管理员设置的账号每日消费上限，或剩余上限不足以预留本次请求。请联系服务管理员调整上限；这不代表免费 Token 或账户余额不足。",
+  "model.errorTitle.spendingLimit": "账号每日消费上限",
   "model.error.insufficient_balance": "账号可用余额不足以完成本次请求。请查看余额，或选择其他模型。",
   "model.error.quota_exceeded": "已达到模型服务的请求额度或消费上限。请查看账号用量，或选择其他模型。",
   "model.error.membership_required": "当前会员权限不包含此模型。请选择可用模型，或更新会员权限。",
