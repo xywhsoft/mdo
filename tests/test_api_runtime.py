@@ -4895,14 +4895,19 @@ def run_probe(host: Path) -> None:
                 status, _, body = request(port, "GET", starting_path)
                 assert status == 200 and json.loads(body)["data"] == {
                     "id": starting_id, "state": "starting",
+                    "phase": "unconfirmed", "executed": False,
+                    "terminal": False, "cancel_requested": False,
                 }, (status, body)
                 starting_receipt.write_text(json.dumps({
                     "schema_version": 3, "id": starting_id,
                     "state": "starting", "run_id": "run-unseen",
                     "agent_run_id": 999999,
                 }), encoding="utf-8")
-                assert json.loads(request(port, "GET", starting_path)[2])[
-                    "data"] == {"id": starting_id, "state": "starting"}
+                starting_status = json.loads(request(port, "GET", starting_path)[2])["data"]
+                assert starting_status == {"id": starting_id, "state": "starting",
+                        "phase": "unconfirmed", "executed": False,
+                        "terminal": False, "cancel_requested": False,
+                        "run_id": "run-unseen"}, starting_status
                 visible = json.loads(request(port, "GET", queue_path)[2])[
                     "data"]["items"]
                 claimed = next(item for item in visible
@@ -4943,10 +4948,15 @@ def run_probe(host: Path) -> None:
                 receipt_file.write_text(json.dumps(receipt), encoding="utf-8")
                 assert request(port, "DELETE", bound_path)[0] == 200
                 status, _, body = request(port, "GET", bound_path)
-                assert status == 200 and json.loads(body)["data"] == {
+                receipt_status = json.loads(body)["data"]
+                assert status == 200 and {key: receipt_status[key] for key in (
+                    "id", "state", "run_id")} == {
                     "id": bound_id, "state": "accepted",
                     "run_id": bound_run_id,
                 }, (status, body)
+                assert receipt_status["executed"] and receipt_status["terminal"], receipt_status
+                assert receipt_status["input_event_id"] > 0 and receipt_status[
+                    "phase"] in ("completed", "failed"), receipt_status
                 status, _, body = queue_request("POST", queue_path, {
                     "id": bound_id, "text": "bound queue run", "first": False,
                     "stage": True,
@@ -5100,6 +5110,9 @@ def run_probe(host: Path) -> None:
                 for state in ("pending", "sending"):
                     assert queue_request("PUT", invalid_profile_path,
                         {"state": state})[0] == 200
+                # The preceding reply updates last_message_at_us at completion.
+                # Compare the rejected request against the completed metadata.
+                invalid_profile_meta = json.loads(meta_path.read_text(encoding="utf-8"))
                 status, _, body = queue_request("POST", run_path, {
                     "prompt": "invalid model bound",
                     "queue_item_id": invalid_profile_id,
@@ -5109,7 +5122,7 @@ def run_probe(host: Path) -> None:
                 assert not (queue_file.parent / "queue-receipts" /
                     (invalid_profile_id + ".json")).exists()
                 assert json.loads(meta_path.read_text(encoding="utf-8")) == (
-                    restored_meta)
+                    invalid_profile_meta)
                 assert request(port, "DELETE", invalid_profile_path)[0] == 200
 
                 status, headers, body = request(port, "GET",
