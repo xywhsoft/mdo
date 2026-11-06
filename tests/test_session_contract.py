@@ -60,7 +60,9 @@ class SessionContractTests(unittest.TestCase):
         self.assertIn("MdoSessionConversationTurns", header)
         self.assertIn("MDO_SESSION_EVENT_REPLAY_MAX", events)
         self.assertIn("MdoSessionEventBridgeOnEvent", manager)
-        self.assertIn("session already has an active runtime", manager)
+        self.assertIn("MDO_SESSION_RUNTIME_BUSY_ERROR", manager)
+        self.assertIn("MDO_SESSION_RUNTIME_CLAIMED_ERROR", manager)
+        self.assertIn("MDO_SESSION_RUNTIME_BUSY_ERROR", header)
         self.assertNotIn("journal.jsonl", events)
 
     def test_advanced_session_operations_keep_one_authoritative_ledger(self) -> None:

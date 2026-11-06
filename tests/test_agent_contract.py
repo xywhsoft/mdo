@@ -70,10 +70,10 @@ class AgentContractTests(unittest.TestCase):
         libraries = lock["libraries"]
         self.assertEqual(libraries["xwork"]["version"], "3.11.0")
         self.assertEqual(libraries["xwork"]["abi_version"], 9)
-        self.assertNotEqual(
-            libraries["xllm"]["source_commit"],
-            libraries["xwork"]["source_commit"],
-        )
+        # Independently pinned libraries may share a commit after a mainline merge.
+        for name in ("xllm", "xllm-session", "xwork"):
+            self.assertRegex(libraries[name]["source_commit"], r"^[0-9a-f]{40}$")
+            self.assertRegex(libraries[name]["production_tree_sha256"], r"^[0-9a-f]{64}$")
 
 
 if __name__ == "__main__":
