@@ -113,7 +113,7 @@ void ServiceInit(XS_HostInfo* Host) {
     Event.tDiagnostics.uAttemptCount=3u;
     Json=MdoEventsRecord(&Bridge,8,&Event,"",0,NULL,&Size);
     Good=Json && MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
-    printf("model_done_metadata=%u\n",Good && Parsed.Info.SchemaVersion==10u &&
+    printf("model_done_metadata=%u\n",Good && Parsed.Info.SchemaVersion==MDO_SESSION_EVENT_SCHEMA &&
         !strcmp(Parsed.Info.ModelRequestId,"request-fixture") &&
         !strcmp(Parsed.Info.ModelFinishReason,"stop") && Parsed.Info.ModelToolCallCount==2u &&
         Parsed.Info.ModelHttpStatus==200u && Parsed.Info.ModelAttempts==3u);
@@ -145,7 +145,7 @@ def main():
         write_site(site)
         (site / 'probe.c').write_text(PROBE, encoding='utf-8')
         output = run_probe(host, site, base / 'home')
-        for expected in ('current=1 schema=10 kind=daily_token_limit status=429 attempts=1',
+        for expected in ('current=1 schema=11 kind=daily_token_limit status=429 attempts=1',
                          'local_profile=1 kind=profile_credential_unavailable',
                          'image_profile=1 kind=profile_image_unsupported',
                          'upstream_profile_code=1 kind=authentication_failed',
