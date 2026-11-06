@@ -109,6 +109,9 @@ typedef struct MdoModelOnlineAuthority {
     bool (*Acquire)(xcancel*,uint64 Deadline,MdoModelOnlineAccess*);
     void (*Release)(MdoModelOnlineAccess*,int);
     MdoModelLoginState (*State)(void);
+    /* Pin identity/cancellation even while no usable bearer is available.
+     * Optional for custom authorities; Release owns this tokenless lease too. */
+    bool (*Pin)(xcancel*,MdoModelOnlineAccess*);
 } MdoModelOnlineAuthority;
 void MdoModelManagerSetOnlineAuthority(const MdoModelOnlineAuthority* Authority);
 bool MdoModelManagerSetOnlineCatalog(const xvalue* Catalog);

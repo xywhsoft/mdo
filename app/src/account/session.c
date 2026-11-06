@@ -1,8 +1,12 @@
 #include "../../include/mdo/time.h"
 #include "internal.h"
 #include "../../include/mdo/models.h"
+#ifndef MDO_ACCOUNT_REFRESH_RETRY_BASE_MS
+#define MDO_ACCOUNT_REFRESH_RETRY_BASE_MS 1000u
+#endif
 static bool MdoAccountLeaseLocked(xcancel*,MdoAccountLease*);
 static bool MdoAccountQueueLocked(unsigned);
+static void MdoAccountCancelLease(void*);
 #include "model_allowance.inc.c"
 #include "balance.inc.c"
 
@@ -190,8 +194,8 @@ static int32 MdoAccountWorker(void* Unused)
                         if (status == 401 || status == 410) MdoAccountClearTokensLocked();
                         else {
                             if (g_MdoAccount.RefreshFailures < 6u) ++g_MdoAccount.RefreshFailures;
-                            uint64 seconds = (uint64)1u << g_MdoAccount.RefreshFailures;
-                            g_MdoAccount.NextRefresh = MdoDeadlineAfterUs(seconds * 1000000u);
+                            uint64 delay = (uint64)MDO_ACCOUNT_REFRESH_RETRY_BASE_MS << g_MdoAccount.RefreshFailures;
+                            g_MdoAccount.NextRefresh = MdoDeadlineAfterUs(delay * 1000u);
                         }
                     }
                     strcpy(g_MdoAccount.Message, work.Kind == MDO_ACCOUNT_WORK_PASSWORD && (status == 400 || status == 401) ? "invalid_credentials" :
@@ -256,7 +260,7 @@ bool MdoAccountInit(void)
     (void)MdoAccountAuthorizationLoad(&g_MdoAccount.Authorization);
     if (g_MdoAccount.Authorization.State[0]) xrtSecureZero(&g_MdoAccount.Work, sizeof(g_MdoAccount.Work));
     xrtMutexUnlock(g_MdoAccount.Lock);
-    MdoModelOnlineAuthority authority={MDO_ACCOUNT_SERVICE_ORIGIN,MdoAccountModelAccess,MdoAccountModelRelease,MdoAccountModelState};
+    MdoModelOnlineAuthority authority={MDO_ACCOUNT_SERVICE_ORIGIN,MdoAccountModelAccess,MdoAccountModelRelease,MdoAccountModelState,MdoAccountModelPin};
     MdoModelManagerSetOnlineAuthority(&authority);
     g_MdoAccount.Worker = xrtThreadCreate(MdoAccountWorker, NULL, 0);
     if (g_MdoAccount.Worker) return true;
@@ -538,7 +542,7 @@ void MdoAccountRelease(MdoAccountLease* Lease)
 }
 bool MdoAccountRejectAccess(const MdoAccountLease* Lease)
 {
-    if (!Lease || !Lease->Managed || !g_MdoAccount.Initialized) return false;
+    if (!Lease || !Lease->Managed || !Lease->AccessToken || !g_MdoAccount.Initialized) return false;
     xrtMutexLock(g_MdoAccount.Lock);
     bool ok = Lease->Generation == g_MdoAccount.Epoch && g_MdoAccount.Tokens.Refresh[0];
     if (ok && !strcmp(Lease->AccessToken, g_MdoAccount.Tokens.Access)) {

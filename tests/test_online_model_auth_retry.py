@@ -30,15 +30,29 @@ typedef struct Lease { xcancel* Cancel; xcancelwatch* Watch; } Lease;
 static const char* Case;
 static xcancel* AccountCancel;
 static bool Fresh;
-static unsigned Acquired, Released, Deltas, Retries;
+static unsigned Acquired, Released, Deltas, Retries, Waits;
 static uint64 RequestDeadline;
 static void CancelLease(void* Data) { xrtCancelRequest((xcancel*)Data); }
+static MdoModelLoginState State(void) {
+    if(Case&&!strcmp(Case,"wait-unavailable"))return MDO_MODEL_LOGIN_UNAVAILABLE;
+    return Case&&!strncmp(Case,"wait-",5)?MDO_MODEL_LOGIN_PENDING:MDO_MODEL_LOGIN_READY;
+}
+static bool Pin(xcancel* Cancel,MdoModelOnlineAccess* Access) {
+    Lease* L=xrtCalloc(1u,sizeof(*L));if(!L)return false;
+    L->Cancel=xrtCancelChild(Cancel);L->Watch=xrtCancelWatch(AccountCancel,CancelLease,L->Cancel);
+    Access->Cancel=L->Cancel;Access->Handle=L;++Acquired;return L->Cancel&&L->Watch;
+}
 static bool Acquire(xcancel* Cancel,uint64 Deadline,MdoModelOnlineAccess* Access) {
     if (Fresh && !strcmp(Case,"deadline")) {
         while (!MdoDeadlineExpired(Deadline)) xrtSleep(1u);
         return false;
     }
     if ((Cancel && xrtCancelRequested(Cancel)) || xrtCancelRequested(AccountCancel)) return false;
+    if(!strncmp(Case,"wait-",5)){
+        ++Waits;
+        if(!strcmp(Case,"wait-exhausted")||Waits<=3u)return false;
+        Fresh=true;
+    }
     Lease* L=xrtCalloc(1u,sizeof(*L)); if (!L) return false;
     L->Cancel=xrtCancelChild(Cancel);
     L->Watch=xrtCancelWatch(AccountCancel,CancelLease,L->Cancel);
@@ -62,7 +76,7 @@ static bool Event(void* Data,const xllm_event* E) {
 }
 static bool Retry(xllm_client* Client,const xllm_diagnostics* Diagnostics,uint32 Next,void* Data) {
     (void)Client;(void)Data;
-    if (Next!=Diagnostics->uAttemptCount+1u || Diagnostics->uMaxAttempts!=0u) return false;
+    if (Next!=Diagnostics->uAttemptCount+1u || Diagnostics->uMaxAttempts!=11u) return false;
     ++Retries; return strcmp(Case,"hook-stop")!=0;
 }
 void ServiceInit(XS_HostInfo* Host) {
@@ -70,15 +84,19 @@ void ServiceInit(XS_HostInfo* Host) {
     if (!MdoHomeInit() || !MdoConfigInit() || !MdoModelManagerInit()) {
         printf("init_failed=1\nprobe_done=1\n"); return;
     }
-    MdoModelOnlineAuthority Authority={getenv("MDO_AUTH_FIXTURE_ORIGIN"),Acquire,Release};
+    MdoModelOnlineAuthority Authority={getenv("MDO_AUTH_FIXTURE_ORIGIN"),Acquire,Release,State,Pin};
     MdoModelManagerSetOnlineAuthority(&Authority);
+    xvalue* Online=xrtJsonParse(xrtStrView("{\"version\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"models\":[{\"id\":\"ornith-1.5-35b\",\"title\":\"Fixture\",\"available\":true,\"member_only\":true,\"free\":false,\"vision\":false,\"output_limit_field\":\"max_tokens\",\"tool_calling\":true,\"context_window\":240128,\"max_output\":16384,\"reasoning_efforts\":\"none\",\"default_protocol\":\"chat\",\"protocols\":[\"chat\"]}]}"));
+    if(!MdoModelManagerSetOnlineCatalog(Online))printf("catalog_failed=1\n");xrtValueRelease(Online);
     MdoModelCatalog* Catalog=MdoModelCatalogSnapshot();
     MdoModelClientOptions Options;MdoModelClientOptionsInit(&Options);
+    Options.ModelId="mdo-online.ornith-1.5-35b";
     Options.Protocol=MDO_MODEL_PROTOCOL_OPENAI_CHAT_COMPLETIONS;Options.MaxOutputTokens=64u;
     const char* Names[]={"renew","expired-again","backoff-expiry","business","budget",
-        "cancel","deadline","partial","hook-stop","preexpired","cancelled","nullable-error"};
+        "cancel","deadline","partial","hook-stop","preexpired","cancelled","nullable-error",
+        "wait-recover","wait-exhausted","wait-reset","wait-unavailable"};
     for (unsigned i=0;i<sizeof(Names)/sizeof(Names[0]);++i) {
-        Case=Names[i];Fresh=false;Acquired=Released=Deltas=Retries=0u;
+        Case=Names[i];Fresh=false;Acquired=Released=Deltas=Retries=Waits=0u;
         AccountCancel=xrtCancelCreate();xcancel* UserCancel=xrtCancelCreate();
         xllm_request Request;xllmRequestInit(&Request);
         xllmRequestAddTextMessage(&Request,XLLM_ROLE_USER,Case);Request.uMaxOutputTokens=64u;
@@ -94,9 +112,9 @@ void ServiceInit(XS_HostInfo* Host) {
         uint64 Started=MdoMonotonicUs();
         xllm_result Result=MdoModelOnlineComplete(Catalog,&Options,&Request,&Callbacks,&Response,
             !strcmp(Case,"nullable-error")?NULL:&Error);
-        printf("case=%s result=%d kind=%s attempts=%u acquired=%u released=%u deltas=%u retries=%u ms=%llu\n",
+        printf("case=%s result=%d kind=%s attempts=%u acquired=%u released=%u deltas=%u retries=%u waits=%u exhausted=%d ms=%llu\n",
             Case,Result,MdoModelErrorKind(&Error),Error.tDiagnostics.uAttemptCount,Acquired,Released,
-            Deltas,Retries,(unsigned long long)((MdoMonotonicUs()-Started)/1000u));
+            Deltas,Retries,Waits,Error.tDiagnostics.bRetryExhausted,(unsigned long long)((MdoMonotonicUs()-Started)/1000u));
         if(Request.pCancel!=UserCancel || Request.uDeadline!=RequestDeadline || Request.iMessageCount!=1u || Request.uMaxOutputTokens!=64u)
             printf("request_mutated=1\n");
         xllmResponseDestroy(Response);xllmRequestUnit(&Request);
@@ -160,23 +178,31 @@ def main():
             base=Path(raw);site=base/"site";write_site(site)
             (site/"probe.c").write_text(PROBE,encoding="utf-8")
             output=run_probe(args.host.resolve(),site,base/"home",{
-                "MDO_AUTH_FIXTURE_ORIGIN":f"http://127.0.0.1:{server.server_port}"})
+                "MDO_AUTH_FIXTURE_ORIGIN":f"http://127.0.0.1:{server.server_port}"},timeout_seconds=30)
         print(output[output.find("case="):output.find("probe_done=")])
-        assert "init_failed" not in output and "probe_done=1" in output and "request_mutated=1" not in output,output
-        expected={"renew":(0,"unknown",2),"expired-again":(-1,"login_required",2),
+        assert "init_failed" not in output and "catalog_failed" not in output and "probe_done=1" in output and "request_mutated=1" not in output,output
+        expected={"renew":(0,"unknown",2),"expired-again":(-1,"login_required",11),
             "backoff-expiry":(0,"unknown",2),"business":(-1,"service_configuration",1),
-            "budget":(-1,"login_required",7),"cancel":(-3,"cancelled",1),
+            "budget":(-1,"login_required",11),"cancel":(-3,"cancelled",1),
             "deadline":(-2,"timeout",1),"partial":(-1,"network",1),
             "hook-stop":(-1,"login_required",1),"preexpired":(-2,"timeout",0),
-            "cancelled":(-3,"cancelled",0),"nullable-error":(0,"unknown",2)}
+            "cancelled":(-3,"cancelled",0),"nullable-error":(0,"unknown",2),
+            "wait-recover":(0,"unknown",1),"wait-exhausted":(-1,"profile_login_pending",0),
+            "wait-reset":(0,"unknown",1),"wait-unavailable":(0,"unknown",1)}
         for name,(result,kind,count) in expected.items():
             line=next(line for line in output.splitlines() if line.startswith(f"case={name} "))
             fields=dict(part.split("=",1) for part in line.split())
             assert (int(fields["result"]),fields["kind"],Model.calls[name])==(result,kind,count),(line,Model.calls)
             assert fields["acquired"]==fields["released"],line
             if name != "nullable-error": assert int(fields["attempts"])==count,line
-        for name in ("renew","expired-again","nullable-error","backoff-expiry"):
+            if name in ("expired-again","budget","wait-exhausted"):
+                assert fields["retries"]=="10" and fields["exhausted"]=="1",line
+            if name=="wait-exhausted":assert fields["waits"]=="11",line
+            if name in ("wait-recover","wait-reset"):
+                assert fields["retries"]=="3" and fields["waits"]=="4" and fields["exhausted"]=="0",line
+        for name in ("renew","nullable-error","backoff-expiry"):
             assert Model.tokens[name]==["Bearer expired-fixture-token","Bearer fresh-fixture-token"],name
+        assert Model.tokens["expired-again"]==["Bearer expired-fixture-token"]+["Bearer fresh-fixture-token"]*10
         record={"passed":True,"cases":expected,"http_requests":dict(Model.calls),"output":output[output.find("case="):output.find("probe_done=")],
             "scope":"loopback HTTP, real product completion, simulated authority; no website or private credentials"}
         if args.record:

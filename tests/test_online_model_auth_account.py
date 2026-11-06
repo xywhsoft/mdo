@@ -23,6 +23,7 @@ PROBE = r'''
 #include "model-plugin-free.h"
 #define MDO_MODEL_RETRY_BASE_MS 10u
 #define MDO_MODEL_RETRY_MAX_MS 80u
+#define MDO_ACCOUNT_REFRESH_RETRY_BASE_MS 10u
 #include "src/storage/home.c"
 #include "src/config/config.c"
 #include "src/security/secrets.c"
@@ -54,29 +55,41 @@ void ServiceInit(XS_HostInfo* Host) {
     if(!MdoHomeInit()||!MdoConfigInit()||!MdoModelManagerInit()||!MdoAccountInit()) {
         printf("init_failed=1\nprobe_done=1\n");return;
     }
-    const char* Names[]={"account-renew","account-deadline","account-logout","account-switch","account-business"};
+    const char* Names[]={"account-renew","account-deadline","account-logout","account-switch","account-business",
+        "account-background","account-transient","account-initial","account-initial-logout","account-initial-switch","account-revoked"};
     for(unsigned i=0;i<sizeof(Names)/sizeof(Names[0]);++i) {
         const char* Name=Names[i];
         if(!MdoAccountLoginPassword(Name,"Fixture-only-2026",false)||!Idle(1u)) {
             printf("login_failed=1\nprobe_done=1\n");return;
         }
         MdoModelCatalog* Catalog=MdoModelCatalogSnapshot();
+        if(!strncmp(Name,"account-initial",15)||!strcmp(Name,"account-background")){
+            xrtMutexLock(g_MdoAccount.Lock);
+            if(strcmp(Name,"account-background")){g_MdoAccount.Tokens.Access[0]=0;g_MdoAccount.Tokens.Expires=0;}
+            MdoAccountQueueLocked(MDO_ACCOUNT_WORK_REFRESH);
+            xrtMutexUnlock(g_MdoAccount.Lock);
+            xllm_model_profile Profile;xllm_error ProfileError;
+            if(!MdoModelCatalogProfile(Catalog,"mdo-online.ornith-1.5-35b",MDO_MODEL_PROTOCOL_OPENAI_CHAT_COMPLETIONS,&Profile,&ProfileError))
+                printf("profile_blocked=1\n");
+        }
         MdoModelClientOptions Options;MdoModelClientOptionsInit(&Options);
+        Options.ModelId="mdo-online.ornith-1.5-35b";
         Options.Protocol=MDO_MODEL_PROTOCOL_OPENAI_CHAT_COMPLETIONS;Options.MaxOutputTokens=64u;
         xllm_request Request;xllmRequestInit(&Request);
         xllmRequestAddTextMessage(&Request,XLLM_ROLE_USER,Name);Request.uMaxOutputTokens=64u;
         Request.bStream=false;
         xthread* Thread=NULL;
-        if(!strcmp(Name,"account-logout")||!strcmp(Name,"account-switch"))Thread=xrtThreadCreate(Transition,(void*)Name,0);
+        if(!strcmp(Name,"account-logout")||!strcmp(Name,"account-switch")||!strcmp(Name,"account-initial-logout")||!strcmp(Name,"account-initial-switch"))
+            Thread=xrtThreadCreate(Transition,(void*)(!strcmp(Name,"account-initial-switch")?"account-switch":Name),0);
         if(!strcmp(Name,"account-deadline"))Request.uDeadline=MdoDeadlineAfterUs(100000u);
         xllm_response* Response=NULL;xllm_error Error;xllmErrorInit(&Error);
         uint64 Started=MdoMonotonicUs();
         xllm_result Result=MdoModelOnlineComplete(Catalog,&Options,&Request,NULL,&Response,&Error);
         uint64 Elapsed=(MdoMonotonicUs()-Started)/1000u;
         if(Thread){xrtThreadWait(Thread);xrtThreadDestroy(Thread);}
-        if(!strcmp(Name,"account-switch")&&!Idle(2u))printf("switch_failed=1\n");
-        printf("case=%s result=%d kind=%s attempts=%u acquirers=%zu ms=%llu\n",Name,Result,
-            MdoModelErrorKind(&Error),Error.tDiagnostics.uAttemptCount,g_MdoAccount.Acquirers,(unsigned long long)Elapsed);
+        if((!strcmp(Name,"account-switch")||!strcmp(Name,"account-initial-switch"))&&!Idle(2u))printf("switch_failed=1\n");
+        printf("case=%s result=%d kind=%s attempts=%u acquirers=%zu failures=%u ms=%llu\n",Name,Result,
+            MdoModelErrorKind(&Error),Error.tDiagnostics.uAttemptCount,g_MdoAccount.Acquirers,g_MdoAccount.RefreshFailures,(unsigned long long)Elapsed);
         xllmResponseDestroy(Response);xllmRequestUnit(&Request);MdoModelCatalogRelease(Catalog);
         MdoAccountLogout();if(!Idle(0u))printf("logout_failed=1\n");
     }
@@ -119,7 +132,10 @@ class Identity(BaseHTTPRequestHandler):
                 "refresh_token":"a"*64,"id":2 if switched else 1,"token_type":"Bearer","expires_in":900}})
         if self.path=="/api/v1/token/refresh":
             name=type(self).case;self.renewals[name]+=1
-            assert body["refresh_token"]=="a"*64
+            assert body["refresh_token"] in ("a"*64,"b"*64)
+            if name in ("account-transient","account-initial") and self.renewals[name]<=2:
+                return self.reply(503,{"code":503,"message":"temporary fixture failure"})
+            if name=="account-revoked":return self.reply(401,{"code":401,"message":"fixture credential revoked"})
             if name!="account-renew":time.sleep(.25)
             return self.reply(200,{"code":0,"data":{"access_token":"fresh-fixture-token","refresh_token":"b"*64,
                 "id":1,"token_type":"Bearer","expires_in":900}})
@@ -153,17 +169,21 @@ def main():
             (site/"probe.c").write_text("#define MDO_ACCOUNT_SERVICE_ORIGIN "+json.dumps(origin)+"\n"+PROBE,encoding="utf-8")
             output=run_probe(args.host.resolve(),site,base/"home")
         print(output[output.find("case="):output.find("probe_done=")])
-        assert "probe_done=1" in output and not any(key in output for key in ("init_failed","login_failed","switch_failed","logout_failed")),output
+        assert "probe_done=1" in output and not any(key in output for key in ("init_failed","login_failed","switch_failed","logout_failed","profile_blocked")),output
         expected={"account-renew":(0,"unknown",2),"account-deadline":(-2,"timeout",1),
             "account-logout":(-3,"cancelled",1),"account-switch":(-3,"cancelled",1),
-            "account-business":(-1,"service_configuration",1)}
+            "account-business":(-1,"service_configuration",1),"account-background":(0,"unknown",2),
+            "account-transient":(0,"unknown",2),"account-initial":(0,"unknown",1),
+            "account-initial-logout":(-3,"cancelled",0),"account-initial-switch":(-3,"cancelled",0),
+            "account-revoked":(-1,"login_required",1)}
         for name,(result,kind,count) in expected.items():
             line=next(line for line in output.splitlines() if line.startswith(f"case={name} "))
             fields=dict(part.split("=",1) for part in line.split())
             assert (int(fields["result"]),fields["kind"],Identity.calls[name])==(result,kind,count),(line,Identity.calls)
             assert int(fields["attempts"])==count and fields["acquirers"]=="0",line
             if name=="account-deadline":assert 80<=int(fields["ms"])<200,line
-            assert Identity.renewals[name]==(0 if name=="account-business" else 1),(name,Identity.renewals)
+            assert Identity.renewals[name]==(0 if name=="account-business" else 3 if name in ("account-transient","account-initial") else 1),(name,Identity.renewals)
+            if result==0:assert fields["failures"]=="0",line
         record={"passed":True,"model_requests":dict(Identity.calls),"token_refreshes":dict(Identity.renewals),
             "output":output[output.find("case="):output.find("probe_done=")],"scope":"real account worker, controlled identity, no xadmin or public data"}
         if args.record:

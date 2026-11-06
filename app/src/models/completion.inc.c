@@ -314,7 +314,6 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
     uint32 RepairAttempts = 0u;
     uint32 PreviousDelay = 0u;
     bool Retryable = false;
-    bool AuthenticationRetried = false;
     xllm_request RepairRequest = {0};
     xllm_message* RepairMessages = NULL;
     const xllm_request* ActiveRequest = Request;
@@ -333,7 +332,7 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
         Stream.pUserData = &Guard;
         Stream.OnEvent = MdoModelsStream;
         xllm_request AttemptRequest = *ActiveRequest;
-        if (AttemptsMade && (AttemptRequest.uDeadline == MDO_DEADLINE_NEVER ||
+        if (Attempt > 1u && (AttemptRequest.uDeadline == MDO_DEADLINE_NEVER ||
                 AttemptRequest.uDeadline > RecoveryDeadline)) AttemptRequest.uDeadline = RecoveryDeadline;
         Result = MdoModelsScope(Request, &Error);
         if (Result != XLLM_RESULT_OK) { Retryable = false; break; }
@@ -370,12 +369,13 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
         }
         /* Invalid streamed drafts are also replaceable at the Agent boundary:
          * no tools execute until a valid complete response is returned. */
-        /* Only a definite online authentication rejection before delivery may
-         * trigger one renewal. Business errors and delivered content remain
-         * protected, including for replaceable Agent streams. */
-        bool RenewAuthentication = Complete && !AuthenticationRetried &&
-            Error.iHttpStatus == 401 &&
-            !strcmp(MdoModelErrorKind(&Error), "login_required") && !*Response &&
+        /* Renewal waits and definite bearer rejections share the same ten
+         * recoveries as network failures. Never replay business denials,
+         * caller cancellation or authentication failures after delivery. */
+        const char* Kind=MdoModelErrorKind(&Error);
+        bool RenewAuthentication = Complete &&
+            ((Error.iHttpStatus == 401 && !strcmp(Kind,"login_required")) ||
+             !strcmp(Kind,"profile_login_pending") || !strcmp(Kind,"profile_login_unavailable")) && !*Response &&
             !Error.tDiagnostics.bModelDataDelivered &&
             !xrtAtomic32Load(&Guard.Delivered, XMEMORY_ACQUIRE) &&
             !xrtAtomic32Load(&Guard.Stopped, XMEMORY_ACQUIRE);
@@ -390,11 +390,10 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
         if (!Retryable) break;
         /* Bound automatic recovery even when the caller has no deadline.
          * Retain the user's context; a new explicit retry gets a fresh budget. */
-        if (AttemptsMade >= MDO_MODEL_CONNECTION_ATTEMPTS ||
+        if (Attempt >= MDO_MODEL_CONNECTION_ATTEMPTS ||
             MdoMonotonicUs()-RecoveryStarted >= MDO_MODEL_RECOVERY_BUDGET_US) break;
         if (!RenewAuthentication && !MdoModelsRetryable(&Error) &&
             ++RepairAttempts >= MDO_MODEL_REPAIR_ATTEMPTS) break;
-        if (RenewAuthentication) AuthenticationRetried = true;
         if ((Error.eCode == XLLM_ERROR_OUTPUT_LIMIT ||
              MdoModelsCode(&Error, "empty_response"))) {
             /* Add one ephemeral instruction to a borrowed message overlay.

@@ -35,6 +35,11 @@ bool MdoModelCatalogCheckLogin(const MdoModelCatalog* Catalog,const char* ModelI
         (!strncmp(Id,"mdo-online.",11) || MdoModelsRetiredOnlineId(Id)));
     if(!Required)return true;
     if(State==MDO_MODEL_LOGIN_READY)return true;
+    /* A retained profile is structural information, not an access grant.
+     * Background renewal must not reject an established route before its
+     * completion boundary can wait/retry credentials. Signed-out still fails. */
+    if(Model&&Catalog->LoginCatalogReady&&
+        (State==MDO_MODEL_LOGIN_PENDING||State==MDO_MODEL_LOGIN_UNAVAILABLE))return true;
     const char* Kind=State==MDO_MODEL_LOGIN_PENDING?"profile_login_pending":
         State==MDO_MODEL_LOGIN_REQUIRED?"profile_login_required":"profile_login_unavailable";
     MdoModelProfileErrorInit(Error,Kind,"account model catalog is not ready");
@@ -68,8 +73,13 @@ typedef struct MdoModelsOnlineCall {
     xllm_client* Client;
 } MdoModelsOnlineCall;
 
-static void MdoModelsLoginRequired(xllm_error* Error)
+static void MdoModelsLoginRequired(const MdoModelOnlineAuthority* Authority,xllm_error* Error)
 {
+    MdoModelLoginState State=Authority->State?Authority->State():MDO_MODEL_LOGIN_REQUIRED;
+    if(State==MDO_MODEL_LOGIN_PENDING||State==MDO_MODEL_LOGIN_UNAVAILABLE){
+        MdoModelProfileErrorInit(Error,State==MDO_MODEL_LOGIN_PENDING?"profile_login_pending":"profile_login_unavailable",
+            "account credentials are temporarily unavailable");return;
+    }
     MdoModelsProfileError(Error,"Sign in to use online models, or wait for login renewal");
     Error->eCode=XLLM_ERROR_AUTH;
     snprintf(Error->sProviderCode,sizeof(Error->sProviderCode),"%s","login_required");
@@ -88,7 +98,7 @@ static xllm_result MdoModelsOnlineAttempt(void* Data,xllm_client** Client,
     xllmClientDestroy(Call->Client);Call->Client=NULL;*Client=NULL;
     if(!Call->Authority.Acquire(Request->pCancel,Request->uDeadline,&Access)){
         Result=MdoModelsScope(Request,Error);
-        if(Result==XLLM_RESULT_OK){MdoModelsLoginRequired(Error);Result=XLLM_RESULT_ERROR;}
+        if(Result==XLLM_RESULT_OK){MdoModelsLoginRequired(&Call->Authority,Error);Result=XLLM_RESULT_ERROR;}
         return Result;
     }
     Call->Client=MdoModelClientCreateAuth(Call->Catalog,Call->Options,NULL,Error,Access.Token);
@@ -123,9 +133,10 @@ xllm_result MdoModelOnlineComplete(const MdoModelCatalog* Catalog,const MdoModel
     MdoModelsOnlineCall Call={Catalog,Options,g_MdoModelsOnline,NULL};
     if(!Request||!Response||!Options||!g_MdoModelsOnline.Acquire||!g_MdoModelsOnline.Release)return Result;
     Result=MdoModelsScope(Request,Error);if(Result!=XLLM_RESULT_OK)return Result;
-    if(!Call.Authority.Acquire(Request->pCancel,Request->uDeadline,&Pinned)){
+    if(!(Call.Authority.Pin?Call.Authority.Pin(Request->pCancel,&Pinned):
+            Call.Authority.Acquire(Request->pCancel,Request->uDeadline,&Pinned))){
         Result=MdoModelsScope(Request,Error);
-        if(Result==XLLM_RESULT_OK){MdoModelsLoginRequired(Error);Result=XLLM_RESULT_ERROR;}
+        if(Result==XLLM_RESULT_OK){MdoModelsLoginRequired(&Call.Authority,Error);Result=XLLM_RESULT_ERROR;}
         return Result;
     }
     {
@@ -150,7 +161,7 @@ xllm_result MdoModelOnlineComplete(const MdoModelCatalog* Catalog,const MdoModel
         }
         if(Ready)Result=MdoModelsComplete(NULL,&Borrowed,Callbacks,Response,Error,
             Options->RestartableStream,MdoModelsOnlineAttempt,&Call,Options->RetryObserver);
-        else Result=XLLM_RESULT_ERROR;
+        else {Result=MdoModelsScope(&Borrowed,Error);if(Result==XLLM_RESULT_OK)Result=XLLM_RESULT_ERROR;}
         xrtFree(ExtraJson);xllmClientDestroy(Call.Client);
     }
     /* The per-attempt lease already reports authentication failures. Releasing

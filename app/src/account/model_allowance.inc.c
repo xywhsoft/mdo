@@ -67,17 +67,40 @@ static MdoModelLoginState MdoAccountModelState(void)
     xrtMutexUnlock(g_MdoAccount.Lock);return State;
 }
 
+static bool MdoAccountModelPin(xcancel* Cancel,MdoModelOnlineAccess* Access)
+{
+    MdoAccountLease* Lease=xrtCalloc(1,sizeof(*Lease));
+    if(!Lease||!g_MdoAccount.Initialized){xrtFree(Lease);return false;}
+    bool Ok=false;
+    xrtMutexLock(g_MdoAccount.Lock);
+    if(!g_MdoAccount.Stopping&&g_MdoAccount.SessionCancel&&g_MdoAccount.Tokens.MemberId&&
+        (g_MdoAccount.Tokens.Refresh[0]||(g_MdoAccount.Tokens.Access[0]&&!MdoDeadlineExpired(g_MdoAccount.Tokens.Expires)))&&
+        (!Cancel||!xrtCancelRequested(Cancel))){
+        Lease->Cancel=xrtCancelChild(Cancel);
+        if(Lease->Cancel)Lease->Watch=xrtCancelWatch(g_MdoAccount.SessionCancel,MdoAccountCancelLease,Lease->Cancel);
+        if(Lease->Watch){Lease->Generation=g_MdoAccount.Epoch;Lease->MemberId=g_MdoAccount.Tokens.MemberId;Lease->Managed=true;Ok=true;}
+    }
+    xrtMutexUnlock(g_MdoAccount.Lock);
+    if(!Ok){MdoAccountRelease(Lease);xrtFree(Lease);return false;}
+    Access->Cancel=Lease->Cancel;Access->Handle=Lease;return true;
+}
+
 static bool MdoAccountModelAccess(xcancel* Cancel,uint64 Deadline,MdoModelOnlineAccess* Access)
 {
     MdoAccountLease* Lease=xrtCalloc(1,sizeof(*Lease));if(!Lease||!g_MdoAccount.Initialized){xrtFree(Lease);return false;}
     uint64 Until=MdoDeadlineAfterUs(30000000);bool Ok=false;
     if(Deadline!=MDO_DEADLINE_NEVER&&Deadline<Until)Until=Deadline;
     xrtMutexLock(g_MdoAccount.Lock);++g_MdoAccount.Acquirers;
+    uint64 Epoch=g_MdoAccount.Epoch,Serial=g_MdoAccount.RefreshSerial;
     while(!g_MdoAccount.Stopping&&!MdoDeadlineExpired(Until)&&(!Cancel||!xrtCancelRequested(Cancel))){
+        if(g_MdoAccount.Epoch!=Epoch)break;
         if(MdoAccountLeaseLocked(Cancel,Lease)){Ok=true;break;}
         /* Unwatch may wait for a cancellation callback. A partially created
          * lease is cleaned up after unlocking, never inside the account lock. */
         if(Lease->AccessToken||Lease->Cancel||Lease->Watch)break;
+        /* One failed renewal is one product recovery attempt. Do not hide
+         * repeated refreshes in a second, uncounted 30-second retry loop. */
+        if(g_MdoAccount.RefreshSerial!=Serial)break;
         /* Switching during rotation discards the old refresh. Wait for the
          * pending login to settle so its session cancellation reaches the
          * pinned caller, rather than reporting a spurious login failure. */
