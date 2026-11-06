@@ -99,6 +99,9 @@ export function createParameterEditor(draft, { onChange = () => {}, index = 0 } 
   }
   function manual(key, value) {
     record.fields[key] = { value, source: "manual", checked_at: new Date().toISOString() };
+    if (["context_tokens", "max_output_tokens"].includes(key) && !draft.budgetEdited) {
+      draft.output = recommendedOutputBudget(record, draft.effort); budget.value = draft.output;
+    }
   }
   const sourceLabels = { api: text("api", "供应商 API"), server: text("registry", "服务器推荐参数"),
     manual: text("manual", "用户填写"), "upstream-recommendation": text("upstream", "上游推荐值，请确认中转服务限制") };

@@ -169,6 +169,13 @@ def main():
              'fields': {'context_tokens': 1050000, 'max_output_tokens': 128000,
                         'reasoning': {'kind': 'effort', 'efforts': ['low', 'medium', 'high', 'xhigh', 'max']}}}]}
         cache['providers']=[{'id':'fixture','name':'Fixture','variants':[{'id':'api','label':'regular','base':'https://example.invalid/v1','protocol':'openai-responses','models':['old-id']}]}]
+        cache['entries'].append({'bases': ['https://api.openai.com/v1'], 'upstream': True,
+            'ids': ['metadata-false'], 'protocols': ['openai-responses'],
+            'source_url': 'https://example.invalid/model-spec', 'checked_at': '2026-11-07',
+            'fields': {'context_tokens': 64000, 'max_output_tokens': 16000,
+                'reasoning': {'kind': 'effort', 'efforts': ['low', 'high']}},
+            'request_defaults': {'output_tokens': 2048, 'basis': 'official-default',
+                'source_url': 'https://example.invalid/model-spec', 'checked_at': '2026-11-07'}})
         cache['default_locale']='zh-CN'
         cache['locales']=[{'id':tag,'name':tag,'dir':'ltr','enabled':True} for tag in ['zh-CN','en-US','ru-RU']]
         cache['providers'][0]['i18n']={tag:{'name':tag+' supplier'} for tag in ['zh-CN','en-US','ru-RU']}
@@ -251,13 +258,17 @@ def main():
                     status, _, complete = call('POST', 'models/parameters', {'provider': {'endpoints': {
                         'responses': f'http://127.0.0.1:{supplier.server_port}/v1/responses'},'proxy':{'kind':'none'}},
                         'protocol':'openai-responses','models':['metadata-false']})
-                    assert status == 200 and len(Supplier.catalog_headers) == count, complete
+                    assert status == 200 and len(Supplier.catalog_headers) == count+1, complete
+                    complete_row = complete['data']['items'][0]
+                    assert complete_row['request_defaults']['output_tokens'] == 2048, complete
+                    assert complete_row['fields']['max_output_tokens']['value'] == 4096, complete
+                    assert complete_row['fields']['max_output_tokens']['source'] == 'api', complete
                     status, _, missing = call('POST', 'models/parameters', {'key':'supplier-only-draft-key',
                         'provider': {'endpoints': {'responses': f'http://127.0.0.1:{supplier.server_port}/v1/responses'},'proxy':{'kind':'none'}},
                         'protocol':'openai-responses','models':['unknown']})
-                    assert status == 200 and len(Supplier.catalog_headers) == count+1, missing
+                    assert status == 200 and len(Supplier.catalog_headers) == count+2, missing
                     assert not any(k.lower() in ('authorization','x-api-key') for k in Supplier.catalog_headers[-1])
-                    checks.append('complete supplier metadata bypasses server lookup; missing fields refresh server data without a supplier key')
+                    checks.append('complete supplier metadata still reads official request defaults; API capability limits win; catalog lookup never receives the supplier key')
                 metadata_provider = {'endpoints': {'responses': f'http://127.0.0.1:{supplier.server_port}/v1/responses'}, 'proxy': {'kind': 'none'}}
                 status, _, result = call('POST', 'models/parameters', {'provider': metadata_provider,
                     'refresh_catalog': False, 'protocol': 'openai-responses', 'models': ['gpt-5.4', 'metadata-false', 'metadata-effort', 'unknown-gpt-5.4']})

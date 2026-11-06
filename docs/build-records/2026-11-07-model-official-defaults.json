@@ -1,0 +1,159 @@
+{
+  "date": "2026-11-07",
+  "scope": "public-client-catalog",
+  "deployment": {
+    "passed": true,
+    "providers": 11,
+    "entries": 55,
+    "request_defaults": 23,
+    "version": "ad97853c7a0398649187b96003c69343ad6d93d198b55e2c7e48bd36e930cef1",
+    "legacy_compatible": true,
+    "suppliers_unchanged": true,
+    "gateway_models_channels_limits_unchanged": true,
+    "service_active": true,
+    "backup": "/home/xs/mdo-model-catalog-official-20261107-2/backup",
+    "files": {
+      "modules/models/src/client_catalog.c": "88162f0766c8d7a3b9c908bcf3a43a0e78521941ba242d1763af6b2f7ee12b65",
+      "page/models/client-catalog.js": "c5e40bba2ded18194126e3c9d30483f907d5a6ace777dd9688e7dedaa81b6682",
+      "page/models/catalog-i18n.js": "82e28926dbde63af7ff3ffa4a6896509e4669b0a6de19b92632ab3f69313b916",
+      "modules/models/client-catalog.defaults.json": "207f0c2599dfce105c6e94f2f31b796e57a5d9b5355d8155c0be1b0aa5f96dcd"
+    },
+    "temporary_admin_removed": true
+  },
+  "external_verification": {
+    "passed": true,
+    "version": "ad97853c7a0398649187b96003c69343ad6d93d198b55e2c7e48bd36e930cef1",
+    "entries": 55,
+    "request_defaults": 23,
+    "identities_preserved": 78,
+    "anonymous_admin_status": 404,
+    "legacy_sampling_filter": true,
+    "final_read_at": "2026-11-06T18:18:59.643656+00:00",
+    "final_read_passed": true
+  },
+  "client_published": false,
+  "existing_user_budgets_overwritten": false,
+  "audit_counts": {
+    "confirmed": 23,
+    "partial": 15,
+    "unpublished": 16,
+    "retired": 1
+  },
+  "tests": {
+    "client_node_tests": 67,
+    "web_modules": 271,
+    "native_api": "passed",
+    "native_request_defaults": "passed",
+    "browser_editor_cases": [
+      {
+        "locale": "zh-CN",
+        "width": 1400,
+        "passed": true,
+        "checks": {
+          "existingBudgetPreserved": true,
+          "officialDefault": true,
+          "maxEffortDefault": true,
+          "manualBudgetPreserved": true,
+          "clampedToEffectiveLimit": true,
+          "explicitNoThinkingDefault": true,
+          "persistedDefaults": true,
+          "clearCapacityAndBudget": true,
+          "noOverflow": true
+        },
+        "errors": []
+      },
+      {
+        "locale": "zh-CN",
+        "width": 390,
+        "passed": true,
+        "checks": {
+          "existingBudgetPreserved": true,
+          "officialDefault": true,
+          "maxEffortDefault": true,
+          "manualBudgetPreserved": true,
+          "clampedToEffectiveLimit": true,
+          "explicitNoThinkingDefault": true,
+          "persistedDefaults": true,
+          "clearCapacityAndBudget": true,
+          "noOverflow": true
+        },
+        "errors": []
+      },
+      {
+        "locale": "en-US",
+        "width": 1400,
+        "passed": true,
+        "checks": {
+          "existingBudgetPreserved": true,
+          "officialDefault": true,
+          "maxEffortDefault": true,
+          "manualBudgetPreserved": true,
+          "clampedToEffectiveLimit": true,
+          "explicitNoThinkingDefault": true,
+          "persistedDefaults": true,
+          "clearCapacityAndBudget": true,
+          "noOverflow": true
+        },
+        "errors": []
+      },
+      {
+        "locale": "en-US",
+        "width": 390,
+        "passed": true,
+        "checks": {
+          "existingBudgetPreserved": true,
+          "officialDefault": true,
+          "maxEffortDefault": true,
+          "manualBudgetPreserved": true,
+          "clampedToEffectiveLimit": true,
+          "explicitNoThinkingDefault": true,
+          "persistedDefaults": true,
+          "clearCapacityAndBudget": true,
+          "noOverflow": true
+        },
+        "errors": []
+      },
+      {
+        "locale": "ru-RU",
+        "width": 1400,
+        "passed": true,
+        "checks": {
+          "existingBudgetPreserved": true,
+          "officialDefault": true,
+          "maxEffortDefault": true,
+          "manualBudgetPreserved": true,
+          "clampedToEffectiveLimit": true,
+          "explicitNoThinkingDefault": true,
+          "persistedDefaults": true,
+          "clearCapacityAndBudget": true,
+          "noOverflow": true
+        },
+        "errors": []
+      },
+      {
+        "locale": "ru-RU",
+        "width": 390,
+        "passed": true,
+        "checks": {
+          "existingBudgetPreserved": true,
+          "officialDefault": true,
+          "maxEffortDefault": true,
+          "manualBudgetPreserved": true,
+          "clampedToEffectiveLimit": true,
+          "explicitNoThinkingDefault": true,
+          "persistedDefaults": true,
+          "clearCapacityAndBudget": true,
+          "noOverflow": true
+        },
+        "errors": []
+      }
+    ],
+    "server_native_catalog": "passed",
+    "server_table_and_languages": "passed"
+  },
+  "test_evidence": {
+    "native_api": ".build/acceptance/model-verification-20261030/native-api.json",
+    "browser_editor": ".build/model-request-defaults-browser/report.json",
+    "native_request_defaults": ".build\\model-official-defaults-20261107\\native-client.log"
+  }
+}

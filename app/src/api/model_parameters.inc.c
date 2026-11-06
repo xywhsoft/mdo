@@ -110,8 +110,10 @@ static xvalue* MdoParameterResolve(const xvalue* Registry, cstr Endpoint, cstr P
         bool Recommend = false; xrtValueGetBool(xrtValueObjectGet(Entry, XRT_STR_LITERAL("upstream")), &Recommend);
         if (BaseMatch) { Match = Entry; break; }
         if (Recommend) {
-            if (Upstream && !xrtValueEqual(xrtValueObjectGet(Upstream, XRT_STR_LITERAL("fields")),
-                xrtValueObjectGet(Entry, XRT_STR_LITERAL("fields")))) Ambiguous = true;
+            if (Upstream && (!xrtValueEqual(xrtValueObjectGet(Upstream, XRT_STR_LITERAL("fields")),
+                xrtValueObjectGet(Entry, XRT_STR_LITERAL("fields"))) ||
+                !xrtValueEqual(xrtValueObjectGet(Upstream, XRT_STR_LITERAL("request_defaults")),
+                    xrtValueObjectGet(Entry, XRT_STR_LITERAL("request_defaults"))))) Ambiguous = true;
             Upstream = Entry;
         }
     }

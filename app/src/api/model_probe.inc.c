@@ -211,20 +211,9 @@ static bool MdoApiModelDiscoverRun(MdoApiContext* Context, MdoApiJsonBody Body, 
 done:
     if (Parameters && Endpoint && strcmp(Code, "endpoint_invalid") && strcmp(Code, "key_invalid") &&
         strcmp(Code, "credential_unavailable") && strcmp(Code, "authentication_failed")) {
-        bool NeedCatalog = false;
-        for (size_t n = 0; n < xrtValueCount(Selected); ++n) {
-            const xvalue* Row = NULL;
-            for (size_t k = 0; k < xrtValueCount(List); ++k) {
-                const xvalue* Candidate = xrtValueArrayGet(List, k);
-                if (xrtValueEqual(xrtValueObjectGet(Candidate, XRT_STR_LITERAL("id")), xrtValueArrayGet(Selected, n))) { Row = Candidate; break; }
-            }
-            xvalue* Fields = MdoParameterApiFields(Row);
-            NeedCatalog |= !xrtValueObjectHas(Fields, XRT_STR_LITERAL("context_tokens")) ||
-                !xrtValueObjectHas(Fields, XRT_STR_LITERAL("max_output_tokens")) || !xrtValueObjectHas(Fields, XRT_STR_LITERAL("reasoning"));
-            xrtValueRelease(Fields);
-        }
+        /* Capability metadata does not describe the recommended request budget. */
         bool Stale = false;
-        xvalue* Registry = NeedCatalog ? MdoParameterRegistry(Context, RefreshCatalog, &Stale) : NULL;
+        xvalue* Registry = MdoParameterRegistry(Context, RefreshCatalog, &Stale);
         Data = xrtValueObject(); Items = xrtValueArray();
         Ok = Data && Items;
         for (size_t n = 0; Ok && n < xrtValueCount(Selected); ++n) {
@@ -236,7 +225,7 @@ done:
             }
             xvalue* Resolved = MdoParameterResolve(Registry, Endpoint, Protocol, Name, Row, Code);
             Ok = Resolved && MdoApiValueSetBool(Resolved, "catalog_stale", Stale) &&
-                MdoApiValueSetBool(Resolved, "catalog_unavailable", NeedCatalog && !Registry) && MdoApiValueAppendTake(Items, &Resolved); xrtValueRelease(Resolved);
+                MdoApiValueSetBool(Resolved, "catalog_unavailable", !Registry) && MdoApiValueAppendTake(Items, &Resolved); xrtValueRelease(Resolved);
         }
         Ok = Ok && MdoApiValueSetTake(Data, "items", &Items); xrtValueRelease(Registry);
     }

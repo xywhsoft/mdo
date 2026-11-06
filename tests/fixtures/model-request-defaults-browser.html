@@ -1,0 +1,31 @@
+<!doctype html><html lang="zh-CN" data-theme="dark">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Model request defaults</title><link rel="stylesheet" href="/app/web/css/app.css">
+<style>body{padding:16px;background:var(--bg);color:var(--ink)}main{max-width:760px;margin:auto}input,select{max-width:100%}#result{font-size:11px;white-space:pre-wrap}</style>
+<main id="editor"></main><output id="result">Preparing</output>
+<script type="module">
+import {createParameterEditor,parameterDraft,applyParameters} from "/app/web/js/features/settings/model-parameters.js";
+import {loadLocale} from "/app/web/js/i18n.js";
+const checks={},errors=[];window.addEventListener("error",e=>errors.push(e.message));
+try{
+ await loadLocale(new URL(location.href).searchParams.get("locale")||"zh-CN");
+ const field=value=>({value,source:"server",checked_at:"2026-11-07"});
+ const record={id:"deepseek-flash",protocol:"openai-chat-completions",fields:{context_tokens:field(1048576),max_output_tokens:field(393216),reasoning:field({kind:"effort",efforts:["none","low","high","max"],default:"high"}),temperature:field(1)},
+   request_defaults:{output_tokens:65536,output_tokens_by_effort:{default:65536,none:8192,low:65536,high:65536,max:131072},basis:"official-default",source_url:"https://api-docs.deepseek.com/api/create-chat-completion/",checked_at:"2026-11-07"}};
+ const model={protocols:["openai-chat-completions"],capabilities:["text-input","text-output","streaming","tool-call-output"],window:{max_output_tokens:8192}};
+ const draft=parameterDraft(record,model),root=createParameterEditor(draft);document.querySelector("#editor").append(root);root.open=true;
+ const budget=root.querySelector('[name="parameter-0-output-budget"]'),effort=root.querySelector('[name="parameter-0-default-effort"]'),maximum=root.querySelector('[name="parameter-0-max_output_tokens"]');
+ const recommend=root.querySelector('button[type="button"]');
+ const change=(node,value,type="input")=>{node.value=value;node.dispatchEvent(new Event(type,{bubbles:true}));};
+ checks.existingBudgetPreserved=Number(budget.value)===8192;
+ recommend.click();checks.officialDefault=Number(budget.value)===65536&&!draft.budgetEdited;
+ change(effort,"max","change");checks.maxEffortDefault=Number(budget.value)===131072;
+ change(budget,12345);change(effort,"high","change");checks.manualBudgetPreserved=Number(budget.value)===12345;
+ recommend.click();change(maximum,32768);checks.clampedToEffectiveLimit=Number(budget.value)===32768;
+ change(effort,"none","change");checks.explicitNoThinkingDefault=Number(budget.value)===8192;
+ const saved=applyParameters(model,draft);checks.persistedDefaults=saved.parameters.request_defaults.output_tokens===65536&&saved.window.max_output_tokens===8192;
+ checks.clearCapacityAndBudget=maximum.value!==budget.value;
+ const paint=()=>new Promise(requestAnimationFrame);await paint();checks.noOverflow=document.documentElement.scrollWidth<=innerWidth;
+ document.querySelector("#result").textContent=JSON.stringify({passed:errors.length===0&&Object.values(checks).every(Boolean),checks,errors},null,2);
+}catch(e){document.querySelector("#result").textContent=JSON.stringify({passed:false,error:String(e.stack),checks,errors});}
+</script></html>
