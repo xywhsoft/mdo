@@ -110,7 +110,13 @@
       await wait(() => user()?.textContent.includes("Revised review") && document.querySelector("#send").dataset.action === "send", "edited transcript");
       check(user().querySelectorAll(".prompt-context-chip").length === 5, "resend retains all context");
       reports.inlineResend = true;
-      await wait(() => edit(), "edited message controls restored");
+      await wait(async () => {
+        const draft = await api(sessionPath + "/draft"), queue = await api(sessionPath + "/queue");
+        return !draft.text && !draft.submissions.length && !queue.items.length &&
+          !input.value && !input.disabled && !input.readOnly && edit() && !edit().disabled &&
+          ["idle", "succeeded"].includes(document.querySelector("#run-status").dataset.state);
+      }, "edited message controls restored after queue handoff");
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       edit().click(); await wait(() => document.querySelector(".message-inline-editor"), "edit before navigating");
       enter(editor, "Retained edit after navigation");
       location.hash = route(source);
