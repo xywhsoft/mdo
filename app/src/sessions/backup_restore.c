@@ -31,6 +31,12 @@ static bool MdoRestoreTarget(const MdoSessionBackup* Source, const MdoSessionBac
          !MdoPathCopy(Target->WorkspaceRoot, Info->WorkspaceRoot, sizeof(Info->WorkspaceRoot)) ||
          !MdoBackupWorkspaceAbsolute(xrtStrView(Info->WorkspaceRoot)) ) goto invalid;
     Info->Revision = 1u; Info->CreatedAt = Info->UpdatedAt = Target->RestoredAt;
+    /* The restored identity is newly created. Source activity clocks predate
+     * its creation and cannot be copied into the live metadata schema. There
+     * is no live run attached to the imported conversation. */
+    Info->LastActivatedAt = Info->LastMessageAt = Target->RestoredAt;
+    Info->LastRunAt = 0;
+    Info->LastRunOutcome = MDO_SESSION_OUTCOME_NONE;
     if (!Target->PreserveLifecycle) {
         Info->Status = Info->PreviousStatus = MDO_SESSION_ACTIVE;
         Info->Pinned = false;

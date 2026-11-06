@@ -56,7 +56,8 @@ const second = createBackupImportController({ bookmark, pollMs: 20 });
 const observations = [];
 second.subscribe((state) => { phases.push(state.phase);
   observations.push({ phase: state.phase, busy: state.busy, error: state.error?.code ?? null }); });
-await second.inspect(); assert.equal(second.get().phase, "committed", second.get().error?.stack);
+await second.inspect(); assert.equal(second.get().phase, "committed",
+  second.get().error?.stack || JSON.stringify(second.get().restore));
 const result = second.get().restore;
 assert.equal(result.id, reviewed.id); assert.equal(result.source_sha256, reviewed.source_sha256);
 assert.equal(result.project_id, "restore-target");

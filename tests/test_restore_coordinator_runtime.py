@@ -154,6 +154,8 @@ class Probe(DecodeProbe):
                 assert actual[name] == expected[name], name
         meta = json.loads(actual["meta.json"])
         assert meta["id"] == identifier and meta["project_id"] == "restore-target" and meta["revision"] == 1
+        assert meta["last_activated_at_us"] == meta["last_message_at_us"] == meta["created_at_us"]
+        assert meta["last_run_at_us"] == meta["last_run_outcome"] == 0
         assert meta["workspace_root"] == state["workspace"]
         assert os.path.samefile(meta["workspace_root"], self.workspace), (meta["workspace_root"], str(self.workspace))
         assert json.loads(actual["queue.json"])["items"][0]["state"] == "staged"

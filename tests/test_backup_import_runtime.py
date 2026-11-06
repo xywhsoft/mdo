@@ -36,6 +36,9 @@ class Probe(WorkerProbe):
         assert receipt["source_sha256"] == hashlib.sha256(source.read_bytes()).hexdigest()
         target = self.target(receipt["id"])
         files = self.inventory(target)
+        meta = json.loads(files["meta.json"])
+        assert meta["last_activated_at_us"] == meta["last_message_at_us"] == meta["created_at_us"]
+        assert meta["last_run_at_us"] == meta["last_run_outcome"] == 0
         original = {f["path"]: base64.b64decode(f["data"]) for f in document["files"]}
         for name in ("snapshot.json", "journal.jsonl", ARTIFACT):
             if name in original:
