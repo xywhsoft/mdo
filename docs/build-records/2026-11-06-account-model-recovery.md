@@ -33,3 +33,5 @@
 新增 `tests/test_agent_account_recovery.py`，扩展 `tests/test_online_model_auth_retry.py` 与 `tests/test_online_model_auth_account.py`。旧夹具依赖已移除的内置线上模型默认项，本轮改为显式发布合成目录并选择线上模型，以确保实际经过账号模型边界。
 
 私有测试证据：`.build/account-recovery-20261106/`。
+
+修复提交：`583a3bf6`。Windows 测试程序已生成：`.build/account-recovery-20261106/mdo.exe`，构建收据见同目录 `build.json`，汇总核验见 `verification.json`。没有覆盖仓库根目录或用户正在使用的程序，没有重新发布官网下载和更新。
