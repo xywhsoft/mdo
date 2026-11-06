@@ -7,13 +7,13 @@ from pathlib import Path
 from test_api_runtime import ROOT,free_port,request,wait_ready,write_site
 from test_model_verification_runtime import Supplier
 
-def check(host,packed=False):
+def check(host,packed=False,work_root=None):
     Supplier.calls=[];Supplier.contract_errors=[];Supplier.mode='ok'
     supplier=ThreadingHTTPServer(('127.0.0.1',0),Supplier)
     threading.Thread(target=supplier.serve_forever,daemon=True).start()
     checks=[]
     try:
-      with tempfile.TemporaryDirectory(prefix='model-onboarding-',dir=ROOT/'.build') as raw:
+      with tempfile.TemporaryDirectory(prefix='model-onboarding-',dir=work_root or ROOT/'.build') as raw:
         base=Path(raw);port=free_port();site=base/'site';site.mkdir();config_path=None if packed else write_site(site,port)
         home=base/'home'
         with (base/'host.log').open('wb') as log:
@@ -32,7 +32,10 @@ def check(host,packed=False):
                         time.sleep(.05)
                     else:raise RuntimeError('Packed app did not bind its embedded service')
                 wait_ready(port,child);return child
-            except BaseException:stop(child);raise
+            except BaseException:
+                stop(child)
+                print((base/'host.log').read_text(encoding='utf-8',errors='replace')[-5000:])
+                raise
           def stop(child):
             if child.poll() is None:
                 if os.name=='nt':subprocess.run(['taskkill','/PID',str(child.pid),'/T','/F'],capture_output=True)
@@ -160,5 +163,7 @@ def check(host,packed=False):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();target=parser.add_mutually_exclusive_group(required=True)
-    target.add_argument('--host',type=Path);target.add_argument('--packed',type=Path);args=parser.parse_args()
-    check((args.packed or args.host).resolve(),bool(args.packed))
+    target.add_argument('--host',type=Path);target.add_argument('--packed',type=Path)
+    parser.add_argument('--work-root',type=Path,help='Test data root; use native Linux storage for rooted atomic renames')
+    args=parser.parse_args()
+    check((args.packed or args.host).resolve(),bool(args.packed),args.work_root)

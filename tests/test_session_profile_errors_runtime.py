@@ -102,12 +102,18 @@ def check(packed: Path, base: Path, interactive: bool = False) -> dict:
             "stage": True, "first": False, "profile": {**profile, "model_id": "missing-profile-model"}}, 201)
         for state in ("pending", "sending"):
             call("PUT", queue + "/" + queue_id, {"state": state})
+        queued_baseline, _ = call("GET", path)
+        # Receiving the queued input legitimately advances the message clock;
+        # only the subsequent invalid execution must leave metadata unchanged.
+        assert queued_baseline["last_message_at"] >= original["last_message_at"]
+        assert {k: v for k, v in queued_baseline.items() if k != "last_message_at"} == {
+            k: v for k, v in original.items() if k != "last_message_at"}
         reject("POST", path + "/runs", {"prompt": "Missing model must not start", "queue_item_id": queue_id},
             "model_profile_model_missing")
         assert not (snapshot.parent / "queue-receipts" / (queue_id + ".json")).exists()
         assert hashlib.sha256(snapshot.read_bytes()).hexdigest() == before
         current, _ = call("GET", path)
-        assert current == original and Model.calls == 1, (current, Model.calls)
+        assert current == queued_baseline and Model.calls == 1, (current, Model.calls)
         call("DELETE", queue + "/" + queue_id)
         rejected_snapshot_unchanged = True
 
