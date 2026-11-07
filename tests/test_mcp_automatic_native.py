@@ -6,6 +6,10 @@ from native_product_runner import product
 from mcp_template_fixture import template
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = r'''
+static xllm_result QaUnavailableComplete(void* U,const xllm_request* Q,const xllm_stream_callbacks* C,xllm_response** R,xllm_error* E){
+ (void)U;(void)Q;(void)C;(void)E;*R=calloc(1,sizeof(**R));if(!*R)return XLLM_RESULT_ERROR;
+ (*R)->sContent=malloc(12);if(!(*R)->sContent){xllmResponseDestroy(*R);*R=NULL;return XLLM_RESULT_ERROR;}strcpy((*R)->sContent,"Continuing");return XLLM_RESULT_OK;
+}
 static bool QaAutoReady(cstr Ref){
  uint64 End=MdoDeadlineAfterUs(6000000);bool Ready=false;
  do{xvalue* S=MdoMcpExtensionStatus(Ref);cstr State=SdkField(S,"state");Ready=State&&!strcmp(State,"ready")&&xrtValueCount(SdkGet(S,"missing_inputs"))==0;xrtValueRelease(S);if(Ready)break;xrtSleep(20);}while(!MdoDeadlineExpired(End));return Ready;
@@ -15,7 +19,8 @@ static bool QaAutoInstall(cstr Id,cstr Zip,char Error[512]){
  bool Ok=MdoExtensionsManage(Input,NULL,NULL,&Result,Error);xrtValueRelease(Result);xrtValueRelease(Input);return Ok;
 }
 xvalue* QaProductContract(const xvalue* P,xvfs V){
- xvalue* R=xrtValueObject();char Error[512]={0};bool Home=QaProductHome(SdkField(P,"root"),SdkField(P,"app"),V),Ok=Home&&MdoExtensionsInit();
+ xvalue* R=xrtValueObject();char Error[512]={0};bool Home=QaProductHome(SdkField(P,"root"),SdkField(P,"app"),V),Ok=Home&&MdoConfigInit()&&MdoExtensionsInit();
+ Ok=Ok&&MdoConfigImport(MDO_CONFIG_SETTINGS,xrtStrView("{\"schema_version\":1,\"patch\":{\"agent\":{\"recovery_retries\":2}}}"));
  xwork_runtime_config Config;xworkRuntimeConfigInit(&Config);xwork_error E;xworkErrorInit(&E);xwork_runtime* Runtime=Ok?xworkRuntimeCreate(&Config,&E):NULL;Ok=Ok&&Runtime&&MdoMcpManagerInit(Runtime);
  cstr Ref="mcp:qa.auto-fixture",Id="qa-auto";char AutoId[97];McpDefaultId(Ref,AutoId);
  Ok=Ok&&QaAutoInstall(Id,"data/ready.zip",Error);bool Ready=Ok&&QaAutoReady(Ref);xrtValueObjectSetNew(R,XRT_STR_LITERAL("install_initializes_and_discovers_without_user_action"),xrtValueBool(Ready));
@@ -35,12 +40,20 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  SdkPut(Save,"id",SecretId);SdkPut(Save,"expected_revision",SdkField(Private,"revision"));SdkPut(Save,"approval_digest",SdkField(Private,"approval_digest"));Secret=Secret&&MdoMcpConnectionManage(Save,NULL,&Saved,Error)&&QaAutoReady("mcp:qa.secret-fixture");xrtValueRelease(Private);xrtValueRelease(Save);xrtValueRelease(Saved);
  Secret=Secret&&QaAutoInstall("qa-secret","data/secret-update.zip",Error)&&QaAutoReady("mcp:qa.secret-fixture");Private=MdoMcpConnections(SecretId,Error);Secret=Secret&&Private&&MdoExtOpBool(SdkGet(Private,"secrets_set"),"token",false)&&!SdkGet(SdkGet(Private,"values"),"token");xrtValueRelease(Private);xrtValueObjectSetNew(R,XRT_STR_LITERAL("verified_update_preserves_working_private_credentials"),xrtValueBool(Secret));
  bool Target=Secret&&QaAutoInstall("qa-secret","data/secret-target.zip",Error);S=MdoMcpExtensionStatus("mcp:qa.secret-fixture");State=SdkField(S,"state");Target=Target&&State&&!strcmp(State,"needs_approval");xrtValueRelease(S);xrtValueObjectSetNew(R,XRT_STR_LITERAL("changed_target_never_reuses_saved_credentials_automatically"),xrtValueBool(Target));
- bool Limited=QaAutoInstall("qa-limit","data/limit.zip",Error);uint64 LimitEnd=MdoDeadlineAfterUs(6000000);do{S=MdoMcpExtensionStatus("mcp:qa.limit-fixture");State=SdkField(S,"state");Limited=State&&!strcmp(State,"failed");xrtValueRelease(S);if(Limited)break;xrtSleep(20);}while(!MdoDeadlineExpired(LimitEnd));xrtValueObjectSetNew(R,XRT_STR_LITERAL("persistent_failure_finishes_bounded_background_retries"),xrtValueBool(Limited));
+ bool Limited=QaAutoInstall("qa-limit","data/limit.zip",Error);uint64 LimitEnd=MdoDeadlineAfterUs(6000000);do{S=MdoMcpExtensionStatus("mcp:qa.limit-fixture");State=SdkField(S,"state");Limited=State&&!strcmp(State,"waiting");xrtValueRelease(S);if(Limited)break;xrtSleep(20);}while(!MdoDeadlineExpired(LimitEnd));xrtValueObjectSetNew(R,XRT_STR_LITERAL("persistent_failure_waits_without_ending_agent_work"),xrtValueBool(Limited));
+ xllm_session_config SessionConfig;xllmSessionConfigInit(&SessionConfig);xllm_session* Session=xllmSessionCreate(&SessionConfig,NULL);
+ xwork_agent_definition_config DefinitionConfig;xworkAgentDefinitionConfigInit(&DefinitionConfig);DefinitionConfig.bAutoSaveSession=false;xwork_agent_definition* Definition=xworkAgentDefinitionCreate(&DefinitionConfig,&E);
+ xwork_agent_options AgentConfig;xworkAgentOptionsInit(&AgentConfig);AgentConfig.pSession=Session;AgentConfig.sWorkspaceRoot=SdkField(P,"root");AgentConfig.OnModelComplete=QaUnavailableComplete;
+ xwork_agent* Agent=xworkAgentCreateWithRuntime(Runtime,Definition,&AgentConfig,&E);char LimitId[97];McpDefaultId("mcp:qa.limit-fixture",LimitId);const char* Selected[]={LimitId};
+ xwork_run_result Run={0};bool Continues=Agent&&MdoMcpConfigureRole(Agent,SdkField(P,"root"),Selected,1,&E)&&xworkAgentRun(Agent,"Continue without the unavailable MCP",&Run,&E)==XWORK_RESULT_OK;
+ xrtValueObjectSetNew(R,XRT_STR_LITERAL("unavailable_mcp_does_not_interrupt_agent"),xrtValueBool(Continues));xworkRunResultUnit(&Run);if(Agent)xworkAgentDestroy(Agent);xllmSessionDestroy(Session);xworkAgentDefinitionRelease(Definition);
+ xvalue* RecoveryWarnings=xrtValueArray();bool WarnRecovery=MdoMcpWarnings(RecoveryWarnings)&&xrtValueCount(RecoveryWarnings)>0;MdoMcpServerStatus Retained={0};Retained.Size=sizeof(Retained);
+ xrtValueObjectSetNew(R,XRT_STR_LITERAL("unavailable_mcp_warns_and_retains_enabled_setting"),xrtValueBool(WarnRecovery&&MdoMcpManagerGetStatus(LimitId,&Retained)&&Retained.Enabled));xrtValueRelease(RecoveryWarnings);
  xvalue* Warnings=xrtValueArray();bool Warn=MdoExtensionsWarnings(Warnings),InputWarning=false,AuthWarning=false;for(size_t I=0;I<xrtValueCount(Warnings);I++){cstr Code=SdkField(xrtValueArrayGet(Warnings,I),"code");if(Code&&!strcmp(Code,"mcp_configuration_required"))InputWarning=true;if(Code&&!strcmp(Code,"mcp_authorization_required"))AuthWarning=true;}xrtValueObjectSetNew(R,XRT_STR_LITERAL("actionable_states_use_the_existing_unified_warning_feed"),xrtValueBool(Warn&&InputWarning&&AuthWarning));xrtValueRelease(Warnings);
  bool Changed=MdoHomeAtomicWrite("mcp/qa-auto/support/banner.txt","tampered",8,false)&&MdoMcpManagerReload();S=MdoMcpExtensionStatus(Ref);State=SdkField(S,"state");MdoMcpServerStatus Blocked={0};Blocked.Size=sizeof(Blocked);Changed=Changed&&State&&(!strcmp(State,"failed")||!strcmp(State,"needs_approval"))&&!MdoMcpManagerGetStatus(AutoId,&Blocked);xrtValueRelease(S);xrtValueObjectSetNew(R,XRT_STR_LITERAL("modified_directory_is_not_autoapproved"),xrtValueBool(Changed));
  bool Back=QaAutoInstall(Id,"data/ready.zip",Error)&&QaAutoReady(Ref);char Digest[65];Back=Back&&MdoExtensionsFingerprint("mcp",Id,Digest,NULL,Error);xvalue* Input=xrtValueObject(),*Result=NULL;SdkPut(Input,"kind","mcp");SdkPut(Input,"id",Id);SdkPut(Input,"action","remove");SdkPut(Input,"expected_revision",Digest);bool Gone=Back&&MdoExtensionsManage(Input,NULL,NULL,&Result,Error);xrtValueRelease(Input);xrtValueRelease(Result);
  Gone=Gone&&MdoHomeExternalStat(Path,&Exists,&Info)&&!Exists;Rows=MdoMcpConnections(NULL,Error);Gone=Gone&&Rows&&xrtValueCount(Rows)==5;xrtValueRelease(Rows);xrtValueObjectSetNew(R,XRT_STR_LITERAL("uninstall_retires_process_and_private_override"),xrtValueBool(Gone));
- SdkPut(R,"error",Error);SdkPut(R,"work_error",E.sMessage);xrtFree(Path);MdoMcpManagerUnit();xrtEnvSet("MDO_QA_AUTO_TOKEN",NULL);if(Runtime)xworkRuntimeRelease(Runtime);MdoExtensionsUnit();if(Home)MdoHomeUnit();return R;
+ SdkPut(R,"error",Error);SdkPut(R,"work_error",E.sMessage);xrtFree(Path);MdoMcpManagerUnit();xrtEnvSet("MDO_QA_AUTO_TOKEN",NULL);if(Runtime)xworkRuntimeRelease(Runtime);MdoExtensionsUnit();MdoConfigUnit();if(Home)MdoHomeUnit();return R;
 }
 '''
 class Peer(BaseHTTPRequestHandler):
@@ -85,7 +98,7 @@ def main():
   result=product(a,fixture,CONTRACT,out/'result.json');print(json.dumps(result,ensure_ascii=False));assert all(v for k,v in result.items() if k not in ('error','work_error')),result
   assert Peer.retry_initializes==3,Peer.retry_initializes
   # Subsequent explicit catalogue reloads may start another bounded batch.
-  assert Peer.limit_requests<=15 and Peer.limit_requests>=5,Peer.limit_requests
+  assert Peer.limit_requests<=15 and Peer.limit_requests>=3,Peer.limit_requests
  finally:
   if fixture.resolve().parent==out.resolve() and fixture.name.startswith('home-'):shutil.rmtree(fixture)
   peer.shutdown();peer.server_close()

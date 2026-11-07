@@ -352,7 +352,7 @@ static xwork_result MdoAgentsExtension(void* Data,xwork_agent_extension_context*
     if(Native->ePhase==XWORK_AGENT_EXTENSION_BEFORE_TOOL || Native->ePhase==XWORK_AGENT_EXTENSION_AFTER_TOOL){
         bool Before=Native->ePhase==XWORK_AGENT_EXTENSION_BEFORE_TOOL;
         if(!MdoAgentsProgramEvent(Owner,Instance,Native,Instance->Plan,Before?MDO_AGENT_BEFORE_TOOL:MDO_AGENT_AFTER_TOOL,Error))return XWORK_RESULT_ERROR;
-        if(Before){char Why[512]={0};if(!MdoAgentsCheckDependencies(Owner,&Instance->Definition,Native->pAgent,Error))return XWORK_RESULT_ERROR;if(Native->pToolEvent&&!MdoMcpCheckTool(Native->pAgent,Native->pToolEvent->sToolName,Native->pToolEvent->sArgumentsJson,Owner->Workspace,Owner->ProductProject,Why)){MdoAgentsError(Error,XWORK_ERROR_CONTEXT,Why);return XWORK_RESULT_ERROR;}}
+        if(Before){char Why[512]={0};if(!MdoAgentsCheckDependencies(Owner,&Instance->Definition,Native->pAgent,Error))return XWORK_RESULT_ERROR;if(Native->pToolEvent&&!MdoMcpCheckTool(Native->pAgent,Native->pToolEvent->sToolName,Native->pToolEvent->sArgumentsJson,Owner->Workspace,Owner->ProductProject,Why)){MdoAgentsError(Error,XWORK_ERROR_TOOL,Why);return XWORK_RESULT_ERROR;}}
         if(Native->pToolEvent && !strcmp(Native->pToolEvent->sToolName,"agent")){
             xwork_agent_extension_context Current=*Native;xwork_hook_event Event=*Native->pToolEvent;
             if(!Before && Native->pToolOutput){Event.sOutput=Native->pToolOutput->sContent;Event.bSuccess=Native->pToolOutput->bSuccess;}

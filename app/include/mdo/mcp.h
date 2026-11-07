@@ -84,6 +84,8 @@ typedef struct MdoMcpDiagnosticInfo {
 bool MdoMcpManagerInit(xwork_runtime* pRuntime);
 void MdoMcpManagerUnit(void);
 bool MdoMcpManagerReload(void);
+/* Live optional-capability failures join the shared warning indicator. */
+bool MdoMcpWarnings(xvalue* Items);
 /* Resolve an explicit binding, project choice or stable default. Equally
  * ranked accounts require a choice. Owned string; does not start transport. */
 char* MdoMcpDependencyConnection(cstr Ref,cstr Workspace,cstr Preferred,bool RequireReady,char Error[512]);

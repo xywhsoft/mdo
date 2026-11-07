@@ -81,6 +81,7 @@ bool MdoApiDiagnosticsRoute(MdoApiContext* Context)
     xvalue* Knowledge = MdoKnowledgeDiagnostics();
     if(Knowledge&&!MdoApplicationPluginWarnings(Knowledge)){xrtValueRelease(Knowledge);Knowledge=NULL;}
     if(Knowledge&&!MdoExtensionsWarnings(Knowledge)){xrtValueRelease(Knowledge);Knowledge=NULL;}
+    if(Knowledge&&!MdoMcpWarnings(Knowledge)){xrtValueRelease(Knowledge);Knowledge=NULL;}
     MdoHomeSnapshot Home = {0}; Home.Size = sizeof(Home);
     if ( Knowledge && !MdoHomeGetSnapshot(&Home) ) { xrtValueRelease(Knowledge); Knowledge = NULL; }
     if ( Knowledge && !MdoApiStorageWarnings(Knowledge, &Home) ) {

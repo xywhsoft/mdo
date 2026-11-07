@@ -38,24 +38,24 @@ char* MdoMcpDependencyConnection(cstr Ref,cstr Workspace,cstr Preferred,bool Req
 static bool MdoMcpConfigureSelection(xwork_agent* Agent,cstr Workspace,cstr Scope,
     const char* const* Selected,size_t SelectionCount,bool Restrict,char** Prompt,xwork_error* Error)
 {
-    if(!g_MdoMcp.Initialized){if(Restrict&&SelectionCount){MdoMcpRoleError(Error,XWORK_ERROR_CONTEXT,"Wait for MCP catalogue initialization");return false;}if(Prompt)*Prompt=xrtStrDup("");return true;}
+    if(!g_MdoMcp.Initialized){if(Prompt)*Prompt=xrtStrDup("");return true;}
     char* Resolved[128]={0};const char* Names[128];if(SelectionCount>128)return false;
     for(size_t I=0;I<SelectionCount;I++){
-        if(MdoExtensionRefValid(Selected[I])){char Why[512];Resolved[I]=MdoMcpDependencyConnection(Selected[I],Workspace,NULL,true,Why);if(!Resolved[I]){for(size_t J=0;J<I;J++)xrtFree(Resolved[J]);MdoMcpRoleError(Error,XWORK_ERROR_CONTEXT,Why);return false;}Names[I]=Resolved[I];}
+        if(MdoExtensionRefValid(Selected[I])){char Why[512];Resolved[I]=MdoMcpDependencyConnection(Selected[I],Workspace,NULL,false,Why);Names[I]=Resolved[I]?Resolved[I]:Selected[I];}
         else Names[I]=Selected[I];
     }
     Selected=Names;
     MdoMcpCatalog* Catalog=MdoMcpCatalogSnapshot();char DependencyError[512]={0};xvalue* Templates=MdoExtensionsList("mcp",DependencyError);const char* Allowed[MDO_MCP_SERVER_LIMIT];size_t Count=0;bool Ok=Catalog&&Templates;
     for(size_t I=0;Ok&&I<Catalog->Count;I++){
         MdoMcpServerEntry* Entry=&Catalog->Entries[I];if(!Entry->Enabled||!McpDirectoryProjectMatches(Entry,Workspace))continue;
+        if(!Prompt){MdoMcpServerStatus Status={0};Status.Size=sizeof(Status);if(!MdoMcpManagerGetStatus(Entry->Id,&Status)||!Status.Connected||!Status.ToolsDiscovered)continue;}
         cstr Ref=NULL;for(size_t J=0;Entry->DirectoryId&&J<xrtValueCount(Templates);J++){const xvalue* T=xrtValueArrayGet(Templates,J);cstr Directory=MdoExtensionText(T,"directory_id",96);if(Directory&&!strcmp(Directory,Entry->DirectoryId)){Ref=MdoExtensionText(T,"id",MDO_EXTENSION_REF_BYTES);break;}}char Why[512];if(Ref&&(!MdoExtensionsProjectAllows(Ref,Workspace,Why)||(!Prompt&&!MdoExtensionsRuntimeCheck(Ref,Workspace,Scope,Agent,false,Why))))continue;
         bool Included=!Restrict;for(size_t J=0;J<SelectionCount;J++)if(!strcmp(Selected[J],Entry->Id))Included=true;
         if(Included)Allowed[Count++]=Entry->Id;
     }
-    if(Ok&&Restrict&&!Prompt)for(size_t I=0;I<SelectionCount;I++){
-        bool Found=false;for(size_t J=0;J<Count;J++)if(!strcmp(Selected[I],Allowed[J]))Found=true;
-        if(!Found){MdoMcpRoleError(Error,XWORK_ERROR_CONTEXT,"Role selects an unavailable or out-of-scope MCP connection");Ok=false;break;}
-    }
+    /* A strict selection still excludes every unselected/out-of-scope server.
+     * Missing connections do not turn an optional capability into a fatal
+     * model preparation error. Background preparation reports their status. */
     if(Ok&&Prompt){
         size_t Shown=0;
         *Prompt=xrtStrDup("<mdo_mcp_capabilities>\n"

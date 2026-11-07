@@ -17,6 +17,11 @@ const domainNames={
   "en-US":{storage:"Local storage",sessions:"Conversations",schedules:"Scheduled tasks",modules:"Extension loading",skills:"Skills",mcp:"MCP",plugins:"Plugins",extensions:"Extensions",knowledge:"Knowledge"},
   "ru-RU":{storage:"Локальное хранилище",sessions:"Диалоги",schedules:"Плановые задачи",modules:"Загрузка расширений",skills:"Навыки",mcp:"MCP",plugins:"Плагины",extensions:"Расширения",knowledge:"Базы знаний"},
 };
+const mcpRecoveryCopy={
+  "zh-CN":["MCP 连接暂不可用，其他 Agent 能力可以继续使用。","前往 MCP 设置重连、完成授权或停用此连接。"],
+  "en-US":["The MCP connection is unavailable. Other Agent capabilities can continue.","Open MCP settings to reconnect, authorize or disable this connection."],
+  "ru-RU":["Соединение MCP недоступно. Остальные возможности Agent продолжают работать.","Откройте настройки MCP для подключения, авторизации или отключения."]
+};
 export function warningNotice({diagnostics,failed=false,online=[],locale}) {
   const copy=warningCopy(locale),rows=new Map();
   for(const row of Array.isArray(diagnostics?.items)?diagnostics.items:[]){
@@ -24,10 +29,11 @@ export function warningNotice({diagnostics,failed=false,online=[],locale}) {
     const id="diagnostic:"+JSON.stringify([row.domain,row.code||row.stage||"check",row.subject_id||"",row.path||"",row.code?"":row.message]);
     const code=typeof row.code==="string"?row.code:"",knowledge=row.domain==="knowledge";
     const kind=code?.startsWith("root_")?"root":code==="invalid_metadata"?"metadata":code==="index_unavailable"?"index":code==="config_unavailable"?"config":code==="hint_limit"?"limit":"scan";
+    const mcp=row.domain==="mcp"&&code==="connection_unavailable"?(mcpRecoveryCopy[locale]||mcpRecoveryCopy["en-US"]):null;
     const storage=row.domain==="storage"&&copy.storage[code];
     const section=settingsSections.has(row.settings_section)?row.settings_section:sections[row.domain];
     rows.set(id,{id,revision:warningRevision(row),title:knowledge?copy[kind]+(row.subject_id?` · ${row.subject_id}`:""):`${domainNames[locale]?.[row.domain]||domainNames["en-US"][row.domain]||row.domain}${row.subject_id?` · ${row.subject_id}`:""}`,
-      body:knowledge?`${copy.reasons[code]||row.message}\n${copy.impact}`:storage?`${storage}\n${copy.details} ${row.message}`:row.message,path:typeof row.path==="string"?row.path:"",remedy:knowledge?copy.repair:storage?copy.storageRemedy[code]:typeof row.remedy==="string"?row.remedy:"",section});
+      body:mcp?mcp[0]:knowledge?`${copy.reasons[code]||row.message}\n${copy.impact}`:storage?`${storage}\n${copy.details} ${row.message}`:row.message,path:typeof row.path==="string"?row.path:"",remedy:mcp?mcp[1]:knowledge?copy.repair:storage?copy.storageRemedy[code]:typeof row.remedy==="string"?row.remedy:"",section});
   }
   if(diagnostics?.truncated)rows.set("diagnostic:truncated",{id:"diagnostic:truncated",revision:1,title:copy.title,body:copy.truncated});
   if(failed)rows.set("diagnostic:unavailable",{id:"diagnostic:unavailable",revision:1,title:copy.title,body:copy.stale,remedy:copy.retry});

@@ -19,8 +19,11 @@ static bool MdoAgentsBindMcp(MdoAgentOwner* Owner,const MdoModuleAgentInfo* Defi
                     if(!Preferred){Preferred=Choice;Choice=NULL;}xrtFree(Choice);
                 }xrtValueRelease(Required);
             }
-            char* Connection=Why[0]?NULL:MdoMcpDependencyConnection(Name.Data,Owner->Workspace,Preferred,true,Why);
-            Ok=Connection&&xrtValueArrayAppendNew(Out,xrtValueString(xrtStrView(Connection)));xrtFree(Preferred);xrtFree(Connection);
+            char* Connection=Why[0]?NULL:MdoMcpDependencyConnection(Name.Data,Owner->Workspace,Preferred,false,Why);
+            /* An unavailable MCP is a missing capability, not lost Agent
+             * context. Keep its typed identity; selection excludes it without
+             * ever substituting another connection/account. */
+            Ok=xrtValueArrayAppendNew(Out,xrtValueString(xrtStrView(Connection?Connection:Name.Data)));xrtFree(Preferred);xrtFree(Connection);
         }else Ok=xrtValueArrayAppend(Out,xrtValueArrayGet(Input,I));
     }
     if(Ok)Ok=xrtValueObjectSet(Config,XRT_STR_LITERAL("mcp_servers"),Out);

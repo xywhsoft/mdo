@@ -42,14 +42,14 @@ bool MdoExtensionsRuntimeCheck(cstr Id,cstr Workspace,cstr Scope,xwork_agent* Ag
     xvalue* Rows=MdoExtensionsDependencies(Id,false,Error),*References=NULL;bool Ok=Rows!=NULL,ReadReferences=false;uint64 KnowledgeBudget=16u*1024u*1024u;
     for(size_t I=0;Ok&&I<xrtValueCount(Rows);I++){
         const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Ref=MdoExtensionText(Row,"id",MDO_EXTENSION_REF_BYTES),Kind=MdoExtensionText(Row,"kind",32);Ok=MdoDependencyProjectAllows(Workspace,Row,Error);
-        if(Ok&&!strcmp(Kind,"mcp")){
+        if(Ok&&!strcmp(Kind,"mcp")&&!ForModel){
             for(size_t P=0;Ok&&P<xrtValueCount(Rows);P++){
                 const xvalue* Parent=xrtValueArrayGet(Rows,P),*Deps=xrtValueObjectGet(Parent,XRT_STR_LITERAL("dependencies"));
                 for(size_t D=0;Ok&&D<xrtValueCount(Deps);D++){
                     const xvalue* Spec=xrtValueArrayGet(Deps,D);cstr Target=MdoExtensionText(Spec,"id",MDO_EXTENSION_REF_BYTES);bool Optional=false;xrtValueGetBool(xrtValueObjectGet(Spec,XRT_STR_LITERAL("optional")),&Optional);
                     if(Optional||!Target||strcmp(Target,Ref))continue;
                     char* Preferred=MdoExtensionsBinding(MdoExtensionText(Parent,"id",MDO_EXTENSION_REF_BYTES),Ref,Scope,Error);if(Error&&Error[0])Ok=false;
-                    char* Connection=Ok?MdoMcpDependencyConnection(Ref,Workspace,Preferred,true,Error):NULL;Ok=Ok&&Connection;xrtFree(Connection);xrtFree(Preferred);
+                    char* Connection=Ok?MdoMcpDependencyConnection(Ref,Workspace,Preferred,false,Error):NULL;Ok=Ok&&Connection;xrtFree(Connection);xrtFree(Preferred);
                 }
             }
         }else if(Ok&&!strcmp(Kind,"knowledge")){
