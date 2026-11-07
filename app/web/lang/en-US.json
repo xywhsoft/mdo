@@ -3606,5 +3606,11 @@
   "modelParameters.recommendedBudgetHelp": "Use the catalogued official default first; otherwise use the verified output limit. Existing budgets are preserved.",
   "modelParameters.budgetOfficialDefault": "Budget basis: official default",
   "modelParameters.budgetOfficialRecommendation": "Budget basis: official recommendation",
-  "modelParameters.budgetCapabilityLimit": "Budget basis: model capability limit (not an official default)"
+  "modelParameters.budgetCapabilityLimit": "Budget basis: model capability limit (not an official default)",
+  "settings.recoveryRetries": "Automatic recovery retries",
+  "settings.recoveryRetriesDescription": "Default 10, range 0–100. Recoverable problems wait after retries rather than ending the task; 0 waits immediately. Stop and explicit deadlines always apply.",
+  "recovery.waiting.network": "Waiting for the network or service; task retained",
+  "recovery.waiting.resource": "Waiting for system resources; task retained",
+  "recovery.waiting.account": "Waiting for account recovery; task retained",
+  "recovery.waiting.model": "Waiting for model or configuration changes; task retained"
 }

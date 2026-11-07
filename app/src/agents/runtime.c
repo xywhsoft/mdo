@@ -420,7 +420,7 @@ static xllm_result MdoAgentsRouteComplete(MdoAgentOwner* Owner,
     MdoModelClientOptions Options;
     xllm_client* Client;
     MdoAgentModelProgress Progress = {0};
-    MdoModelRetryObserver Observer = { MdoAgentsRetryProgress, &Progress };
+    MdoModelRetryObserver Observer = { MdoAgentsRetryProgress, &Progress, true };
     MdoAgentsProgressSnapshot(Owner, &Progress);
     if ( Owner->ExternalComplete != NULL )
         return Owner->ExternalComplete(Owner->ExternalModelData, Request,
@@ -1537,10 +1537,10 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         Approval != XWORK_APPROVAL_READ_ONLY ? XWORK_APPROVAL_CALLBACK : Approval;
     DefinitionConfig.uCommandTimeoutMs = AgentInfo.TimeoutMilliseconds;
     DefinitionConfig.uMaxAgentTurns = MdoAgentEffectiveTurnLimit(Settings.MaxTurns, AgentInfo.MaxTurns);
-    DefinitionConfig.uConsecutiveFailureLimit = 10u;
-    DefinitionConfig.uRepeatedToolBatchLimit = 10u;
-    DefinitionConfig.uCompletionVerificationRetries = 10u;
-    DefinitionConfig.uCompactionQualityRetries = 10u;
+    DefinitionConfig.uConsecutiveFailureLimit = MdoRecoveryRetryLimit()?MdoRecoveryRetryLimit():1u;
+    DefinitionConfig.uRepeatedToolBatchLimit = DefinitionConfig.uConsecutiveFailureLimit;
+    DefinitionConfig.uCompletionVerificationRetries = MdoRecoveryRetryLimit();
+    DefinitionConfig.uCompactionQualityRetries = MdoRecoveryRetryLimit();
     DefinitionConfig.uMaxParallelTools = Settings.MaxParallelTools;
     DefinitionConfig.uMaxSubagentDepth = AgentInfo.MaxDepth;
     DefinitionConfig.uMaxConcurrentSubagents = Settings.MaxParallelSubagents;

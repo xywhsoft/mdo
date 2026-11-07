@@ -71,6 +71,7 @@ typedef struct MdoModelInfo {
 typedef struct MdoModelRetryObserver {
     bool (*Notify)(void*, const xllm_error*, uint32 NextAttempt, uint32 DelayMs);
     void* UserData;
+    bool WaitForRecovery; /* Long-running Agent; probes keep their bounded result. */
 } MdoModelRetryObserver;
 
 typedef struct MdoModelClientOptions {

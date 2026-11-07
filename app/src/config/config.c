@@ -541,6 +541,8 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
          !MdoConfigUnsigned(xrtValueObjectGet(pAgent,
             MdoConfigKey("max_turns")), &iValue) ||
          iValue > 1024u ||
+         (xrtValueObjectHas(pAgent,MdoConfigKey("recovery_retries")) &&
+          (!MdoConfigUnsigned(xrtValueObjectGet(pAgent,MdoConfigKey("recovery_retries")),&iValue)||iValue>100u)) ||
          !MdoConfigUnsigned(xrtValueObjectGet(pAgent,
             MdoConfigKey("max_parallel_tools")), &iValue) ||
          iValue == 0u || iValue > 64u ||
@@ -1400,6 +1402,20 @@ bool MdoConfigGetPowerSettings(MdoConfigPowerSettings* pSettings)
     }
     xrtMutexUnlock(g_MdoConfig.Lock);
     return Ok;
+}
+
+#include "../../include/mdo/recovery.h"
+uint32 MdoRecoveryRetryLimit(void)
+{
+    uint64 Count=10;
+    if(!g_MdoConfig.Initialized)return 10;
+    xrtMutexLock(g_MdoConfig.Lock);
+    const xvalue* Settings=xrtValueObjectGet(g_MdoConfig.Effective,MdoConfigKey("settings"));
+    const xvalue* Agent=xrtValueObjectGet(Settings,MdoConfigKey("agent"));
+    const xvalue* Value=xrtValueObjectGet(Agent,MdoConfigKey("recovery_retries"));
+    if(Value&&!MdoConfigUnsigned(Value,&Count))Count=10;
+    xrtMutexUnlock(g_MdoConfig.Lock);
+    return Count<=100u?(uint32)Count:10u;
 }
 
 bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings)

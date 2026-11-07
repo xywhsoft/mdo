@@ -33,6 +33,7 @@ export function settingsPatch(form) {
       memory: form.elements.memory.checked,
       schedules: form.elements.schedules.checked,
       max_turns: number(form, "max_turns"),
+      recovery_retries: form.elements.recovery_retries ? number(form, "recovery_retries") : 10,
       max_parallel_tools: number(form, "max_parallel_tools"),
       max_parallel_subagents: number(form, "max_parallel_subagents"),
     },
@@ -265,6 +266,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     validateInstructions();
     form.elements.max_parallel_tools.value = settings.agent.max_parallel_tools;
     form.elements.max_turns.value = settings.agent.max_turns ?? 0;
+    if (form.elements.recovery_retries) form.elements.recovery_retries.value = settings.agent.recovery_retries ?? 10;
     form.elements.max_parallel_subagents.value = settings.agent.max_parallel_subagents;
     form.elements.web_search.checked = settings.agent.web_search;
     form.elements.memory.checked = settings.agent.memory;

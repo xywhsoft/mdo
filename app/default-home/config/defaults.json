@@ -24,6 +24,7 @@
       "memory": true,
       "schedules": true,
       "max_turns": 0,
+      "recovery_retries": 10,
       "max_parallel_tools": 4,
       "max_parallel_subagents": 2
     },

@@ -482,6 +482,10 @@
                   <input id="setting-max-turns" name="max_turns" type="number" min="0" max="1024" step="1" required aria-describedby="setting-max-turns-description">
                 </div>
                 <div class="setting-row">
+                  <div><label for="setting-recovery-retries" data-i18n="settings.recoveryRetries">自动恢复重试次数</label><p data-i18n="settings.recoveryRetriesDescription">默认 10 次，范围 0–100。可恢复问题耗尽重试后等待恢复，不结束任务；0 表示直接等待。停止和明确的任务期限始终生效。</p></div>
+                  <input id="setting-recovery-retries" name="recovery_retries" type="number" min="0" max="100" step="1" required>
+                </div>
+                <div class="setting-row">
                   <div><label for="setting-parallel-subagents" data-i18n="settings.parallelSubagents">并行子 Agent 数</label><p data-i18n="settings.parallelSubagentsDescription">设为 0 可关闭并行子 Agent。</p></div>
                   <input id="setting-parallel-subagents" name="max_parallel_subagents" type="number" min="0" max="16" required>
                 </div>

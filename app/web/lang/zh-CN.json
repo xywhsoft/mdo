@@ -3606,5 +3606,11 @@
   "modelParameters.recommendedBudgetHelp": "优先采用服务器记录的官方默认值；未公布默认值时使用已确认的输出上限。已有预算不自动覆盖。",
   "modelParameters.budgetOfficialDefault": "预算依据：官方默认值",
   "modelParameters.budgetOfficialRecommendation": "预算依据：官方推荐值",
-  "modelParameters.budgetCapabilityLimit": "预算依据：模型能力上限（非官方默认值）"
+  "modelParameters.budgetCapabilityLimit": "预算依据：模型能力上限（非官方默认值）",
+  "settings.recoveryRetries": "自动恢复重试次数",
+  "settings.recoveryRetriesDescription": "默认 10 次，范围 0–100。可恢复问题耗尽重试后等待恢复，不结束任务；0 表示直接等待。停止和明确的任务期限始终生效。",
+  "recovery.waiting.network": "等待网络或服务恢复，任务已保留",
+  "recovery.waiting.resource": "等待系统资源释放，任务已保留",
+  "recovery.waiting.account": "等待账号恢复，任务已保留",
+  "recovery.waiting.model": "等待模型或配置调整，任务已保留"
 }

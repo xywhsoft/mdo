@@ -4,7 +4,9 @@ import { t } from "../../i18n.js";
 export function modelRetryCopy(item, now = Date.now()) {
   const status = Number(item.httpStatus || 0);
   const limited = item.errorKind === "rate_limited" || status === 429;
-  const title = limited
+  const waiting = { waiting_network: "network", waiting_resource: "resource", waiting_account: "account", waiting_model: "model" }[item.errorKind];
+  const title = waiting ? t(`recovery.waiting.${waiting}`)
+    : limited
     ? t("model.retry.rateLimited", {}, "模型服务暂时限流，正在重试…")
     : item.errorKind === "timeout"
       ? t("model.retry.timeout", {}, "模型请求超时，正在重试…")
