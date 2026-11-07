@@ -1,5 +1,5 @@
 from model_fixture import conversation_catalog
-"""Bounded summary failure/cancellation, restart and continuation on real packs.
+"""Retained summary recovery, cancellation and continuation on real packs.
 
 Three serial cases use only a synthetic loopback model and disposable Home.
 No production credentials, paid models, tools, stress or high-load tests.
@@ -138,53 +138,62 @@ def main():
                     assert wait(run)["state"] == "succeeded"
                     Model.mode = mode
                     run, _ = call("POST", path + "/runs", {"prompt": "Continue the original task. " + prompt}, status=202)
-                    if mode == "wait":
-                        deadline = time.monotonic() + 5
-                        while Model.calls["summary"] == 0:
-                            assert time.monotonic() < deadline
+                    expected_calls = 11 if mode == "quality" else 1
+                    deadline = time.monotonic() + 10
+                    while Model.calls["summary"] < expected_calls:
+                        assert time.monotonic() < deadline, Model.calls
+                        time.sleep(.02)
+                    if mode == "quality":
+                        while not any(e["kind"] == "model_retry" and
+                                      e.get("model_error_kind") == "waiting_compaction"
+                                      for e in session_events(port, "/api/v1" + path)):
+                            assert time.monotonic() < deadline, Model.calls
                             time.sleep(.02)
+                    # Exhausted quality attempts and business blockers retain
+                    # the original run, rather than publishing a final error.
+                    time.sleep(.15)
+                    retained, _ = call("GET", "/runs/" + run["id"])
+                    assert not retained["terminal"], retained
+                    events = session_events(port, "/api/v1" + path)
+                    assert not any(e["kind"] == "error" for e in events), events
+                    assert Model.calls == Counter(normal=1, summary=expected_calls), Model.calls
+                    if mode == "wait":
                         cancelled_at = time.monotonic()
                         call("DELETE", "/runs/" + run["id"])
-                    failed = wait(run)
-                    cancel_ms = int((time.monotonic() - cancelled_at) * 1000) if mode == "wait" else None
-                    assert failed["state"] == ("cancelled" if mode == "wait" else "failed"), failed
-                    events = session_events(port, "/api/v1" + path)
-                    errors = [e for e in events if e["kind"] == "error"]
-                    assert len(errors) == (0 if mode == "wait" else 1), errors
-                    assert Model.calls["normal"] == 1, Model.calls
-                    assert Model.calls["summary"] == (11 if mode == "quality" else 1), Model.calls
-                    expected = "context_compaction" if mode == "quality" else "daily_token_limit" if mode == "quota" else ""
-                    before_kind = errors[0]["model_error_kind"] if errors else ""
-                    if mode == "quality":
-                        process.terminate()
-                        process.wait(timeout=10)
-                        process = start()
-                        replayed = session_events(port, "/api/v1" + path)
-                        assert [e for e in replayed if e["kind"] == "error"][0]["model_error_kind"] == before_kind
-                    recovery, _ = call("GET", path + "/recovery")
-                    assert recovery["resume_required"] and recovery["items"] == [], recovery
-                    Model.mode = "valid"
-                    resumed, _ = call("POST", path + "/resume", {"recovery_token": recovery["recovery_token"],
-                        "decisions": [], "client_resume_id": "a" * 32}, status=202)
-                    resumed = wait(resumed)
-                    assert resumed["state"] == "succeeded" and resumed["resume"], resumed
+                        cancelled = wait(run)
+                        cancel_ms = int((time.monotonic() - cancelled_at) * 1000)
+                        assert cancelled["state"] == "cancelled", cancelled
+                        recovery, _ = call("GET", path + "/recovery")
+                        assert recovery["resume_required"] and recovery["items"] == [], recovery
+                        Model.mode = "valid"
+                        resumed, _ = call("POST", path + "/resume", {"recovery_token": recovery["recovery_token"],
+                            "decisions": [], "client_resume_id": "a" * 32}, status=202)
+                        resumed = wait(resumed)
+                        assert resumed["state"] == "succeeded" and resumed["resume"], resumed
+                    else:
+                        Model.mode = "valid"
+                        current, fields = call("GET", "/models/config")
+                        current.pop("runtime_override", None)
+                        next(p for p in current["providers"] if p["id"] == "context-fixture")["name"] += " repaired"
+                        call("PUT", "/settings/models", {"schema_version": 1, "patch": current}, {"If-Match": fields["etag"]})
+                        resumed = wait(run)
+                        assert resumed["state"] == "succeeded" and not resumed["resume"], resumed
                     recovery, _ = call("GET", path + "/recovery")
                     assert not recovery["resume_required"], recovery
                     followup, _ = call("POST", path + "/runs", {"prompt": "Continue; recall the original dimensions and filename."}, status=202)
                     assert wait(followup)["state"] == "succeeded"
                     events = session_events(port, "/api/v1" + path)
                     assert sum(e["kind"] == "agent_start" and e["user_message_sequence"] > 0 for e in events) == 3, events
-                    assert sum(e["kind"] == "error" for e in events) == len(errors), events
+                    assert not any(e["kind"] == "error" for e in events), events
                     assert Model.calls["normal"] == 3 and all(r["has_marker"] for r in Model.requests), Model.requests
                     assert all(r["tools"] == 0 for r in Model.requests if r["kind"] == "summary"), Model.requests
-                    record = {"mode": mode, "kind": before_kind, "expected_kind": expected,
-                        "calls": dict(Model.calls), "final_errors": len(errors), "resume_and_followup": True,
-                        "restarted_before_resume": mode == "quality"}
+                    record = {"mode": mode, "calls": dict(Model.calls), "final_errors": 0,
+                        "retained_before_repair": True, "automatic_recovery": mode != "wait",
+                        "resume_and_followup": True}
                     if mode == "wait":
                         record["cancel_ms"] = cancel_ms
                         assert record["cancel_ms"] < 2000, record
                     records.append(record)
-                    assert before_kind == expected, record
                 result = {"passed": True, "cases": records}
                 if args.record:
                     args.record.parent.mkdir(parents=True, exist_ok=True)
