@@ -135,7 +135,7 @@ class Identity(BaseHTTPRequestHandler):
             assert body["refresh_token"] in ("a"*64,"b"*64)
             if name in ("account-transient","account-initial") and self.renewals[name]<=2:
                 return self.reply(503,{"code":503,"message":"temporary fixture failure"})
-            if name=="account-revoked":return self.reply(401,{"code":401,"message":"fixture credential revoked"})
+            if name=="account-revoked":return self.reply(410,{"code":410,"message":"fixture credential revoked"})
             if name!="account-renew":time.sleep(.25)
             return self.reply(200,{"code":0,"data":{"access_token":"fresh-fixture-token","refresh_token":"b"*64,
                 "id":1,"token_type":"Bearer","expires_in":900}})
@@ -175,7 +175,7 @@ def main():
             "account-business":(-1,"service_configuration",1),"account-background":(0,"unknown",2),
             "account-transient":(0,"unknown",2),"account-initial":(0,"unknown",1),
             "account-initial-logout":(-3,"cancelled",0),"account-initial-switch":(-3,"cancelled",0),
-            "account-revoked":(-1,"login_required",1)}
+            "account-revoked":(-1,"profile_login_required",1)}
         for name,(result,kind,count) in expected.items():
             line=next(line for line in output.splitlines() if line.startswith(f"case={name} "))
             fields=dict(part.split("=",1) for part in line.split())

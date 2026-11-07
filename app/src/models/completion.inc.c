@@ -378,7 +378,7 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
          * caller cancellation or authentication failures after delivery. */
         const char* Kind=MdoModelErrorKind(&Error);
         bool RenewAuthentication = Complete &&
-            ((Error.iHttpStatus == 401 && !strcmp(Kind,"login_required")) ||
+            (!strcmp(Kind,"login_required") ||
              !strcmp(Kind,"profile_login_pending") || !strcmp(Kind,"profile_login_unavailable")) && !*Response &&
             !Error.tDiagnostics.bModelDataDelivered &&
             !xrtAtomic32Load(&Guard.Delivered, XMEMORY_ACQUIRE) &&

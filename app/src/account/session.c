@@ -4,6 +4,7 @@
 #ifndef MDO_ACCOUNT_REFRESH_RETRY_BASE_MS
 #define MDO_ACCOUNT_REFRESH_RETRY_BASE_MS 1000u
 #endif
+#define MDO_ACCOUNT_REFRESH_RECOVERIES 10u
 static bool MdoAccountLeaseLocked(xcancel*,MdoAccountLease*);
 static bool MdoAccountQueueLocked(unsigned);
 static void MdoAccountCancelLease(void*);
@@ -191,15 +192,22 @@ static int32 MdoAccountWorker(void* Unused)
                     (void)MdoAccountQueueLocked(MDO_ACCOUNT_WORK_PROFILE);
                 } else {
                     if (work.Kind == MDO_ACCOUNT_WORK_REFRESH) {
-                        if (status == 401 || status == 410) MdoAccountClearTokensLocked();
+                        /* A single rejected renewal can be transient (for
+                         * example an auth service replica lagging rotation).
+                         * Retain the same refresh identity for ten recoveries;
+                         * do not erase the lease before model recovery runs. */
+                        if (status == 410 || (status == 401 &&
+                                g_MdoAccount.RefreshFailures >= MDO_ACCOUNT_REFRESH_RECOVERIES)) MdoAccountClearTokensLocked();
                         else {
-                            if (g_MdoAccount.RefreshFailures < 6u) ++g_MdoAccount.RefreshFailures;
-                            uint64 delay = (uint64)MDO_ACCOUNT_REFRESH_RETRY_BASE_MS << g_MdoAccount.RefreshFailures;
+                            if (status == 401) g_MdoAccount.Tokens.Expires = 0;
+                            if (g_MdoAccount.RefreshFailures < MDO_ACCOUNT_REFRESH_RECOVERIES) ++g_MdoAccount.RefreshFailures;
+                            unsigned shift = g_MdoAccount.RefreshFailures < 6u ? g_MdoAccount.RefreshFailures : 6u;
+                            uint64 delay = (uint64)MDO_ACCOUNT_REFRESH_RETRY_BASE_MS << shift;
                             g_MdoAccount.NextRefresh = MdoDeadlineAfterUs(delay * 1000u);
                         }
                     }
                     strcpy(g_MdoAccount.Message, work.Kind == MDO_ACCOUNT_WORK_PASSWORD && (status == 400 || status == 401) ? "invalid_credentials" :
-                        status == 429 ? "login_rate_limited" : status == 401 || status == 410 ? "login_expired" :
+                        status == 429 ? "login_rate_limited" : (status == 401 || status == 410) && !g_MdoAccount.Tokens.Refresh[0] ? "login_expired" :
                         status == 404 ? "service_update_required" : work.Kind == MDO_ACCOUNT_WORK_REFRESH ?
                         "account_renewal_pending" : "account_connection_failed");
                 }

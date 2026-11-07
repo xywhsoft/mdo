@@ -34,6 +34,7 @@ static unsigned Acquired, Released, Deltas, Retries, Waits;
 static uint64 RequestDeadline;
 static void CancelLease(void* Data) { xrtCancelRequest((xcancel*)Data); }
 static MdoModelLoginState State(void) {
+    if(Case&&!strcmp(Case,"wait-ready"))return MDO_MODEL_LOGIN_READY;
     if(Case&&!strcmp(Case,"wait-unavailable"))return MDO_MODEL_LOGIN_UNAVAILABLE;
     return Case&&!strncmp(Case,"wait-",5)?MDO_MODEL_LOGIN_PENDING:MDO_MODEL_LOGIN_READY;
 }
@@ -94,7 +95,7 @@ void ServiceInit(XS_HostInfo* Host) {
     Options.Protocol=MDO_MODEL_PROTOCOL_OPENAI_CHAT_COMPLETIONS;Options.MaxOutputTokens=64u;
     const char* Names[]={"renew","expired-again","backoff-expiry","business","budget",
         "cancel","deadline","partial","hook-stop","preexpired","cancelled","nullable-error",
-        "wait-recover","wait-exhausted","wait-reset","wait-unavailable"};
+        "wait-recover","wait-exhausted","wait-reset","wait-unavailable","wait-ready","login-code-403"};
     for (unsigned i=0;i<sizeof(Names)/sizeof(Names[0]);++i) {
         Case=Names[i];Fresh=false;Acquired=Released=Deltas=Retries=Waits=0u;
         AccountCancel=xrtCancelCreate();xcancel* UserCancel=xrtCancelCreate();
@@ -151,6 +152,7 @@ class Model(BaseHTTPRequestHandler):
             self.wfile.flush();self.close_connection=True;return
         status, code = 200, ""
         if name == "business": status, code = 401, "upstream_configuration_error"
+        elif name == "login-code-403" and token != "Bearer fresh-fixture-token": status, code = 403, "login_required"
         elif name == "budget": status, code = (503,"unavailable") if attempt < 6 else (401,"invalid_token")
         elif name == "expired-again": status, code = 401, "invalid_token"
         elif name == "backoff-expiry":
@@ -188,7 +190,8 @@ def main():
             "hook-stop":(-1,"login_required",1),"preexpired":(-2,"timeout",0),
             "cancelled":(-3,"cancelled",0),"nullable-error":(0,"unknown",2),
             "wait-recover":(0,"unknown",1),"wait-exhausted":(-1,"profile_login_pending",0),
-            "wait-reset":(0,"unknown",1),"wait-unavailable":(0,"unknown",1)}
+            "wait-reset":(0,"unknown",1),"wait-unavailable":(0,"unknown",1),
+            "wait-ready":(0,"unknown",1),"login-code-403":(0,"unknown",2)}
         for name,(result,kind,count) in expected.items():
             line=next(line for line in output.splitlines() if line.startswith(f"case={name} "))
             fields=dict(part.split("=",1) for part in line.split())

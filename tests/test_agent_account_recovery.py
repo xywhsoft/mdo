@@ -15,6 +15,8 @@ ROOT=Path(__file__).resolve().parents[1]
 class RecoveryService(Service):
     first=threading.Event();advance=threading.Event();renewing=threading.Event();renew=threading.Event()
     calls=0;refreshes=0;tool_results=0
+    refresh_status=503
+    refresh_failures=2
 
     def handle(self):
         try:super().handle()
@@ -33,7 +35,8 @@ class RecoveryService(Service):
         cls=type(self)
         if self.path=="/api/v1/token/refresh":
             cls.refreshes+=1;cls.renewing.set();assert cls.renew.wait(15)
-            if cls.refreshes<=2:return self.raw(503,{"code":503,"message":"Temporary fixture outage"})
+            if cls.refreshes<=cls.refresh_failures:
+                return self.raw(cls.refresh_status,{"code":cls.refresh_status,"message":"Fixture renewal rejection"})
             return self.reply({"id":1,"access_token":"fresh-fixture-token","refresh_token":"b"*64,
                                "token_type":"Bearer","expires_in":900})
         cls.calls+=1
@@ -57,7 +60,12 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host",type=Path,default=ROOT/'.build/host/xs.exe')
     parser.add_argument("--record",type=Path)
+    parser.add_argument("--refresh-status",type=int,default=503)
+    parser.add_argument("--refresh-failures",type=int,default=2)
+    parser.add_argument("--exhausted",action="store_true")
     args=parser.parse_args()
+    RecoveryService.refresh_status=args.refresh_status
+    RecoveryService.refresh_failures=args.refresh_failures
     Service.login.set();Service.catalog.set()
     for e in (RecoveryService.first,RecoveryService.advance,RecoveryService.renewing,RecoveryService.renew):e.clear()
     RecoveryService.calls=RecoveryService.refreshes=RecoveryService.tool_results=0
@@ -101,9 +109,20 @@ def main():
             assert not call('GET','/runs/'+run['id'])['terminal'],'Background renewal interrupted the Agent'
             RecoveryService.renew.set()
             finished=until(lambda:(r if (r:=call('GET','/runs/'+run['id']))['terminal'] else None))
-            assert finished['state']=='succeeded',finished
             events=session_events(port,'/api/v1'+path)
             retries=[e for e in events if e.get('kind')=='model_retry']
+            if args.exhausted:
+                assert finished['state']=='failed',finished
+                until(lambda:call('GET','/account')['state']=='expired')
+                assert RecoveryService.refreshes==11,RecoveryService.refreshes
+                assert len(retries)==20,len(retries)  # waiting and retrying pairs
+                assert sum(e.get('kind')=='error' for e in events)==1,events
+                assert not call('GET','/account')['refresh_available']
+                proof=dict(passed=True,run=finished['state'],renewals=RecoveryService.refreshes,
+                           retry_events=len(retries),continuation_requests=0,refresh_status=args.refresh_status)
+                if args.record:args.record.write_text(json.dumps(proof,indent=2)+'\n')
+                print(json.dumps(proof));return
+            assert finished['state']=='succeeded',finished
             assert retries and not any(e.get('kind')=='error' for e in events),events
             before=RecoveryService.refreshes
             second=call('POST',path+'/runs',{'prompt':'Confirm completion without using tools again.'},202)

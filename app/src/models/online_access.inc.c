@@ -76,13 +76,13 @@ typedef struct MdoModelsOnlineCall {
 static void MdoModelsLoginRequired(const MdoModelOnlineAuthority* Authority,xllm_error* Error)
 {
     MdoModelLoginState State=Authority->State?Authority->State():MDO_MODEL_LOGIN_REQUIRED;
-    if(State==MDO_MODEL_LOGIN_PENDING||State==MDO_MODEL_LOGIN_UNAVAILABLE){
-        MdoModelProfileErrorInit(Error,State==MDO_MODEL_LOGIN_PENDING?"profile_login_pending":"profile_login_unavailable",
-            "account credentials are temporarily unavailable");return;
-    }
-    MdoModelsProfileError(Error,"Sign in to use online models, or wait for login renewal");
-    Error->eCode=XLLM_ERROR_AUTH;
-    snprintf(Error->sProviderCode,sizeof(Error->sProviderCode),"%s","login_required");
+    /* A catalog being ready is not proof that a fresh bearer was acquired.
+     * Preserve recoverable acquisition failures even in that race. Only an
+     * explicitly signed-out authority needs user login. */
+    MdoModelProfileErrorInit(Error,State==MDO_MODEL_LOGIN_REQUIRED?"profile_login_required":
+        State==MDO_MODEL_LOGIN_PENDING?"profile_login_pending":"profile_login_unavailable",
+        State==MDO_MODEL_LOGIN_REQUIRED?"account login is required":
+            "account credentials are temporarily unavailable");
 }
 
 /* Acquire a fresh bearer for every HTTP attempt, including after backoff.
@@ -116,7 +116,8 @@ static xllm_result MdoModelsOnlineAttempt(void* Data,xllm_client** Client,
     /* A specific provider/business error can also carry HTTP 401. It does not
      * invalidate the member bearer or justify rotating the login session. */
     int Status=Error->iHttpStatus;
-    if(Status==401&&strcmp(MdoModelErrorKind(Error),"login_required"))Status=0;
+    if(!strcmp(MdoModelErrorKind(Error),"login_required"))Status=401;
+    else if(Status==401)Status=0;
     Call->Authority.Release(&Access,Status);
     return Result;
 }
