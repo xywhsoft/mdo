@@ -273,7 +273,7 @@ class ApiContractTests(unittest.TestCase):
             self.assertIn(f'"{field}"', state)
         self.assertIn('"artifact_offset_out_of_range"', state)
 
-    def test_approvals_are_bounded_synchronous_and_fail_closed(self) -> None:
+    def test_approvals_are_cancellable_synchronous_and_fail_closed(self) -> None:
         approvals = (ROOT / "app/src/api/approvals.c").read_text(
             encoding="utf-8")
         manager = (ROOT / "app/src/approvals/manager.c").read_text(
@@ -287,7 +287,9 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn("MdoApprovalSnapshotCreate", approvals)
         self.assertIn("MdoApprovalDecide", approvals)
         self.assertIn("MDO_APPROVAL_PENDING_MAX", manager)
-        self.assertIn("MDO_APPROVAL_MAX_WAIT_MICROSECONDS", manager)
+        self.assertIn("Info->ExpiresAt = MDO_DEADLINE_NEVER", manager)
+        self.assertIn("Info->ExpiresAt = Request->uDeadline", manager)
+        self.assertNotIn("MDO_APPROVAL_MAX_WAIT_MICROSECONDS", manager)
         self.assertIn("xrtCancelRequested", manager)
         self.assertIn("xrtCondWaitFor", manager)
         self.assertIn("MdoDeadlineWaitMs(Wake)", manager)
