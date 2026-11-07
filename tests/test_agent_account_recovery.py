@@ -63,7 +63,12 @@ def main():
     parser.add_argument("--refresh-status",type=int,default=503)
     parser.add_argument("--refresh-failures",type=int,default=2)
     parser.add_argument("--exhausted",action="store_true")
+    parser.add_argument("--relogin",action="store_true")
+    parser.add_argument("--storage-fault",action="store_true")
+    parser.add_argument("--storage-cancel",action="store_true")
+    parser.add_argument("--retries",type=int,default=10)
     args=parser.parse_args()
+    if args.storage_cancel:args.storage_fault=True
     RecoveryService.refresh_status=args.refresh_status
     RecoveryService.refresh_failures=args.refresh_failures
     Service.login.set();Service.catalog.set()
@@ -75,6 +80,23 @@ def main():
     try:
         with tempfile.TemporaryDirectory(prefix='agent-account-recovery-',dir=ROOT/'.build') as raw, ExitStack() as lifetime:
             base=Path(raw);site=base/'site';shutil.copytree(ROOT/'app',site)
+            if args.storage_fault:
+                events_source=site/'src/sessions/events.c'
+                code=events_source.read_text(encoding='utf-8')
+                fault=r'''static unsigned ProbeEventFailures=1;
+static bool ProbeEventWrite(xfile F,const char* J,size_t S){
+ if(ProbeEventFailures){--ProbeEventFailures;(void)xrtWriteFull(F,J,S>7?7:S,NULL);xrtSetErrorKind(XERR_IO);printf("partial_event_fault=1\n");fflush(stdout);return false;}
+ return xrtWriteFull(F,J,S,NULL);
+}
+'''
+                if args.storage_cancel:fault=fault.replace('ProbeEventFailures=1','ProbeEventFailures=99')
+                code=code.replace('static bool MdoEventsAppendOwned(',fault+'static bool MdoEventsAppendOwned(',1)
+                assert 'Ok=xrtWriteFull(File,Json,Size,NULL)' in code
+                code=code.replace('Ok=xrtWriteFull(File,Json,Size,NULL)','Ok=ProbeEventWrite(File,Json,Size)',1)
+                events_source.write_text(code,encoding='utf-8')
+            defaults=site/'default-home/config/defaults.json'
+            settings=json.loads(defaults.read_text(encoding='utf-8'));settings['settings']['agent']['recovery_retries']=args.retries
+            defaults.write_text(json.dumps(settings),encoding='utf-8')
             unity=site/'generated/mdo_unity.c'
             unity.write_text(f'#define MDO_ACCOUNT_SERVICE_ORIGIN "http://127.0.0.1:{server.server_port}"\n'
                 '#define MDO_MODEL_RETRY_BASE_MS 10u\n#define MDO_MODEL_RETRY_MAX_MS 80u\n'
@@ -101,28 +123,58 @@ def main():
             session=call('POST','/sessions',{'project_id':'default','model_id':ONLINE,'reasoning_effort':'none','title':'Recovery fixture'},201)
             path='/projects/default/sessions/'+session['id']
             run=call('POST',path+'/runs',{'prompt':'List the workspace once, then summarize.'},202)
-            assert RecoveryService.first.wait(10)
+            if args.storage_cancel:
+                until(lambda:'partial_event_fault=1' in log.read_text(encoding='utf-8',errors='replace'))
+                call('DELETE','/runs/'+run['id'])
+                done=until(lambda:(r if (r:=call('GET','/runs/'+run['id']))['terminal'] else None))
+                assert done['state']=='cancelled',done
+                assert RecoveryService.calls==0
+                print('PASS stop during persistent storage failure remains cancelled, with no model request')
+                return
+            if not RecoveryService.first.wait(10):
+                print('startup_state',json.dumps(call('GET','/runs/'+run['id'])))
+                print(log.read_text(encoding='utf-8',errors='replace')[-7000:])
+                raise AssertionError('initial model request did not start')
             call('POST','/account/refresh',{})
             assert RecoveryService.renewing.wait(5)
             RecoveryService.advance.set()
             time.sleep(.1)
             assert not call('GET','/runs/'+run['id'])['terminal'],'Background renewal interrupted the Agent'
             RecoveryService.renew.set()
-            finished=until(lambda:(r if (r:=call('GET','/runs/'+run['id']))['terminal'] else None))
+            if args.relogin:
+                until(lambda:any(e.get('model_error_kind') in ('waiting_account','waiting_model') for e in session_events(port,'/api/v1'+path)))
+                assert not call('GET','/runs/'+run['id'])['terminal']
+                call('POST','/account/login',{'identifier':'fixture','password':'fixture-only','remember':False})
+            if args.exhausted:
+                until(lambda:RecoveryService.refreshes>=args.retries+1)
+                until(lambda:any(e.get('model_error_kind')=='waiting_account' for e in session_events(port,'/api/v1'+path)))
+                assert not call('GET','/runs/'+run['id'])['terminal']
+                assert call('GET','/account')['refresh_available']
+                call('DELETE','/runs/'+run['id'])
+            try:finished=until(lambda:(r if (r:=call('GET','/runs/'+run['id']))['terminal'] else None))
+            except AssertionError:
+                print('recovery_state',json.dumps(call('GET','/runs/'+run['id'])))
+                print('recovery_account',json.dumps(call('GET','/account')))
+                print('recovery_counts',RecoveryService.calls,RecoveryService.refreshes)
+                print('recovery_notices',[(e.get('kind'),e.get('model_error_kind'),e.get('model_attempts')) for e in session_events(port,'/api/v1'+path)][-14:])
+                raise
             events=session_events(port,'/api/v1'+path)
             retries=[e for e in events if e.get('kind')=='model_retry']
             if args.exhausted:
-                assert finished['state']=='failed',finished
-                until(lambda:call('GET','/account')['state']=='expired')
-                assert RecoveryService.refreshes==11,RecoveryService.refreshes
-                assert len(retries)==20,len(retries)  # waiting and retrying pairs
-                assert sum(e.get('kind')=='error' for e in events)==1,events
-                assert not call('GET','/account')['refresh_available']
+                assert finished['state']=='cancelled',finished
+                assert RecoveryService.refreshes==args.retries+1,RecoveryService.refreshes
+                assert retries
+                assert not any(e.get('kind')=='error' for e in events),events
+                assert call('GET','/account')['refresh_available']
                 proof=dict(passed=True,run=finished['state'],renewals=RecoveryService.refreshes,
                            retry_events=len(retries),continuation_requests=0,refresh_status=args.refresh_status)
                 if args.record:args.record.write_text(json.dumps(proof,indent=2)+'\n')
                 print(json.dumps(proof));return
             assert finished['state']=='succeeded',finished
+            if args.storage_fault:
+                assert 'partial_event_fault=1' in log.read_text(encoding='utf-8',errors='replace')
+                assert len({e['event_id'] for e in events})==len(events)
+                assert sum(e.get('kind')=='agent_start' for e in events)==1
             assert retries and not any(e.get('kind')=='error' for e in events),events
             before=RecoveryService.refreshes
             second=call('POST',path+'/runs',{'prompt':'Confirm completion without using tools again.'},202)

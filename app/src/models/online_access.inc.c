@@ -39,7 +39,7 @@ bool MdoModelCatalogCheckLogin(const MdoModelCatalog* Catalog,const char* ModelI
      * Background renewal must not reject an established route before its
      * completion boundary can wait/retry credentials. Signed-out still fails. */
     if(Model&&Catalog->LoginCatalogReady&&
-        (State==MDO_MODEL_LOGIN_PENDING||State==MDO_MODEL_LOGIN_UNAVAILABLE))return true;
+        (State==MDO_MODEL_LOGIN_PENDING||State==MDO_MODEL_LOGIN_UNAVAILABLE||State==MDO_MODEL_LOGIN_REQUIRED))return true;
     const char* Kind=State==MDO_MODEL_LOGIN_PENDING?"profile_login_pending":
         State==MDO_MODEL_LOGIN_REQUIRED?"profile_login_required":"profile_login_unavailable";
     MdoModelProfileErrorInit(Error,Kind,"account model catalog is not ready");
@@ -101,10 +101,14 @@ static xllm_result MdoModelsOnlineAttempt(void* Data,xllm_client** Client,
         if(Result==XLLM_RESULT_OK){MdoModelsLoginRequired(&Call->Authority,Error);Result=XLLM_RESULT_ERROR;}
         return Result;
     }
-    Call->Client=MdoModelClientCreateAuth(Call->Catalog,Call->Options,NULL,Error,Access.Token);
+    MdoModelCatalog* Current=MdoModelCatalogSnapshot();
+    Call->Client=MdoModelClientCreateAuth(Current?Current:Call->Catalog,Call->Options,NULL,Error,Access.Token);
+    xllm_request Defaulted=*Request;
+    MdoModelApplyRequestDefaults(Current?Current:Call->Catalog,Call->Options->ModelId,&Defaulted);
+    MdoModelCatalogRelease(Current);
     *Client=Call->Client;
     if(Call->Client){
-        xllm_request Borrowed=*Request;Borrowed.pCancel=Access.Cancel;
+        xllm_request Borrowed=Defaulted;Borrowed.pCancel=Access.Cancel;
         Result=MdoModelsClientComplete(Call->Client,&Borrowed,Callbacks,Response,Error);
         if(Error->iHttpStatus==401 &&
             !strcmp(MdoModelErrorKind(Error),"authentication_failed")){
@@ -133,7 +137,6 @@ xllm_result MdoModelOnlineComplete(const MdoModelCatalog* Catalog,const MdoModel
     MdoModelOnlineAccess Pinned={0};xllm_result Result=XLLM_RESULT_ERROR;
     MdoModelsOnlineCall Call={Catalog,Options,g_MdoModelsOnline,NULL};
     if(!Request||!Response||!Options||!g_MdoModelsOnline.Acquire||!g_MdoModelsOnline.Release)return Result;
-    xllm_request Defaulted=*Request;MdoModelApplyRequestDefaults(Catalog,Options->ModelId,&Defaulted);Request=&Defaulted;
     Result=MdoModelsScope(Request,Error);if(Result!=XLLM_RESULT_OK)return Result;
     if(!(Call.Authority.Pin?Call.Authority.Pin(Request->pCancel,&Pinned):
             Call.Authority.Acquire(Request->pCancel,Request->uDeadline,&Pinned))){
@@ -169,4 +172,41 @@ xllm_result MdoModelOnlineComplete(const MdoModelCatalog* Catalog,const MdoModel
     /* The per-attempt lease already reports authentication failures. Releasing
      * the pinned lease must not schedule a second renewal for the same reply. */
     Call.Authority.Release(&Pinned,0);return Result;
+}
+
+typedef struct MdoModelsConfiguredCall {
+    const MdoModelCatalog* Pinned;
+    xllm_client* First;
+    xllm_client* Replacement;
+    const MdoModelClientOptions* Options;
+    bool Attempted;
+} MdoModelsConfiguredCall;
+
+static xllm_result MdoModelsConfiguredAttempt(void* Data,xllm_client** Client,
+    const xllm_request* Request,const xllm_stream_callbacks* Callbacks,
+    xllm_response** Response,xllm_error* Error)
+{
+    MdoModelsConfiguredCall* Call=Data;
+    MdoModelCatalog* Current=MdoModelCatalogSnapshot();
+    if(!Call->Attempted&&Call->First&&(!Current||Current==Call->Pinned)){*Client=Call->First;Call->Attempted=true;}
+    else{
+        Call->Attempted=true;
+        xllmClientDestroy(Call->Replacement);Call->Replacement=NULL;*Client=NULL;
+        if(Current)Call->Replacement=MdoModelClientCreate(Current,Call->Options,NULL,Error);
+        *Client=Call->Replacement;
+    }
+    xllm_request Defaulted=*Request;MdoModelApplyRequestDefaults(Current?Current:Call->Pinned,Call->Options->ModelId,&Defaulted);
+    MdoModelCatalogRelease(Current);
+    if(!*Client)return XLLM_RESULT_ERROR;
+    return MdoModelsClientComplete(*Client,&Defaulted,Callbacks,Response,Error);
+}
+
+xllm_result MdoModelConfiguredComplete(const MdoModelCatalog* Pinned,xllm_client* First,const MdoModelClientOptions* Options,
+    const xllm_request* Request,const xllm_stream_callbacks* Callbacks,xllm_response** Response,xllm_error* Error)
+{
+    if(!Options)return XLLM_RESULT_ERROR;
+    MdoModelsConfiguredCall Call={Pinned,First,NULL,Options,false};
+    xllm_result Result=MdoModelsComplete(First,Request,Callbacks,Response,Error,
+        Options->RestartableStream,MdoModelsConfiguredAttempt,&Call,Options->RetryObserver);
+    xllmClientDestroy(Call.Replacement);return Result;
 }

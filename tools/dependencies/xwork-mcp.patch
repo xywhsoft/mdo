@@ -1,17 +1,15 @@
-diff --git a/android/native/host_jni.c b/android/native/host_jni.c
-index 7824dfae360e141477687430c78e3ee0d612cd12..170adad0c14f7a78314e88ac0be0c62dfc7caa9f 100644
 --- a/android/native/host_jni.c
 +++ b/android/native/host_jni.c
-@@ -5,6 +5,8 @@
+@@ -4,6 +4,8 @@
+ #include <stdio.h>
  #include "src/sdk/xs_host.h"
  #include "src/sdk/xsbase.h"
- 
-+#include "system_proxy_jni.c"
 +
++#include "system_proxy_jni.c"
+ 
  static JavaVM* CredentialVm;
  static jclass CredentialClass;
- static jmethodID CredentialMethod;
-@@ -31,13 +33,16 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* Vm, void* Reserved)
+@@ -31,13 +33,16 @@
          CredentialClass = NULL; return JNI_ERR;
      }
      CredentialVm = Vm;
@@ -30,9 +28,6 @@ index 7824dfae360e141477687430c78e3ee0d612cd12..170adad0c14f7a78314e88ac0be0c62d
      CredentialClass = NULL; CredentialVm = NULL; CredentialMethod = NULL; OpenUrlMethod = NULL; BackgroundLeaseMethod = NULL;
  }
  uint64 XS_AndroidBackgroundLease(uint64 Token, uint32 Milliseconds)
-diff --git a/android/native/system_proxy_jni.c b/android/native/system_proxy_jni.c
-new file mode 100644
-index 0000000000000000000000000000000000000000..6006986938cf71c722eb4eaedd4ee481f2ba270f
 --- /dev/null
 +++ b/android/native/system_proxy_jni.c
 @@ -0,0 +1,88 @@
@@ -124,9 +119,6 @@ index 0000000000000000000000000000000000000000..6006986938cf71c722eb4eaedd4ee481
 +    }
 +    return Ok;
 +}
-diff --git a/android/src/org/xserver/android/SystemProxy.java b/android/src/org/xserver/android/SystemProxy.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..79607d76a3fd6e3c02e64ef1923996a0e89286b5
 --- /dev/null
 +++ b/android/src/org/xserver/android/SystemProxy.java
 @@ -0,0 +1,65 @@
@@ -195,8 +187,71 @@ index 0000000000000000000000000000000000000000..79607d76a3fd6e3c02e64ef1923996a0
 +        }
 +    }
 +}
-diff --git a/lib/xoauth2/xoauth2.c b/lib/xoauth2/xoauth2.c
-index f6c00f3baf80e6f0589491aeed4ed4c1e1c6c7c1..da7df6834042fe2aefa8ebd7c292b85f834f9079 100644
+--- a/lib/xllm-session/UPSTREAM.txt
++++ b/lib/xllm-session/UPSTREAM.txt
+@@ -1,7 +1,7 @@
+ UPSTREAM
+ 
+ 来源: xrt extlibs/xllm-session
+-基线: xrt@f49b186de53221d67babe29591fc71e2e0672e13
++基线: xrt@a01b4a13f0c1b82e4a428236800230671bcbd6aa
+ 许可: MIT
+ 
+ Exported by tools/export_agent_libraries.py. Implementations retain the
+--- a/lib/xllm-session/src/xllm_session_compact.c
++++ b/lib/xllm-session/src/xllm_session_compact.c
+@@ -1126,6 +1126,26 @@
+     return xllm_session__ops_evaluate(pCompaction->pSession, sSummary, pQuality, pError);
+ }
+ 
++bool xllmCompactionNormalizeSummary(const xllm_compaction *C,const char *Candidate,
++                                    char **Output,xllm_error *Error)
++{
++    xllm_compaction_quality Q; xllm_session_buf B={0};
++    if(Output)*Output=NULL;
++    if(!Output||!xllmCompactionEvaluateSummary(C,Candidate,&Q,Error)||
++        Q.bAccepted||!Q.uMissingSections||Q.uSummaryTokens<Q.uMinimumSummaryTokens||
++        Q.uSummaryTokens>Q.uMaximumSummaryTokens||Q.uSummaryBytes>Q.uMaximumSummaryBytes)return false;
++    const xllm_session_style *Style=xllm_session__style(C->pSession);
++    for(size_t I=0;I<Style->iSectionCount;I++){
++        if(!(Q.uMissingSections&Style->pSections[I].uFlag))continue;
++        if(!xllm_session__buf_cstr(&B,"## ")||!xllm_session__buf_cstr(&B,Style->pSections[I].sHeading)||
++            !xllm_session__buf_cstr(&B,"\nNot separately specified. Refer to the complete candidate below; do not infer completion.\n\n"))goto fail;
++    }
++    if(!xllm_session__buf_cstr(&B,"## Original candidate (verbatim)\n")||
++        !xllm_session__buf_cstr(&B,Candidate)||!xllmCompactionEvaluateSummary(C,B.pData,&Q,Error)||!Q.bAccepted)goto fail;
++    *Output=xllm_session__buf_detach(&B);return *Output!=NULL;
++fail:xllm_session__buf_unit(&B);return false;
++}
++
+ bool xllmSessionCommitCompaction(xllm_session *pSession, xllm_compaction *pCompaction,
+                                  const char *sSummary, xllm_error *pError)
+ {
+--- a/lib/xllm-session/xllm-session.h
++++ b/lib/xllm-session/xllm-session.h
+@@ -516,6 +516,11 @@
+ const char* xllmCompactionPrompt(const xllm_compaction* pCompaction);
+ uint64_t xllmCompactionThroughSequence(const xllm_compaction* pCompaction);
+ uint64_t xllmCompactionEstimatedTokens(const xllm_compaction* pCompaction);
++/* Repair missing structural headings without rewriting or dropping any of the
++ * candidate's text. Reject empty/short/oversized candidates and reapply the
++ * configured evaluator. Caller owns the returned malloc-compatible string. */
++bool xllmCompactionNormalizeSummary(const xllm_compaction* pCompaction,
++    const char* sCandidate, char** psSummary, xllm_error* pError);
+ /* Record the meta-call usage before committing (exact summary accounting). */
+ bool xllmCompactionSetUsage(xllm_compaction* pCompaction, const xllm_usage* pUsage);
+ bool xllmCompactionEvaluateSummary(const xllm_compaction* pCompaction, const char* sSummary,
+--- a/lib/xllm/UPSTREAM.txt
++++ b/lib/xllm/UPSTREAM.txt
+@@ -1,7 +1,7 @@
+ UPSTREAM
+ 
+ 来源: xrt extlibs/xllm
+-基线: xrt@f49b186de53221d67babe29591fc71e2e0672e13
++基线: xrt@a01b4a13f0c1b82e4a428236800230671bcbd6aa
+ 许可: MIT
+ 
+ Exported by tools/export_agent_libraries.py. Implementations retain the
 --- a/lib/xoauth2/xoauth2.c
 +++ b/lib/xoauth2/xoauth2.c
 @@ -1,4 +1,36 @@
@@ -237,7 +292,6 @@ index f6c00f3baf80e6f0589491aeed4ed4c1e1c6c7c1..da7df6834042fe2aefa8ebd7c292b85f
  #include "src/xoauth2_core.c"
  #include "src/xoauth2_flow.c"
  #include "src/xoauth2_http.c"
-diff --git a/lib/xrt.h b/lib/xrt.h
 --- a/lib/xrt.h
 +++ b/lib/xrt.h
 @@ -64911,6 +64911,7 @@
@@ -316,8 +370,1273 @@ diff --git a/lib/xrt.h b/lib/xrt.h
  	if ( !__xrtProcessRunThreadsJoin(&State) ) {
  		__xrtProcessRunFail(&State, xrtTakeError());
  	}
-diff --git a/lib/xwork/xwork-xrt-roots.h b/lib/xwork/xwork-xrt-roots.h
-index 04bd0f3574aa48cbff76fc15b2588ee55e6f707b..73d26847b7e3f96472c7d4234be6a9ae089f47d7 100644
+--- a/lib/xwork/UPSTREAM.txt
++++ b/lib/xwork/UPSTREAM.txt
+@@ -1,7 +1,7 @@
+ UPSTREAM
+ 
+ 来源: xrt extlibs/xwork
+-基线: xrt@f49b186de53221d67babe29591fc71e2e0672e13
++基线: xrt@a01b4a13f0c1b82e4a428236800230671bcbd6aa
+ 许可: MIT
+ 
+ Exported by tools/export_agent_libraries.py. Implementations retain the
+--- a/lib/xwork/src/xwork_agent.c
++++ b/lib/xwork/src/xwork_agent.c
+@@ -539,6 +539,7 @@
+     xwork_result eResult = XWORK_RESULT_ERROR;
+     size_t iResultLimit = 0u;
+     uint64_t uAgentDeadline;
++    uint32_t uResultRecoveries=0;
+     xwork_error tPermissionError;
+     if (ppSessionContent)
+         *ppSessionContent = NULL;
+@@ -739,11 +740,14 @@
+             /* Ordinary execution/argument/IO failures belong in the tool
+              * result so the model can recover. Scope termination, loss of
+              * durable context, OOM and uncertain receipts remain fatal. */
++            /* Execution may already have applied effects. The OOM label
++             * recovers only result preparation, never the tool callback. */
++            if(pError&&pError->eCode==XWORK_ERROR_OUT_OF_MEMORY)goto oom;
+             if (eResult == XWORK_RESULT_CANCELLED || xwork__is_cancelled(pAgent) ||
+                 xwork__operation_status(pAgent) == XWORK_OPERATION_TIMED_OUT ||
+                 (pError &&
+                  (pError->eCode == XWORK_ERROR_OUT_OF_MEMORY ||
+-                  pError->eCode == XWORK_ERROR_CONTEXT || pError->eCode == XWORK_ERROR_CANCELLED ||
++                  pError->eCode == XWORK_ERROR_CANCELLED ||
+                   pError->eCode == XWORK_ERROR_RECOVERY_REQUIRED)))
+                 goto cleanup;
+             {
+@@ -938,6 +942,17 @@
+     goto cleanup;
+ oom:
+     xwork__set_error(pError, XWORK_ERROR_OUT_OF_MEMORY, "failed to prepare tool result");
++    if(xwork__recover(pAgent,"tool_resource",pError,++uResultRecoveries,true)){
++        /* No jump returns to execution or hooks. Drop only the uncommitted
++         * projection; existing artifacts and external effects remain owned. */
++        free(sInline);sInline=NULL;xwork__buf_unit(&tSession);xwork__buf_unit(&tHookOutput);
++        xworkToolOutputUnit(&tOutput);
++        while(!xworkToolOutputSet(&tOutput,false,
++            "tool_failure: resource_exhausted\nExecution may have applied effects. Inspect the existing receipt and target state before choosing another operation; do not blindly replay it."))
++            if(!xwork__recover(pAgent,"tool_resource",pError,++uResultRecoveries,true))goto cleanup;
++        if(pbEffectApplied)*pbEffectApplied=true;
++        goto tool_ready;
++    }
+ cleanup:
+     if (eResult != XWORK_RESULT_OK)
+     {
+@@ -983,9 +998,12 @@
+     uint32_t uAttempt;
+     uint32_t uMaxAttempts;
+     char *sRejectedSummary = NULL;
++    uint32_t uPrepareRecoveries=0;
++retry_compaction_prepare:
+     if (!xllmSessionGetStats(pAgent->pSession, &tStats))
+     {
+         xwork__set_error(pError, XWORK_ERROR_CONTEXT, "failed to inspect context pressure");
++        if(xwork__recover(pAgent,"context",pError,++uPrepareRecoveries,true))goto retry_compaction_prepare;
+         return XWORK_RESULT_ERROR;
+     }
+     if (!bForce && tStats.ePressure != XLLM_SESSION_PRESSURE_COMPACT &&
+@@ -1001,6 +1019,7 @@
+                          tSessionError.sMessage[0]
+                              ? tSessionError.sMessage
+                              : "context needs compaction but no safe prefix is available");
++        if(xwork__recover(pAgent,tSessionError.eCode==XLLM_ERROR_OUT_OF_MEMORY?"resource":"compaction",pError,++uPrepareRecoveries,true))goto retry_compaction_prepare;
+         return XWORK_RESULT_ERROR;
+     }
+     memset(&tEvent, 0, sizeof(tEvent));
+@@ -1016,9 +1035,11 @@
+     }
+     memset(&tQuality, 0, sizeof(tQuality));
+     uMaxAttempts = pAgent->uCompactionQualityRetries + 1u;
++retry_compaction_summary:
+     for (uAttempt = 1u; uAttempt <= uMaxAttempts; ++uAttempt)
+     {
+         xwork_buf tCorrection = {0};
++retry_summary_request:
+         xllmRequestInit(&tRequest);
+         xllmRequestSetCancel(&tRequest, xwork__active_cancel(pAgent));
+         xllmRequestSetDeadline(&tRequest, xwork__active_deadline(pAgent));
+@@ -1036,6 +1057,7 @@
+             xwork__set_error(pError, XWORK_ERROR_OUT_OF_MEMORY,
+                              "failed to build compaction request");
+             xllmRequestUnit(&tRequest);
++            if(xwork__recover(pAgent,"resource",pError,++uPrepareRecoveries,true))goto retry_summary_request;
+             goto cleanup;
+         }
+         if (sRejectedSummary)
+@@ -1057,6 +1079,7 @@
+                 xwork__set_error(pError, XWORK_ERROR_OUT_OF_MEMORY,
+                                  "failed to build compaction correction request");
+                 xllmRequestUnit(&tRequest);
++                if(xwork__recover(pAgent,"resource",pError,++uPrepareRecoveries,true))goto retry_summary_request;
+                 goto cleanup;
+             }
+         }
+@@ -1108,6 +1131,13 @@
+         }
+         if (pResponse->iToolCallCount == 0u && tQuality.bAccepted)
+             break;
++        if(uAttempt==uMaxAttempts&&pResponse->iToolCallCount==0u){
++            char *Normalized=NULL;
++            if(xllmCompactionNormalizeSummary(pCompaction,pResponse->sContent,&Normalized,&tSessionError)){
++                free(pResponse->sContent);pResponse->sContent=Normalized;
++                if(xllmCompactionEvaluateSummary(pCompaction,Normalized,&tQuality,&tSessionError)&&tQuality.bAccepted)break;
++            }
++        }
+         ++pRun->uRejectedCompactionSummaries;
+         memset(&tEvent, 0, sizeof(tEvent));
+         tEvent.eKind = XWORK_EVENT_COMPACTION_REJECTED;
+@@ -1121,16 +1151,13 @@
+             eResult = XWORK_RESULT_CANCELLED;
+             goto cleanup;
+         }
+-        free(sRejectedSummary);
+-        sRejectedSummary = xwork__strdup(pResponse->sContent ? pResponse->sContent : "");
+-        xllmResponseDestroy(pResponse);
+-        pResponse = NULL;
+-        if (!sRejectedSummary)
+-        {
++        free(sRejectedSummary);sRejectedSummary=NULL;
++        while(!(sRejectedSummary=xwork__strdup(pResponse->sContent?pResponse->sContent:""))){
+             xwork__set_error(pError, XWORK_ERROR_OUT_OF_MEMORY,
+                              "failed to retain rejected compaction summary");
+-            goto cleanup;
+-        }
++            if(!xwork__recover(pAgent,"resource",pError,++uPrepareRecoveries,true))goto cleanup;
++        }
++        xllmResponseDestroy(pResponse);pResponse=NULL;
+     }
+     if (!pResponse || pResponse->iToolCallCount != 0u || !tQuality.bAccepted)
+     {
+@@ -1140,15 +1167,22 @@
+             "compaction summary failed quality policy after %u attempt(s); missing_sections=0x%08x",
+             (unsigned)uMaxAttempts, (unsigned)tQuality.uMissingSections);
+         xwork__set_error(pError, XWORK_ERROR_CONTEXT, sMessage);
++        if(xwork__recover(pAgent,"compaction_quality",pError,uMaxAttempts,true))goto retry_compaction_summary;
+         goto cleanup;
+     }
+     xllmErrorInit(&tSessionError);
++retry_compaction_commit:
+     if (!xllmSessionCommitCompaction(pAgent->pSession, pCompaction, pResponse->sContent,
+                                      &tSessionError))
+     {
+         xwork__set_error(pError, XWORK_ERROR_CONTEXT,
+                          tSessionError.sMessage[0] ? tSessionError.sMessage
+                                                    : "failed to commit context compaction");
++        /* Commit validates a still-prepared transaction and stages its journal
++         * before changing the active summary. Never regenerate the summary. */
++        if(xllmSessionGetState(pAgent->pSession)!=XLLM_SESSION_STATE_RECOVERY_REQUIRED&&
++            (tSessionError.eCode==XLLM_ERROR_OUT_OF_MEMORY||tSessionError.eCode==XLLM_ERROR_NETWORK)&&
++            xwork__recover(pAgent,tSessionError.eCode==XLLM_ERROR_OUT_OF_MEMORY?"resource":"storage",pError,++uPrepareRecoveries,true))goto retry_compaction_commit;
+         goto cleanup;
+     }
+     if (!xwork__save(pAgent, pError))
+@@ -1177,6 +1211,23 @@
+     return eResult;
+ }
+ 
++/* Scalar session mutators journal before changing their in-memory state.
++ * Retry only when the journal outcome is known, with the original input held. */
++static bool xwork__recover_append(xwork_agent* Agent,xwork_error* Error,uint32_t Attempt)
++{
++    if(xllmSessionGetState(Agent->pSession)==XLLM_SESSION_STATE_RECOVERY_REQUIRED)return false;
++    xllm_error Persist;xllmErrorInit(&Persist);
++    bool Storage=xllmSessionGetLastPersistenceError(Agent->pSession,&Persist);
++    xwork__set_error(Error,Storage?XWORK_ERROR_IO:XWORK_ERROR_OUT_OF_MEMORY,"failed to retain session operation");
++    return xwork__recover(Agent,Storage?"storage":"resource",Error,Attempt,true);
++}
++static uint64_t xwork__begin_turn_retained(xwork_agent* Agent,xwork_error* Error)
++{
++    uint32_t Attempt=0;uint64_t Turn;
++    while(!(Turn=xllmSessionBeginTurn(Agent->pSession)))
++        if(!xwork__recover_append(Agent,Error,++Attempt))return 0;
++    return Turn;
++}
+ static void xwork__emit_error(xwork_agent *pAgent, uint64_t uTurn, const xwork_error *pError)
+ {
+     xwork_event tEvent;
+@@ -1296,6 +1347,7 @@
+     xwork_result eResult = XWORK_RESULT_ERROR;
+     xwork_run_result tRun;
+     xwork_event tEvent;
++    uint32_t uRequestRecoveries=0;
+     if (pResult)
+         memset(pResult, 0, sizeof(*pResult));
+     memset(&tRun, 0, sizeof(tRun));
+@@ -1363,18 +1415,17 @@
+                              "another prompt");
+             goto cleanup;
+         }
+-        uTurn = xllmSessionBeginTurn(pAgent->pSession);
++        uTurn = xwork__begin_turn_retained(pAgent,pError);
+         if (!uTurn)
+         {
+-            xwork__set_error(pError, XWORK_ERROR_CONTEXT, "failed to begin user turn");
+-            goto cleanup;
+-        }
+-        if (!(pUserMessage
+-                  ? xllmSessionAddMessage(pAgent->pSession, uTurn, pUserMessage, 0u)
+-                  : xllmSessionAddText(pAgent->pSession, uTurn, XLLM_ROLE_USER, sPrompt, 0u)))
+-        {
+-            xwork__set_error(pError, XWORK_ERROR_CONTEXT, "failed to add user prompt to session");
+-            goto cleanup;
++            if(!pError||pError->eCode==XWORK_ERROR_NONE)xwork__set_error(pError,XWORK_ERROR_CONTEXT,"failed to begin user turn");
++            goto cleanup;
++        }
++        { uint32_t Attempt=0;
++            while (!(pUserMessage
++                  ? xllmSessionAddMessage(pAgent->pSession,uTurn,pUserMessage,0u)
++                  : xllmSessionAddText(pAgent->pSession,uTurn,XLLM_ROLE_USER,sPrompt,0u)))
++                if(!xwork__recover_append(pAgent,pError,++Attempt))goto cleanup;
+         }
+         uUserMessageSequence = xllmSessionLastSequence(pAgent->pSession);
+         if (!uUserMessageSequence)
+@@ -1598,15 +1649,17 @@
+             goto cleanup;
+         if (bNeedNewTurn)
+         {
+-            uTurn = xllmSessionBeginTurn(pAgent->pSession);
++            uTurn = xwork__begin_turn_retained(pAgent,pError);
+             if (!uTurn)
+             {
+-                xwork__set_error(pError, XWORK_ERROR_CONTEXT, "failed to start next agent turn");
++                if(!pError||pError->eCode==XWORK_ERROR_NONE)xwork__set_error(pError,XWORK_ERROR_CONTEXT,"failed to start next agent turn");
+                 eResult = XWORK_RESULT_ERROR;
+                 goto cleanup;
+             }
+             bNeedNewTurn = false;
+         }
++retry_request_build:
++        if(uRequestRecoveries)pAgent->uMaxParallelTools=1;
+         xllmRequestInit(&tRequest);
+         xllmErrorInit(&tModelError);
+         if (!xllmSessionBuildRequest(pAgent->pSession, &tRequest, &tModelError))
+@@ -1616,6 +1669,7 @@
+                                  ? tModelError.sMessage
+                                  : "failed to build model request from session");
+             xllmRequestUnit(&tRequest);
++            if(xwork__recover(pAgent,tModelError.eCode==XLLM_ERROR_OUT_OF_MEMORY?"resource":"context",pError,++uRequestRecoveries,true))goto retry_request_build;
+             eResult = XWORK_RESULT_ERROR;
+             goto cleanup;
+         }
+@@ -1628,6 +1682,7 @@
+             xwork__set_error(pError, XWORK_ERROR_OUT_OF_MEMORY,
+                              "failed to apply model request profile");
+             xllmRequestUnit(&tRequest);
++            if(xwork__recover(pAgent,"resource",pError,++uRequestRecoveries,true))goto retry_request_build;
+             eResult = XWORK_RESULT_ERROR;
+             goto cleanup;
+         }
+@@ -1640,6 +1695,7 @@
+                 xwork__set_error(pError, XWORK_ERROR_OUT_OF_MEMORY,
+                                  "failed to add tool definitions to model request");
+                 xllmRequestUnit(&tRequest);
++                if(xwork__recover(pAgent,"resource",pError,++uRequestRecoveries,true))goto retry_request_build;
+                 eResult = XWORK_RESULT_ERROR;
+                 goto cleanup;
+             }
+@@ -1768,14 +1824,26 @@
+             goto cleanup;
+         }
+         uExtensionCompactions = 0u;
++        uRequestRecoveries=0;
+         tRun.tLastUsage = pResponse->tUsage;
+-        if (!xllmSessionAddAssistantResponse(pAgent->pSession, uTurn, pResponse))
+-        {
+-            xllmResponseDestroy(pResponse);
+-            xwork__set_error(pError, XWORK_ERROR_CONTEXT,
+-                             "failed to append assistant response to session");
+-            eResult = XWORK_RESULT_ERROR;
+-            goto cleanup;
++        {
++            /* AddAssistantResponse can commit the message before recording
++             * usage. Resume that second operation instead of duplicating the
++             * assistant message (and its tool calls). Never regenerate it. */
++            uint64_t Before=xllmSessionLastSequence(pAgent->pSession);
++            uint32_t Recoveries=0;
++            while (!(xllmSessionLastSequence(pAgent->pSession)>Before ?
++                xllmSessionRecordUsage(pAgent->pSession,&pResponse->tUsage):
++                xllmSessionAddAssistantResponse(pAgent->pSession,uTurn,pResponse))) {
++                xllm_error Persist;xllmErrorInit(&Persist);
++                bool Storage=xllmSessionGetLastPersistenceError(pAgent->pSession,&Persist);
++                xwork__set_error(pError,Storage?XWORK_ERROR_IO:XWORK_ERROR_OUT_OF_MEMORY,
++                    "failed to retain the completed model response");
++                if(xllmSessionGetState(pAgent->pSession)==XLLM_SESSION_STATE_RECOVERY_REQUIRED||
++                    !xwork__recover(pAgent,Storage?"storage":"resource",pError,++Recoveries,true)){
++                    xllmResponseDestroy(pResponse);eResult=XWORK_RESULT_ERROR;goto cleanup;
++                }
++            }
+         }
+         if (!xwork__save(pAgent, pError))
+         {
+@@ -1822,11 +1890,14 @@
+                     xwork__set_error(
+                         pError, XWORK_ERROR_LOOP_GUARD,
+                         "agent repeatedly attempted to finish without verifying workspace changes");
++                    if(xwork__recover(pAgent,"verification",pError,uVerificationPrompts+1u,true)){
++                        bNeedNewTurn=true;continue;
++                    }
+                     eResult = XWORK_RESULT_LIMIT;
+                     goto cleanup;
+                 }
+                 ++uVerificationPrompts;
+-                uTurn = xllmSessionBeginTurn(pAgent->pSession);
++                uTurn = xwork__begin_turn_retained(pAgent,pError);
+                 if (!uTurn ||
+                     !xllmSessionAddText(pAgent->pSession, uTurn, XLLM_ROLE_USER,
+                                         sVerificationPrompt, XLLM_SESSION_ENTRY_SYNTHETIC))
+@@ -1866,14 +1937,17 @@
+         {
+             bool bBatchHadSuccess = false;
+             bool bFailureLimitReached = false;
+-            xwork_tool_batch_output *pOutputs =
++            uint32_t BatchRecoveries=0;
++retry_batch_allocation:
++            ;xwork_tool_batch_output *pOutputs =
+                 (xwork_tool_batch_output *)calloc(pResponse->iToolCallCount, sizeof(*pOutputs));
+             xllm_executor_ctx tBatchContext;
+             if (!pOutputs)
+             {
+-                xllmResponseDestroy(pResponse);
+                 xwork__set_error(pError, XWORK_ERROR_OUT_OF_MEMORY,
+                                  "failed to allocate ordered tool batch outputs");
++                if(xwork__recover(pAgent,"resource",pError,++BatchRecoveries,true))goto retry_batch_allocation;
++                xllmResponseDestroy(pResponse);
+                 eResult = XWORK_RESULT_ERROR;
+                 goto cleanup;
+             }
+@@ -1908,6 +1982,8 @@
+                     xllmResponseDestroy(pResponse);
+                     goto cleanup;
+                 }
++                uint32_t ResultRecoveries=0;
++retry_ordered_result:
+                 if (pOutputs[i].pImageBytes && pOutputs[i].iImageSize && pOutputs[i].sImageMime[0])
+                 {
+                     bRecorded = xllmSessionAddToolResultWithImage(
+@@ -1923,6 +1999,10 @@
+                 {
+                     xwork__set_error(pError, XWORK_ERROR_CONTEXT,
+                                      "failed to append an ordered tool result to session");
++                    xllm_error Persist;xllmErrorInit(&Persist);
++                    bool Storage=xllmSessionGetLastPersistenceError(pAgent->pSession,&Persist);
++                    if(xllmSessionGetState(pAgent->pSession)!=XLLM_SESSION_STATE_RECOVERY_REQUIRED&&
++                        xwork__recover(pAgent,Storage?"storage":"resource",pError,++ResultRecoveries,true))goto retry_ordered_result;
+                     eResult = XWORK_RESULT_ERROR;
+                     xwork__tool_batch_outputs_unit(pOutputs, pResponse->iToolCallCount);
+                     free(pOutputs);
+@@ -1949,6 +2029,9 @@
+                 else
+                 {
+                     ++uConsecutiveToolFailures;
++                    /* Main thread, after all worker callbacks joined. Never
++                     * mutate dispatch policy concurrently from an OOM hook. */
++                    pAgent->uMaxParallelTools=1;
+                 }
+                 if (uConsecutiveToolFailures >= pAgent->uConsecutiveFailureLimit)
+                 {
+@@ -1976,6 +2059,13 @@
+             {
+                 xwork__set_error(pError, XWORK_ERROR_LOOP_GUARD,
+                                  "consecutive tool failure limit reached");
++                if(xwork__recover(pAgent,"loop_guard",pError,uConsecutiveToolFailures,true)){
++                    uint64_t RecoveryTurn=xwork__begin_turn_retained(pAgent,pError);
++                    if(RecoveryTurn&&xllmSessionAddText(pAgent->pSession,RecoveryTurn,XLLM_ROLE_USER,
++                        "The current method repeatedly failed. Choose a different available tool or approach. Do not blindly repeat commands with possible effects; inspect existing results and receipts first.",XLLM_SESSION_ENTRY_SYNTHETIC)&&xwork__save(pAgent,pError)){
++                        xllmResponseDestroy(pResponse);bNeedNewTurn=true;continue;
++                    }
++                }
+                 eResult = XWORK_RESULT_LIMIT;
+                 xllmResponseDestroy(pResponse);
+                 goto cleanup;
+@@ -2009,6 +2099,10 @@
+                          "available for recovery");
+         xwork__atomic_store(&pAgent->iCancelled, 0);
+     }
++    if(eResult!=XWORK_RESULT_OK&&!pAgent->bEventSinkFailed){
++        if(xwork__operation_status(pAgent)==XWORK_OPERATION_TIMED_OUT||(pError&&pError->eCode==XWORK_ERROR_TIMEOUT))eResult=XWORK_RESULT_TIMEOUT;
++        else if(xwork__is_cancelled(pAgent)||(pError&&pError->eCode==XWORK_ERROR_CANCELLED))eResult=XWORK_RESULT_CANCELLED;
++    }
+     if (eResult != XWORK_RESULT_OK)
+     {
+         (void)xllmSessionGetStats(pAgent->pSession, &tRun.tFinalSessionStats);
+--- a/lib/xwork/src/xwork_core.c
++++ b/lib/xwork/src/xwork_core.c
+@@ -815,14 +815,61 @@
+     return uDeadline;
+ }
+ 
++/* Keep the failed operation's stack/result alive while the host waits.
++ * No completed model/tool execution is restarted by this helper. */
++bool xwork__recover(xwork_agent *Agent,const char *Stage,xwork_error *Error,
++                     uint32_t Attempt,bool Safe)
++{
++    xwork_agent_extension_context Context={0};xwork_error PolicyError;
++    if(!Agent||!Agent->OnExtension||!Safe)return false;
++    if(xwork__operation_status(Agent)==XWORK_OPERATION_TIMED_OUT){xwork__set_error(Error,XWORK_ERROR_TIMEOUT,"recovery deadline exceeded");return false;}
++    if(xwork__is_cancelled(Agent)){xwork__set_error(Error,XWORK_ERROR_CANCELLED,"recovery was cancelled");return false;}
++    Context.ePhase=XWORK_AGENT_EXTENSION_RECOVERY;Context.sRecoveryStage=Stage;
++    Context.pRecoveryError=Error;Context.uRecoveryAttempt=Attempt;Context.bRecoverySafe=Safe;
++    xworkErrorInit(&PolicyError);
++    if(xwork__agent_extension(Agent,&Context,&PolicyError)!=XWORK_RESULT_OK||!Context.bRecoveryHandled)return false;
++    xwork_event Event={0};Event.eKind=XWORK_EVENT_RECOVERY_WAIT;Event.sText=Stage;
++    xllm_session_tail Tail={0};if(xllmSessionGetTail(Agent->pSession,&Tail))Event.uAgentTurn=Tail.uTurn;
++    Event.sProviderCode=Context.bRecoveryWaiting?"waiting_resource":"recovering_resource";
++    if(!strcmp(Stage,"storage"))Event.sProviderCode="waiting_storage";
++    if(!strncmp(Stage,"compaction",10))Event.sProviderCode="waiting_compaction";
++    if(!strcmp(Stage,"context"))Event.sProviderCode="waiting_context";
++    if(!strcmp(Stage,"callback"))Event.sProviderCode="waiting_callback";
++    if(!strcmp(Stage,"verification"))Event.sProviderCode="waiting_verification";
++    if(!strcmp(Stage,"loop_guard"))Event.sProviderCode="waiting_tools";
++    Event.tDiagnostics.uAttemptCount=Attempt;Event.tDiagnostics.uRetryAfterMs=Context.uRecoveryDelayMs;
++    /* A storage outage must not recursively ask the failed sink to persist
++     * its own recovery notice. The original operation remains authoritative. */
++    bool Notify=strcmp(Stage,"storage")&&strcmp(Stage,"callback_quiet")&&strcmp(Stage,"callback_resource_quiet");
++    if(Notify&&!xwork__emit(Agent,&Event))return false;
++    uint64_t Until=xllmClockUs()+(uint64_t)Context.uRecoveryDelayMs*1000u,NextProbe=xllmClockUs();
++    do{
++        if(xwork__operation_status(Agent)==XWORK_OPERATION_TIMED_OUT){xwork__set_error(Error,XWORK_ERROR_TIMEOUT,"recovery deadline exceeded");return false;}
++        if(xwork__is_cancelled(Agent)){xwork__set_error(Error,XWORK_ERROR_CANCELLED,"recovery was cancelled");return false;}
++        if(Context.bRecoveryNeedsChange&&xllmClockUs()>=NextProbe){
++            Context.bRecoveryProbe=true;Context.bRecoveryReady=false;
++            if(xwork__agent_extension(Agent,&Context,&PolicyError)!=XWORK_RESULT_OK)return false;
++            if(Context.bRecoveryReady)break;
++            NextProbe=xllmClockUs()+1000000u;
++        }
++        if(!Context.bRecoveryNeedsChange&&xllmClockUs()>=Until)break;
++        xrtSleep(20);
++    }while(true);
++    if(Notify){Event.tDiagnostics.uRetryAfterMs=0;(void)xwork__emit(Agent,&Event);}
++    return true;
++}
++
+ bool xwork__save(xwork_agent *pAgent, xwork_error *pError)
+ {
+     xllm_error tError;
++    uint32_t Attempt=0;
+     if (!pAgent || !pAgent->bAutoSaveSession || !pAgent->sSessionPath || !pAgent->sSessionPath[0])
+         return true;
++retry_checkpoint:
+     if (!xwork__ensure_parent(pAgent->sSessionPath))
+     {
+         xwork__set_error(pError, XWORK_ERROR_IO, "failed to create session directory");
++        if(xwork__recover(pAgent,"storage",pError,++Attempt,true))goto retry_checkpoint;
+         return false;
+     }
+     xllmErrorInit(&tError);
+@@ -830,9 +877,15 @@
+     {
+         xwork__set_error(pError, XWORK_ERROR_IO,
+                          tError.sMessage[0] ? tError.sMessage : "failed to save session");
++        if(xwork__recover(pAgent,"storage",pError,++Attempt,true))goto retry_checkpoint;
+         return false;
+     }
+     return true;
++}
++
++bool xworkAgentWaitRecovery(xwork_agent *Agent,const char *Stage,xwork_error *Error,uint32_t Attempt)
++{
++    return Stage&&Stage[0]&&xwork__recover(Agent,Stage,Error,Attempt,true);
+ }
+ 
+ bool xworkPathIsProtected(const char *sPath)
+--- a/lib/xwork/src/xwork_internal.h
++++ b/lib/xwork/src/xwork_internal.h
+@@ -633,6 +633,7 @@
+ xfile xwork__artifact_temp(xroot Directory, char Name[64]);
+ void xwork__runtime_observability_unit(xwork_runtime *pRuntime);
+ bool xwork__save(xwork_agent *pAgent, xwork_error *pError);
++bool xwork__recover(xwork_agent*,const char*,xwork_error*,uint32_t,bool);
+ const xwork_tool_entry *xwork__find_tool(const xwork_agent *pAgent, const char *sName);
+ void xwork__tool_entry_unit(xwork_tool_entry *pTool);
+ xwork_tool_catalog *xwork__tool_catalog_empty(uint64_t uGeneration);
+--- /dev/null
++++ b/lib/xwork/src/xwork_process_grep.inc.c
+@@ -0,0 +1,62 @@
++/* Search large result files with bounded memory. Ordinary workspace limits
++ * stay unchanged. A snapshot ends at the size observed when the file opens. */
++static xwork_explore_status xwork__explore_grep_log_line(const xwork_explore_file* File,
++    xwork_grep_state* State,const char* Text,size_t Size,size_t Line)
++{
++    if(Size&&Text[Size-1u]=='\r')Size--;
++    if(memchr(Text,0,Size)||!xrtUtf8Valid((xstrview){Text,Size},NULL))return XWORK_EXPLORE_IO;
++    if(State->bTruncated)return XWORK_EXPLORE_OK;
++    size_t Begin=0,End=0;bool Match=false;
++    xwork_explore_status Result=xwork__explore_line_match(State,Text,Size,&Begin,&End,&Match);
++    if(Result!=XWORK_EXPLORE_OK||!Match)return Result;
++    State->iMatches++;
++    if(State->iShown>=State->iMaxResults){State->bTruncated=true;return XWORK_EXPLORE_OK;}
++    if(!xwork__buf_appendf(State->pOutput,"%s:%zu: ",File->sWorkspaceRelative,Line)||
++        !xwork__explore_append_preview(State->pOutput,Text,Size,Begin,End)||
++        !xwork__buf_append_char(State->pOutput,'\n'))return XWORK_EXPLORE_OUT_OF_MEMORY;
++    State->iShown++;return XWORK_EXPLORE_OK;
++}
++
++static xwork_explore_status xwork__explore_grep_log(const xwork_explore_file* File,xwork_grep_state* State)
++{
++    if(xwork__explore_binary_extension(File->sWorkspaceRelative)){State->iBinarySkipped++;return XWORK_EXPLORE_OK;}
++    xfileoptions Options;xrtFileOptionsInit(&Options);Options.Flags=XFILE_READ|XFILE_NOFOLLOW;
++    xfile Handle=xrtFileOpen(File->sAbsolute,&Options);xfileinfo Info;
++    if(!Handle||!xrtFileStat(Handle,&Info)||Info.Type!=XFILE_TYPE_FILE){if(Handle)xrtClose(Handle);return XWORK_EXPLORE_IO;}
++    if(Info.Size>XWORK_EXPLORE_MAX_TOTAL_BYTES-State->iBytesScanned){State->bScanLimited=true;xrtClose(Handle);return XWORK_EXPLORE_LIMIT;}
++    size_t BeforeSize=State->pOutput->iLen,BeforeShown=State->iShown,BeforeMatches=State->iMatches;
++    bool BeforeTruncated=State->bTruncated,Binary=false;xwork_buf Line={0};size_t LineNumber=0;
++    uint64_t Remaining=Info.Size;unsigned char Chunk[32768];xwork_explore_status Result=XWORK_EXPLORE_OK;
++    while(Remaining) {
++        Result=xwork__explore_scope_status(State->pContext);if(Result!=XWORK_EXPLORE_OK)break;
++        size_t Want=Remaining>sizeof(Chunk)?sizeof(Chunk):(size_t)Remaining,Got=0;
++        if(!xrtRead(Handle,Chunk,Want,&Got)){Result=XWORK_EXPLORE_IO;break;}
++        if(!Got){State->bScanLimited=true;Result=XWORK_EXPLORE_LIMIT;break;}
++        Remaining-=Got;State->iBytesScanned+=Got;size_t At=0;
++        while(At<Got) {
++            const unsigned char* Newline=memchr(Chunk+At,'\n',Got-At);
++            size_t N=Newline?(size_t)(Newline-(Chunk+At)):Got-At;
++            if(N>XWORK_EXPLORE_MAX_FILE_BYTES-Line.iLen){State->bScanLimited=true;Result=XWORK_EXPLORE_LIMIT;break;}
++            if(!xwork__buf_append(&Line,Chunk+At,N)){Result=XWORK_EXPLORE_OUT_OF_MEMORY;break;}
++            At+=N+(Newline?1u:0u);
++            if(Newline) {
++                Result=xwork__explore_grep_log_line(File,State,Line.pData?Line.pData:"",Line.iLen,++LineNumber);
++                if(Result==XWORK_EXPLORE_IO){Binary=true;break;}
++                if(Result!=XWORK_EXPLORE_OK)break;
++                Line.iLen=0;if(Line.pData)Line.pData[0]=0;
++            }
++        }
++        if(Binary||Result!=XWORK_EXPLORE_OK)break;
++    }
++    if(!Binary&&Result==XWORK_EXPLORE_OK&&Line.iLen) {
++        Result=xwork__explore_grep_log_line(File,State,Line.pData,Line.iLen,++LineNumber);
++        if(Result==XWORK_EXPLORE_IO)Binary=true;
++    }
++    if(Binary) {
++        State->pOutput->iLen=BeforeSize;if(State->pOutput->pData)State->pOutput->pData[BeforeSize]=0;
++        State->iShown=BeforeShown;State->iMatches=BeforeMatches;State->bTruncated=BeforeTruncated;
++        State->iBinarySkipped++;Result=XWORK_EXPLORE_OK;
++    }
++    xwork__buf_unit(&Line);if(!xrtClose(Handle)&&Result==XWORK_EXPLORE_OK)Result=XWORK_EXPLORE_IO;
++    return Result;
++}
+--- /dev/null
++++ b/lib/xwork/src/xwork_process_output.inc.c
+@@ -0,0 +1,396 @@
++/* Sequential, bounded process logs shared by exec, spawn and the host SDK.
++ * Ordinary writes enter the OS cache; no per-chunk durable flush is required.
++ * File-backed output retains the prefix, never overwrites it with a tail. */
++#define XWORK_OUTPUT_INLINE (12u * 1024u)
++#define XWORK_OUTPUT_MAX (64u * 1024u * 1024u)
++#define XWORK_OUTPUT_STORE_MAX (1024u * 1024u * 1024u)
++#define XWORK_OUTPUT_AGE (7u * 24u * 60u * 60u)
++
++typedef struct xwork_output_stream {
++    xfile File;
++    xwork_buf Preview;
++    char* Path;
++    char* Locator;
++    uint64_t Received;
++    uint64_t Stored;
++    uint64_t FileBytes;
++    bool Explicit;
++    bool Lost;
++} xwork_output_stream;
++
++struct xwork_process_output {
++    xmutex* Lock;
++    xroot Root;
++    xroot Run;
++    xfile Lease;
++    char Id[33];
++    char Error[96];
++    int SystemCode;
++    size_t InlineBytes;
++    uint64_t MaxBytes;
++    uint64_t Stored;
++    bool FilesFromStart;
++    bool MergeStderr;
++    bool Finished;
++    bool Reserved;
++    struct xwork_process_output* ActiveNext;
++    xwork_output_stream Streams[2];
++};
++
++/* POSIX fcntl locks are process-scoped: a second handle in this process can
++ * acquire them, and closing that handle releases the process's lock. Protect
++ * local collectors/writers with one mutex and skip local active leases before
++ * opening them; native file locks then protect us against other processes. */
++static xonce xwork__output_once;
++static xmutex* xwork__output_gate;
++static xwork_process_output* xwork__output_active;
++static bool xwork__output_init(void* Unused)
++{(void)Unused;xwork__output_gate=xrtMutexCreate();return xwork__output_gate!=NULL;}
++static bool xwork__output_local_lock(void)
++{return xrtOnce(&xwork__output_once,xwork__output_init,NULL)&&xrtMutexLock(xwork__output_gate);}
++static bool xwork__output_local_active(const char* Id)
++{for(xwork_process_output* O=xwork__output_active;O;O=O->ActiveNext)if(!strcmp(O->Id,Id))return true;return false;}
++
++static bool xwork__output_name(const char* Name)
++{
++    size_t i;
++    if (!Name || strlen(Name)!=32u) return false;
++    for(i=0;i<32u;i++) if(!((Name[i]>='0'&&Name[i]<='9')||(Name[i]>='a'&&Name[i]<='f'))) return false;
++    return true;
++}
++
++static bool xwork__output_put(xvalue* V,const char* Key,const char* Text)
++{return xrtValueObjectSetNew(V,xrtStrView(Key),xrtValueString(xrtStrView(Text?Text:"")));}
++static bool xwork__output_uint(xvalue* V,const char* Key,uint64_t N)
++{return xrtValueObjectSetNew(V,xrtStrView(Key),xrtValueUInt(N));}
++static bool xwork__output_bool(xvalue* V,const char* Key,bool B)
++{return xrtValueObjectSetNew(V,xrtStrView(Key),xrtValueBool(B));}
++static bool xwork__output_get_uint(const xvalue* V,const char* Key,uint64_t* N)
++{
++    const xvalue* P=xrtValueObjectGet(V,xrtStrView(Key));int64_t I=0;
++    return xrtValueGetUInt(P,N)||(xrtValueGetInt(P,&I)&&I>=0&&(*N=(uint64_t)I,true));
++}
++
++static void xwork__output_error(xwork_process_output* O,const char* Reason)
++{
++    if(!O->Error[0]) {
++        snprintf(O->Error,sizeof(O->Error),"%s",Reason);
++        O->SystemCode=xrtGetError()?xrtErrorSystemCode(xrtGetError()):0;
++    }
++}
++
++static xfile xwork__output_file(xroot Root,const char* Name,bool Exclusive)
++{
++    xfileoptions Opt;xrtFileOptionsInit(&Opt);
++    Opt.Flags=XFILE_READ|XFILE_WRITE|XFILE_CREATE|XFILE_NOFOLLOW|(Exclusive?XFILE_EXCLUSIVE:0u);
++    Opt.Mode=0600u;Opt.Share=XFILE_SHARE_READ|XFILE_SHARE_WRITE|XFILE_SHARE_DELETE;
++    return xrtRootFileOpen(Root,Name,&Opt);
++}
++
++static xroot xwork__output_root(xroot Root)
++{
++    xfileinfo Info;
++    if(!Root) return NULL;
++    if(!xrtRootStat(Root,"process",false,&Info)) {
++        if(xrtErrorKind(xrtGetError())!=XERR_NOT_FOUND) return NULL;
++        if(!xrtRootDirCreate(Root,"process",0700u)&&xrtErrorKind(xrtGetError())!=XERR_EXISTS) return NULL;
++    } else if(Info.Type!=XFILE_TYPE_DIRECTORY) return NULL;
++    return xrtRootOpenIn(Root,"process");
++}
++
++/* A collector holds the quota lock. An active writer keeps a separate lifetime
++ * lock, so an idle/quiet command cannot be mistaken for an expired log. */
++typedef struct xwork_output_old {
++    char Name[33];
++    uint64_t Bytes;
++    int64_t Ended;
++} xwork_output_old;
++
++static int xwork__output_old_compare(const void* A,const void* B)
++{
++    const xwork_output_old* X=A;const xwork_output_old* Y=B;
++    return X->Ended<Y->Ended?-1:X->Ended>Y->Ended?1:strcmp(X->Name,Y->Name);
++}
++
++static bool xwork__output_receipt_read(xroot Run,uint64_t* Limit,int64_t* Ended)
++{
++    char Text[256];xfileoptions Opt;xrtFileOptionsInit(&Opt);Opt.Flags=XFILE_READ|XFILE_NOFOLLOW;
++    xfile F=xrtRootFileOpen(Run,".receipt.json",&Opt);if(!F)return false;
++    size_t N=0;bool Read=xrtRead(F,Text,sizeof(Text)-1u,&N);xrtClose(F);if(!Read||!N||N==sizeof(Text)-1u)return false;
++    Text[N]=0;xvalue* V=xrtJsonParse(xrtStrView(Text));uint64_t Stamp=0,Format=0;
++    bool Ok=V&&xwork__output_get_uint(V,"format",&Format)&&Format==1u&&
++        xwork__output_get_uint(V,"limit",Limit)&&xwork__output_get_uint(V,"ended_ms",&Stamp)&&Stamp<=INT64_MAX;
++    if(Ok)*Ended=(int64_t)Stamp;xrtValueRelease(V);
++    if(Ok) {
++        F=xrtRootFileOpen(Run,".finished.json",&Opt);
++        if(F) {
++            N=0;Read=xrtRead(F,Text,sizeof(Text)-1u,&N);xrtClose(F);
++            if(Read&&N&&N<sizeof(Text)-1u) {
++                Text[N]=0;V=xrtJsonParse(xrtStrView(Text));
++                if(V&&xwork__output_get_uint(V,"ended_ms",&Stamp)&&Stamp<=INT64_MAX)*Ended=(int64_t)Stamp;
++                xrtValueRelease(V);
++            }
++        }
++    }
++    return Ok;
++}
++
++static uint64_t xwork__output_scan(xroot Root,uint64_t Target,uint64_t MaxAgeSeconds,bool* Ok)
++{
++    xwork_output_old* Old=NULL;size_t Count=0,Cap=0;uint64_t Total=0;int64_t Now=xllmUnixUs()/1000;
++    size_t Visited=0;xdir Dir=xrtRootDirOpen(Root,".",0);xdirentry Entry;xdirnext Next=XDIR_NEXT_END;*Ok=Dir!=NULL;
++    while(Dir&&(Next=xrtDirNext(Dir,&Entry))==XDIR_NEXT_ITEM) {
++        if(++Visited>8192u){*Ok=false;break;}
++        if(!(Entry.Flags&XDIR_ENTRY_UTF8)||Entry.Name.Size!=32u)continue;
++        char Name[33];memcpy(Name,Entry.Name.Data,32u);Name[32]=0;
++        if(!xwork__output_name(Name))continue;
++        xfileinfo Info;if(!xrtRootStat(Root,Name,false,&Info)||Info.Type!=XFILE_TYPE_DIRECTORY)continue;
++        xroot Run=xrtRootOpenIn(Root,Name);if(!Run){*Ok=false;continue;}
++        uint64_t Limit=0,Bytes=0;int64_t Ended=0;
++        if(!xwork__output_receipt_read(Run,&Limit,&Ended)||!Limit||Limit>XWORK_OUTPUT_STORE_MAX){xrtRootClose(Run);continue;}
++        bool Local=xwork__output_local_active(Name);
++        xfile Lease=Local?NULL:xwork__output_file(Run,".active.lock",false);
++        bool Active=Local||!Lease||!xrtFileLock(Lease,XFILE_LOCK_EXCLUSIVE,false);
++        if(Active) Bytes=Limit;
++        else {
++            /* Re-read completion only after the lifetime lock is acquired. A
++             * finishing writer may have been publishing its immutable marker. */
++            (void)xwork__output_receipt_read(Run,&Limit,&Ended);
++            if(xrtRootStat(Run,"stdout.log",false,&Info)&&Info.Type==XFILE_TYPE_FILE)Bytes+=Info.Size;
++            if(xrtRootStat(Run,"stderr.log",false,&Info)&&Info.Type==XFILE_TYPE_FILE)Bytes+=Info.Size;
++            if(!Ended) { /* Unlocked unfinished receipt: process owner has gone. */
++                if(xrtRootStat(Run,".receipt.json",false,&Info))Ended=Info.Modified;
++                else Ended=Now;
++            }
++            if(Count==Cap) {size_t Next=Cap?Cap*2u:32u;void* P=realloc(Old,Next*sizeof(*Old));if(!P){*Ok=false;xrtClose(Lease);xrtRootClose(Run);break;}Old=P;Cap=Next;}
++            memcpy(Old[Count].Name,Name,33u);Old[Count].Bytes=Bytes;Old[Count++].Ended=Ended;
++        }
++        if(UINT64_MAX-Total<Bytes){*Ok=false;Total=UINT64_MAX;}else Total+=Bytes;
++        if(Lease)xrtClose(Lease);xrtRootClose(Run);
++        if(Count>4096u){*Ok=false;break;}
++    }
++    if(Next==XDIR_NEXT_ERROR)*Ok=false;if(Dir)xrtDirClose(Dir);
++    if(Count>1u)qsort(Old,Count,sizeof(*Old),xwork__output_old_compare);
++    for(size_t i=0;i<Count;i++) {
++        bool Expired=MaxAgeSeconds&&Now>=Old[i].Ended&&(uint64_t)(Now-Old[i].Ended)/1000u>=MaxAgeSeconds;
++        if(Total<=Target&&!Expired)continue;
++        xroot Run=xrtRootOpenIn(Root,Old[i].Name);if(!Run)continue;
++        xfile Lease=xwork__output_file(Run,".active.lock",false);
++        bool Removed=false;
++        if(Lease&&xrtFileLock(Lease,XFILE_LOCK_EXCLUSIVE,false)) {
++            /* Only our fixed files are removed, never recursive arbitrary content. */
++            bool A=xrtRootRemove(Run,"stdout.log")||xrtErrorKind(xrtGetError())==XERR_NOT_FOUND;
++            bool B=xrtRootRemove(Run,"stderr.log")||xrtErrorKind(xrtGetError())==XERR_NOT_FOUND;
++            if(A&&B) {
++                bool C=xrtRootRemove(Run,".finished.json")||xrtErrorKind(xrtGetError())==XERR_NOT_FOUND;
++                if(C)Removed=xrtRootRemove(Run,".receipt.json");
++            }
++        }
++        if(Lease)xrtClose(Lease);
++        if(Removed){(void)xrtRootRemove(Run,".active.lock");Total=Total>=Old[i].Bytes?Total-Old[i].Bytes:0;}
++        xrtRootClose(Run);if(Removed)(void)xrtRootRemove(Root,Old[i].Name);
++    }
++    free(Old);return Total;
++}
++
++bool xworkProcessOutputCollect(xroot Directory,uint64_t MaxBytes,uint64_t MaxAgeSeconds)
++{
++    if(!xwork__output_local_lock())return false;
++    xroot Root=Directory?xrtRootOpenIn(Directory,"process"):NULL;
++    if(!Root){bool Missing=Directory&&xrtErrorKind(xrtGetError())==XERR_NOT_FOUND;xrtMutexUnlock(xwork__output_gate);return Missing;}
++    xfile Gate=xwork__output_file(Root,".quota.lock",false);bool Ok=false;
++    if(Gate&&xrtFileLock(Gate,XFILE_LOCK_EXCLUSIVE,true)) {
++        uint64_t Total=xwork__output_scan(Root,MaxBytes?MaxBytes:XWORK_OUTPUT_STORE_MAX,MaxAgeSeconds,&Ok);
++        Ok=Ok&&Total<=(MaxBytes?MaxBytes:XWORK_OUTPUT_STORE_MAX);
++    }
++    if(Gate)xrtClose(Gate);xrtRootClose(Root);xrtMutexUnlock(xwork__output_gate);return Ok;
++}
++
++static bool xwork__output_receipt(xwork_process_output* O)
++{
++    if(!O->Run)return true;
++    char Text[192];int N=snprintf(Text,sizeof(Text),"{\"format\":1,\"limit\":%llu,\"ended_ms\":%llu}\n",
++        (unsigned long long)O->MaxBytes,(unsigned long long)(O->Finished?xllmUnixUs()/1000:0));
++    xfileoptions Opt;xrtFileOptionsInit(&Opt);Opt.Flags=XFILE_WRITE|XFILE_CREATE|XFILE_EXCLUSIVE|XFILE_NOFOLLOW;
++    Opt.Mode=0600u;Opt.Share=XFILE_SHARE_READ;
++    xfile F=xrtRootFileOpen(O->Run,O->Finished?".finished.json":".receipt.json",&Opt);
++    bool Ok=F&&N>0&&xrtWriteFull(F,Text,(size_t)N,NULL);if(F)xrtClose(F);return Ok;
++}
++
++static bool xwork__output_reserve(xwork_process_output* O)
++{
++    if(O->Reserved)return true;
++    if(!xwork__output_local_lock())return false;
++    xroot Root=xwork__output_root(O->Root);if(!Root){xrtMutexUnlock(xwork__output_gate);return false;}
++    xfile Gate=xwork__output_file(Root,".quota.lock",false);bool Ok=false;
++    if(!Gate||!xrtFileLock(Gate,XFILE_LOCK_EXCLUSIVE,true))goto done;
++    bool Scanned=false;uint64_t Total=xwork__output_scan(Root,XWORK_OUTPUT_STORE_MAX-O->MaxBytes,XWORK_OUTPUT_AGE,&Scanned);
++    if(!Scanned||Total>XWORK_OUTPUT_STORE_MAX-O->MaxBytes){xwork__output_error(O,"store_limit");goto done;}
++    uint8_t Random[16];if(!xrtSecureRandom(Random,sizeof(Random)))goto done;
++    for(size_t i=0;i<sizeof(Random);i++) {static const char Hex[]="0123456789abcdef";O->Id[i*2u]=Hex[Random[i]>>4];O->Id[i*2u+1u]=Hex[Random[i]&15u];}
++    if(!xrtRootDirCreate(Root,O->Id,0700u))goto done;
++    O->Run=xrtRootOpenIn(Root,O->Id);if(!O->Run)goto done;
++    O->Lease=xwork__output_file(O->Run,".active.lock",true);
++    if(!O->Lease||!xrtFileLock(O->Lease,XFILE_LOCK_EXCLUSIVE,false)||!xwork__output_receipt(O))goto done;
++    O->Reserved=true;O->ActiveNext=xwork__output_active;xwork__output_active=O;Ok=true;
++done:
++    if(Gate)xrtClose(Gate);xrtRootClose(Root);xrtMutexUnlock(xwork__output_gate);return Ok;
++}
++
++static bool xwork__output_open(xwork_process_output* O,size_t Index)
++{
++    xwork_output_stream* S=&O->Streams[Index];if(S->File)return true;
++    if(S->Explicit) {
++        xfileoptions Opt;xrtFileOptionsInit(&Opt);
++        Opt.Flags=XFILE_READ|XFILE_WRITE|XFILE_CREATE|XFILE_EXCLUSIVE|XFILE_NOFOLLOW;
++        Opt.Mode=0600u;Opt.Share=XFILE_SHARE_READ;
++        S->File=xrtFileOpen(S->Path,&Opt);return S->File!=NULL;
++    }
++    if(!xwork__output_reserve(O))return false;
++    const char* Name=Index?"stderr.log":"stdout.log";
++    S->File=xwork__output_file(O->Run,Name,true);if(!S->File)return false;
++    char Relative[96];snprintf(Relative,sizeof(Relative),"process/%s/%s",O->Id,Name);
++    char* Native=xrtPathJoin(xrtRootPath(O->Root),Relative);
++    S->Path=Native?xwork__strdup(Native):NULL;if(Native)xrtFree(Native);
++    char Locator[112];snprintf(Locator,sizeof(Locator),"@results/%s",Relative);S->Locator=xwork__strdup(Locator);
++    return S->Path&&S->Locator;
++}
++
++void xworkProcessOutputOptionsInit(xwork_process_output_options* Options)
++{
++    if(!Options)return;memset(Options,0,sizeof(*Options));Options->Size=sizeof(*Options);
++    Options->InlineBytes=XWORK_OUTPUT_INLINE;Options->MaxBytes=XWORK_OUTPUT_MAX;
++}
++
++xwork_process_output* xworkProcessOutputCreate(const xwork_process_output_options* Options,xwork_error* Error)
++{
++    xwork_process_output* O=NULL;xworkErrorInit(Error);
++    if(!Options||Options->Size!=sizeof(*Options)||Options->InlineBytes<256u||Options->InlineBytes>1024u*1024u||
++        !Options->MaxBytes||Options->MaxBytes>XWORK_OUTPUT_STORE_MAX||
++        (Options->MergeStderr&&Options->StderrPath))goto invalid;
++    if(Options->StdoutPath&&Options->StderrPath&&!strcmp(Options->StdoutPath,Options->StderrPath))goto invalid;
++    O=calloc(1,sizeof(*O));if(!O)goto memory;
++    O->Lock=xrtMutexCreate();if(!O->Lock)goto memory;
++    O->Root=Options->Directory?xrtRootOpenIn(Options->Directory,"."):NULL;
++    O->InlineBytes=Options->InlineBytes;O->MaxBytes=Options->MaxBytes;
++    O->FilesFromStart=Options->FilesFromStart;O->MergeStderr=Options->MergeStderr;
++    for(size_t i=0;i<2u;i++) {
++        const char* Path=i?Options->StderrPath:Options->StdoutPath;
++        if(Path) {O->Streams[i].Explicit=true;O->Streams[i].Path=xwork__strdup(Path);if(!O->Streams[i].Path)goto memory;}
++        if(i&&O->MergeStderr)continue;
++        if((O->FilesFromStart||Path)&&!xwork__output_open(O,i))goto io;
++    }
++    return O;
++invalid:xwork__set_error(Error,XWORK_ERROR_INVALID_ARGUMENT,"invalid process output options or overlapping destinations");return NULL;
++memory:xwork__set_error(Error,XWORK_ERROR_OUT_OF_MEMORY,"cannot allocate process output storage");goto fail;
++io:xwork__set_error(Error,XWORK_ERROR_IO,"cannot exclusively create process output files (existing files are preserved)");
++fail:
++    if(O)for(size_t i=0;i<2u;i++)if(O->Streams[i].Explicit&&O->Streams[i].File){
++        xrtClose(O->Streams[i].File);O->Streams[i].File=NULL;(void)xrtFileDelete(O->Streams[i].Path);
++    }
++    if(O)xworkProcessOutputDestroy(O);return NULL;
++}
++
++bool xworkProcessOutputWrite(xwork_process_output* O,bool Stderr,const void* Data,size_t Size)
++{
++    if(!O||(!Data&&Size)||!xrtMutexLock(O->Lock))return false;
++    size_t Index=Stderr&&!O->MergeStderr?1u:0u;xwork_output_stream* S=&O->Streams[Index];
++    if(O->Finished){xrtMutexUnlock(O->Lock);return false;}
++    S->Received=UINT64_MAX-S->Received<Size?UINT64_MAX:S->Received+Size;
++    size_t Keep=S->Lost?0u:Size;
++    if((uint64_t)Keep>O->MaxBytes-O->Stored){Keep=(size_t)(O->MaxBytes-O->Stored);S->Lost=true;xwork__output_error(O,"output_limit");}
++    if(S->Lost&&O->Stored==O->MaxBytes)Keep=0;
++    if(!S->File&&S->Preview.iLen+Keep>O->InlineBytes/3u) {
++        if(!xwork__output_open(O,Index)) {S->Lost=true;xwork__output_error(O,"output_open_failed");Keep=0;}
++        else if(S->Preview.iLen) {
++            size_t Written=0;
++            bool Ok=xrtWriteAtFull(S->File,0,S->Preview.pData,S->Preview.iLen,&Written);
++            S->FileBytes=Written;
++            if(!Ok){S->Lost=true;xwork__output_error(O,"output_write_failed");Keep=0;}
++        }
++    }
++    if(Keep&&S->File) {
++        size_t Written=0;bool Ok=xrtWriteAtFull(S->File,S->Stored,Data,Keep,&Written);
++        S->FileBytes+=Written;
++        if(!Ok){S->Lost=true;xwork__output_error(O,"output_write_failed");Keep=Written;}
++    }
++    if(Keep) {
++        size_t PreviewKeep=O->InlineBytes/3u>S->Preview.iLen?O->InlineBytes/3u-S->Preview.iLen:0;
++        if(PreviewKeep>Keep)PreviewKeep=Keep;
++        if(PreviewKeep&&!xwork__buf_append(&S->Preview,Data,PreviewKeep)) {
++            S->Lost=true;xwork__output_error(O,"output_memory_failed");
++            if(!S->File)Keep=0;
++        }
++        S->Stored+=Keep;O->Stored+=Keep;
++    }
++    xrtMutexUnlock(O->Lock);
++    /* Continue draining on quota/IO failure: a stopped reader would deadlock a
++     * writer. The snapshot makes any incomplete capture explicit. */
++    return true;
++}
++
++void xworkProcessOutputFinish(xwork_process_output* O)
++{
++    if(!O||!O->Lock||!xrtMutexLock(O->Lock))return;
++    if(!O->Finished) {
++        O->Finished=true;
++        for(size_t i=0;i<2u;i++)if(O->Streams[i].File){
++            if(!xrtClose(O->Streams[i].File)){O->Streams[i].Lost=true;xwork__output_error(O,"output_close_failed");}
++            O->Streams[i].File=NULL;
++        }
++        if(xwork__output_local_lock()) {
++            if(!xwork__output_receipt(O))xwork__output_error(O,"receipt_write_failed");
++            xwork_process_output** Link=&xwork__output_active;
++            while(*Link&&*Link!=O)Link=&(*Link)->ActiveNext;
++            if(*Link==O)*Link=O->ActiveNext;
++            if(O->Lease){xrtClose(O->Lease);O->Lease=NULL;}
++            xrtMutexUnlock(xwork__output_gate);
++        }
++    }
++    xrtMutexUnlock(O->Lock);
++}
++
++static xvalue* xwork__output_stream_value(xwork_process_output* O,size_t Index,bool IncludeText)
++{
++    xwork_output_stream* S=&O->Streams[Index];xvalue* V=xrtValueObject();if(!V)return NULL;
++    bool Ok=xwork__output_uint(V,"bytes",S->Received)&&xwork__output_uint(V,"saved_bytes",S->Path?S->FileBytes:S->Stored)&&
++        xwork__output_bool(V,"complete",O->Finished&&!S->Lost)&&xwork__output_bool(V,"preview_omitted",S->Path?S->Stored>1024u:S->Stored>S->Preview.iLen)&&
++        xwork__output_put(V,"path",S->Locator?S->Locator:S->Path)&&xwork__output_put(V,"native_path",S->Path);
++    if(Ok&&IncludeText) {
++        size_t Head=S->Path&&S->Stored>1024u&&S->Preview.iLen>512u?512u:S->Preview.iLen;
++        xwork_buf Text={0};Ok=xwork__buf_append_process_text(&Text,S->Preview.pData,Head);
++        if(Ok&&S->Stored>Head&&S->Path) {
++            xfileoptions Opt;xrtFileOptionsInit(&Opt);Opt.Flags=XFILE_READ|XFILE_NOFOLLOW;
++            xfile F=S->Explicit?xrtFileOpen(S->Path,&Opt):
++                xrtRootFileOpen(O->Run,Index?"stderr.log":"stdout.log",&Opt);
++            unsigned char Tail[512];size_t N=S->Stored-Head>sizeof(Tail)?sizeof(Tail):(size_t)(S->Stored-Head);
++            size_t Got=0;
++            if(F&&xrtReadAtFull(F,S->Stored-N,Tail,N,&Got))Ok=xwork__buf_append_cstr(&Text,"\n...[preview omitted; read file for full output]...\n")&&xwork__buf_append_process_text(&Text,Tail,Got);
++            if(F)xrtClose(F);
++        }
++        if(Ok)Ok=xwork__output_put(V,"text",Text.pData);xwork__buf_unit(&Text);
++    }
++    if(!Ok){xrtValueRelease(V);return NULL;}return V;
++}
++
++xvalue* xworkProcessOutputSnapshot(xwork_process_output* O,bool IncludeText)
++{
++    if(!O||!xrtMutexLock(O->Lock))return NULL;
++    xvalue* V=xrtValueObject(),*Out=xwork__output_stream_value(O,0u,IncludeText),*Err=xwork__output_stream_value(O,1u,IncludeText);
++    bool Ok=V&&Out&&Err;
++    if(Ok){Ok=xrtValueObjectSetNew(V,XRT_STR_LITERAL("stdout"),Out);Out=NULL;}
++    if(Ok){Ok=xrtValueObjectSetNew(V,XRT_STR_LITERAL("stderr"),Err);Err=NULL;}
++    if(Ok)Ok=xwork__output_bool(V,"output_complete",O->Finished&&!O->Error[0])&&
++        xwork__output_bool(V,"stderr_merged",O->MergeStderr)&&xwork__output_put(V,"output_error",O->Error)&&
++        xwork__output_uint(V,"output_system_code",O->SystemCode<0?0u:(uint64_t)O->SystemCode);
++    xrtMutexUnlock(O->Lock);xrtValueRelease(Out);xrtValueRelease(Err);
++    if(!Ok){xrtValueRelease(V);V=NULL;}return V;
++}
++
++void xworkProcessOutputDestroy(xwork_process_output* O)
++{
++    if(!O)return;xworkProcessOutputFinish(O);
++    for(size_t i=0;i<2u;i++){xwork__buf_unit(&O->Streams[i].Preview);free(O->Streams[i].Path);free(O->Streams[i].Locator);}
++    if(O->Lease)xrtClose(O->Lease);if(O->Run)xrtRootClose(O->Run);if(O->Root)xrtRootClose(O->Root);
++    if(O->Lock)xrtMutexDestroy(O->Lock);free(O);
++}
+--- /dev/null
++++ b/lib/xwork/src/xwork_process_tools.inc.c
+@@ -0,0 +1,299 @@
++/* Process execution owns byte capture; file tools own output consumption.
++ * Included after the task-table helpers and argv/env parser in xwork_tools.c. */
++typedef struct xwork_process_log_capture_stream {
++    struct xwork_process_log_capture* pOwner;
++    xprocessstream eStream;
++    xthread* pThread;
++} xwork_process_log_capture_stream;
++typedef struct xwork_process_log_capture {
++    xprocess* pProcess;
++    xwork_process_output* Output;
++    xwork_process_log_capture_stream tStdout,tStderr;
++} xwork_process_log_capture;
++
++static char* xwork__process_destination(xwork_agent* Agent,xvalue* Args,const char* Key)
++{
++    xvalue* V=xwork__json_get(Args,Key);if(!V)return NULL;
++    xstrview Text={0};if(!xrtValueGetString(V,&Text)||!Text.Size||Text.Size>8192u||memchr(Text.Data,0,Text.Size)||
++        !xrtUtf8Valid(Text,NULL))return NULL;
++    const char* Cwd=xwork__json_text(Args,"cwd");if(!Cwd||!Cwd[0])Cwd=".";
++    char* Joined=(xrtPathIsAbs(Text.Data)||Text.Data[0]=='@')?xrtStrDup(Text.Data):xrtPathJoin(Cwd,Text.Data);
++    char* Result=Joined?xwork__strdup(Joined):NULL;if(Joined)xrtFree(Joined);
++    (void)Agent;return Result;
++}
++
++static xwork_process_output* xwork__process_output_create(xwork_agent* Agent,xvalue* Args,
++    bool Background,bool Merge,xwork_error* Error)
++{
++    xwork_process_output_options Opt;xworkProcessOutputOptionsInit(&Opt);
++    xroot Root=NULL;char* Dest[2]={0};bool Valid=true;
++    Opt.FilesFromStart=Background;Opt.MergeStderr=Merge;
++    Opt.InlineBytes=Agent->iMaxInlineToolBytes;
++    if(Opt.InlineBytes<256u)Opt.InlineBytes=256u;if(Opt.InlineBytes>XWORK_OUTPUT_INLINE)Opt.InlineBytes=XWORK_OUTPUT_INLINE;
++    Opt.MaxBytes=xwork__json_u64(Args,"max_output_bytes",XWORK_OUTPUT_MAX,&Valid);
++    if(!Valid||!Opt.MaxBytes||Opt.MaxBytes>XWORK_OUTPUT_STORE_MAX)goto invalid;
++    for(size_t i=0;i<2u;i++) {
++        const char* Key=i?"stderr_path":"stdout_path";if(!xwork__json_get(Args,Key))continue;
++        char* Logical=xwork__process_destination(Agent,Args,Key);
++        if(!Logical||!strncmp(Logical,"@results",8u)){free(Logical);goto invalid;}
++        Dest[i]=xwork__resolve_path(Agent,Logical,Error);free(Logical);if(!Dest[i])goto done;
++    }
++    Opt.StdoutPath=Dest[0];Opt.StderrPath=Dest[1];
++    if(Agent->bAllowArtifactWrites) {
++        if(Agent->pArtifactStore)Root=xrtRootOpenIn(Agent->pArtifactStore->pDirectory,".");
++        else {
++            char* Absolute=xwork__resolve_path(Agent,Agent->sArtifactDirectory,Error);
++            if(Absolute){Root=xwork__artifact_open_directory(Agent,Absolute,".",Error);free(Absolute);}
++        }
++    }
++    Opt.Directory=Root;
++    {
++        xwork_process_output* Output=xworkProcessOutputCreate(&Opt,Error);
++        if(Root)xrtRootClose(Root);free(Dest[0]);free(Dest[1]);return Output;
++    }
++invalid:xwork__set_error(Error,XWORK_ERROR_INVALID_ARGUMENT,"invalid output paths, merge mode, or max_output_bytes (1..1073741824)");
++done:if(Root)xrtRootClose(Root);free(Dest[0]);free(Dest[1]);return NULL;
++}
++
++static bool xwork__process_run_output(xprocessstream Stream,xbytesview Bytes,void* User)
++{return xworkProcessOutputWrite(User,Stream==XPROCESS_STDERR,Bytes.Data,Bytes.Size);}
++
++static int32 xwork__process_log_capture_thread(void* User)
++{
++    xwork_process_log_capture_stream* Stream=User;unsigned char Chunk[16384];
++    for(;;) {
++        int64 Read=xrtProcessRead(Stream->pOwner->pProcess,Stream->eStream,Chunk,sizeof(Chunk));
++        if(Read<0) {
++            xwork_process_output* O=Stream->pOwner->Output;
++            if(xrtMutexLock(O->Lock)){O->Streams[Stream->eStream==XPROCESS_STDERR?1u:0u].Lost=true;
++                xwork__output_error(O,"output_read_failed");xrtMutexUnlock(O->Lock);}break;
++        }
++        if(!Read)break;
++        if(!xworkProcessOutputWrite(Stream->pOwner->Output,Stream->eStream==XPROCESS_STDERR,Chunk,(size_t)Read))break;
++    }
++    return 0;
++}
++
++static void xwork__process_log_capture_destroy(xwork_process_log_capture* Capture)
++{
++    if(!Capture)return;
++    if(Capture->tStdout.pThread){xrtThreadWait(Capture->tStdout.pThread);xrtThreadDestroy(Capture->tStdout.pThread);}
++    if(Capture->tStderr.pThread){xrtThreadWait(Capture->tStderr.pThread);xrtThreadDestroy(Capture->tStderr.pThread);}
++    free(Capture);
++}
++
++static xwork_process_log_capture* xwork__process_log_capture_create(xprocess* Process,xwork_process_output* Output,bool Stderr)
++{
++    xwork_process_log_capture* C=calloc(1,sizeof(*C));if(!C)return NULL;C->pProcess=Process;C->Output=Output;
++    C->tStdout.pOwner=C;C->tStdout.eStream=XPROCESS_STDOUT;C->tStderr.pOwner=C;C->tStderr.eStream=XPROCESS_STDERR;
++    C->tStdout.pThread=xrtThreadCreate(xwork__process_log_capture_thread,&C->tStdout,0u);
++    if(C->tStdout.pThread&&Stderr)C->tStderr.pThread=xrtThreadCreate(xwork__process_log_capture_thread,&C->tStderr,0u);
++    if(!C->tStdout.pThread||(Stderr&&!C->tStderr.pThread)) {
++        (void)xrtProcessKillTree(Process);xwork__process_log_capture_destroy(C);return NULL;
++    }
++    return C;
++}
++
++static bool xwork__process_output_read(xwork_process_output* O,bool Err,uint64_t Offset,size_t Max,
++    unsigned char** Bytes,size_t* Size,uint64_t* Next,bool* Dropped)
++{
++    *Bytes=NULL;*Size=0;*Next=Offset;*Dropped=false;if(!O||!xrtMutexLock(O->Lock))return false;
++    xwork_output_stream* S=&O->Streams[Err?1u:0u];uint64_t Available=S->Path?S->FileBytes:S->Stored;
++    if(Offset>Available)Offset=Available;*Next=Offset;*Dropped=S->Lost;
++    size_t N=Available-Offset>Max?Max:(size_t)(Available-Offset);bool Ok=true;
++    if(N) {
++        *Bytes=malloc(N);if(!*Bytes){Ok=false;goto done;}
++        if(S->Path) {
++            xfileoptions Opt;xrtFileOptionsInit(&Opt);Opt.Flags=XFILE_READ|XFILE_NOFOLLOW;
++            xfile F=S->Explicit?xrtFileOpen(S->Path,&Opt):xrtRootFileOpen(O->Run,Err?"stderr.log":"stdout.log",&Opt);
++            size_t Got=0;Ok=F&&xrtReadAtFull(F,Offset,*Bytes,N,&Got)&&Got==N;if(F)xrtClose(F);
++        } else memcpy(*Bytes,S->Preview.pData+(size_t)Offset,N);
++        if(Ok){*Size=N;*Next=Offset+N;}
++    }
++done:if(!Ok){free(*Bytes);*Bytes=NULL;}xrtMutexUnlock(O->Lock);return Ok;
++}
++
++static xvalue* xwork__process_status_value(xwork_agent* Agent,xwork_process_entry* Entry)
++{
++    if(!xrtMutexLock(Entry->pStateLock))return NULL;
++    xwork__task_refresh_locked(Entry);bool Complete=Entry->eState>=XWORK_TASK_SUCCEEDED;
++    xvalue* V=Entry->Output?xworkProcessOutputSnapshot(Entry->Output,false):xrtValueObject();
++    bool Ok=V&&xwork__output_uint(V,"task_id",Entry->uId)&&xwork__output_put(V,"state",xwork__task_state_name(Entry->eState))&&
++        xwork__output_put(V,"kind",Entry->eKind==XWORK_TASK_PROCESS?"process":Entry->eKind==XWORK_TASK_AGENT?"agent":"scheduled")&&
++        xwork__output_bool(V,"finished",Complete);
++    if(Ok&&Entry->bExitStatusValid)Ok=xrtValueObjectSetNew(V,XRT_STR_LITERAL("exit_code"),xrtValueInt(Entry->iExitCode))&&
++        xrtValueObjectSetNew(V,XRT_STR_LITERAL("signal"),xrtValueInt(Entry->iExitSignal))&&
++        xrtValueObjectSetNew(V,XRT_STR_LITERAL("stop_reason"),xrtValueInt(Entry->iStopReason));
++    if(Ok&&Complete&&Entry->eKind!=XWORK_TASK_PROCESS&&Entry->sResult) {
++        Ok=xwork__output_bool(V,"result_truncated",Entry->bResultDropped)&&
++            xwork__output_uint(V,"result_offset",Entry->uResultBaseOffset);
++        size_t Len=strlen(Entry->sResult);
++        if(Len>Agent->iMaxInlineToolBytes&&Agent->bAllowArtifactWrites&&!Entry->Output) {
++            xvalue* Args=xrtValueObject();Entry->Output=xwork__process_output_create(Agent,Args,true,false,NULL);xrtValueRelease(Args);
++            if(Entry->Output){xworkProcessOutputWrite(Entry->Output,false,Entry->sResult,Len);xworkProcessOutputFinish(Entry->Output);}
++        }
++        if(Entry->Output) {
++            xvalue* Output=xworkProcessOutputSnapshot(Entry->Output,false);
++            if(Output)Ok=xrtValueObjectSetNew(V,XRT_STR_LITERAL("result"),Output);else Ok=false;
++        } else Ok=xwork__output_put(V,"result",Entry->sResult);
++    }
++    xrtMutexUnlock(Entry->pStateLock);if(!Ok){xrtValueRelease(V);V=NULL;}return V;
++}
++
++static int32 xwork__process_monitor(void* User)
++{
++    xwork_process_entry* Entry=User;xprocessstatus Exit={0};
++    (void)xrtProcessWait(Entry->pProcess);(void)xrtProcessStatus(Entry->pProcess,&Exit);
++    /* A finished leader must not leave descendants holding its output pipes. */
++    (void)xrtProcessKillTree(Entry->pProcess);
++    xwork__process_log_capture_destroy(Entry->LogCapture);Entry->LogCapture=NULL;
++    xworkProcessOutputFinish(Entry->Output);
++    xvalue* Summary=xworkProcessOutputSnapshot(Entry->Output,false);
++    if(Summary){char* Json=xrtJsonStringify(Summary,false,NULL);Entry->OutputNotice=Json?xwork__strdup(Json):NULL;if(Json)xrtFree(Json);xrtValueRelease(Summary);}
++    xrtMutexLock(Entry->pStateLock);
++    xrtProcessDestroy(Entry->pProcess);Entry->pProcess=NULL;
++    bool Held=Entry->bProcessOwnerHeld;Entry->bProcessOwnerHeld=false;
++    xrtMutexUnlock(Entry->pStateLock);
++    if(Held)Entry->OnProcessRelease(Entry->pProcessOwnerData,Entry->pProcessOwnerLease);
++    xrtMutexLock(Entry->pStateLock);
++    Entry->pProcessOwnerLease=NULL;Entry->bExitStatusValid=Exit.Kind!=XPROCESS_EXIT_NONE;
++    Entry->iExitCode=Exit.Code;Entry->iExitSignal=Exit.Signal;Entry->iStopReason=Exit.Stop;
++    Entry->bDone=true;Entry->bSuccess=Exit.Kind==XPROCESS_EXIT_CODE&&!Exit.Code;
++    xwork_task_state State=Entry->bStopRequested?XWORK_TASK_CANCELLED:
++        Exit.Kind==XPROCESS_EXIT_LOST||!Entry->bExitStatusValid?XWORK_TASK_LOST:
++        Entry->bSuccess?XWORK_TASK_SUCCEEDED:XWORK_TASK_FAILED;
++    xwork__task_set_state_locked(Entry,State);Entry->uExitedUs=xllmClockUs();
++    xrtMutexUnlock(Entry->pStateLock);xwork__task_entry_release(Entry);return 0;
++}
++
++static xwork_result xwork__tool_spawn(void* User,const xwork_tool_context* Context,
++    const char* Arguments,xwork_tool_output* Output,xwork_error* Error)
++{
++    xwork_agent* Agent=User;xvalue* Args=xwork__json_parse_object(Arguments);
++    char** Argv=NULL,**EnvStorage=NULL;size_t Argc=0,EnvCount=0,EnvStorageCount=0;
++    xprocessenv* Env=NULL;char* Cwd=NULL;xwork_process_entry* Entry=NULL;xwork_result Result=XWORK_RESULT_ERROR;
++    bool Valid=true,Merge=false,Started=false;uint64_t Remind=0;
++    if(!Args)return xwork__tool_fail(Output,"invalid arguments: expected a JSON object");
++    if(!xwork__parse_string_array(Args,"argv",&Argv,&Argc,256u)||!Argv){Result=xwork__tool_fail(Output,"argv must contain 1-256 strings");goto done;}
++    Merge=xwork__json_bool(Args,"merge_stderr",false,&Valid);if(!Valid)goto invalid;
++    const char* Notify=xwork__json_text(Args,"notify");if(Notify&&strlen(Notify)>500u)goto invalid;
++    Remind=xwork__json_u64(Args,"remind_after_ms",0u,&Valid);if(!Valid||Remind>3600000u)goto invalid;
++    const char* Logical=xwork__json_text(Args,"cwd");if(!Logical||!Logical[0])Logical=".";
++    Cwd=xwork__resolve_path(Agent,Logical,Error);if(!Cwd)goto fail;
++    xrtClearError();if(!xrtDirExists(Cwd)){if(!xrtGetError())xrtSetErrorInfo(XERR_NOT_FOUND,"xwork.process",0,"working directory does not exist");Result=xwork__tool_process_fail(Output,"spawn/cwd",Argv[0],Cwd,xrtGetError());goto done;}
++    if(!xwork__build_env(Args,&Env,&EnvCount,&EnvStorage,&EnvStorageCount))goto done;
++    Entry=xwork__process_add(Agent,Context,XWORK_TASK_PROCESS);if(!Entry){Result=xwork__tool_fail(Output,"managed task limit reached");goto done;}
++    Entry->Output=xwork__process_output_create(Agent,Args,true,Merge,Error);if(!Entry->Output)goto fail;
++    if(Agent->OnProcessAcquire) {
++        if(!Agent->OnProcessAcquire(Agent->pProcessOwnerData,&Entry->pProcessOwnerLease)){Result=xwork__tool_process_fail(Output,"spawn/resources",Argv[0],Cwd,xrtGetError());goto done;}
++        Entry->OnProcessRelease=Agent->OnProcessRelease;Entry->pProcessOwnerData=Agent->pProcessOwnerData;Entry->bProcessOwnerHeld=true;
++    }
++    Entry->sCommand=xwork__argv_preview(Argv,Argc);Entry->sLabel=Entry->sCommand?xwork__strdup(Entry->sCommand):NULL;
++    Entry->sNotify=Notify?xwork__strdup(Notify):NULL;Entry->uRemindAfterMs=Remind;
++    if(!Entry->sCommand||!Entry->sLabel||(Notify&&!Entry->sNotify))goto done;
++    /* Allocate the complete response before starting a process with effects. */
++    xvalue* V=xwork__process_status_value(Agent,Entry);char* Json=NULL;
++    if(V){xwork__output_put(V,"state","running");Json=xrtJsonStringify(V,false,NULL);}
++    bool Prepared=Json&&xworkToolOutputSet(Output,true,Json);if(Json)xrtFree(Json);xrtValueRelease(V);if(!Prepared)goto done;
++    xprocessconfig Config;xrtProcessConfigInit(&Config);xwork__apply_argv_config(&Config,Argv,Argc);
++    Config.WorkDir=Cwd;Config.InheritEnv=true;Config.Env=Env;Config.EnvCount=EnvCount;Config.NewGroup=true;Config.HideWindow=true;
++    Config.Stdin.Mode=XPROCESS_IO_PIPE;Config.Stdout.Mode=XPROCESS_IO_PIPE;Config.Stderr.Mode=Merge?XPROCESS_IO_MERGE:XPROCESS_IO_PIPE;
++    xrtClearError();Entry->pProcess=xrtProcessSpawn(&Config);
++    if(!Entry->pProcess){Result=xwork__tool_process_fail(Output,"spawn",Argv[0],Cwd,xrtGetError());goto done;}
++    Entry->LogCapture=xwork__process_log_capture_create(Entry->pProcess,Entry->Output,!Merge);if(!Entry->LogCapture)goto done;
++    xwork__atomic_store(&Entry->iReady,1);xwork__task_entry_ref(Entry);
++    Entry->ProcessMonitor=xrtThreadCreate(xwork__process_monitor,Entry,0u);
++    if(!Entry->ProcessMonitor){xwork__task_entry_release(Entry);goto done;}
++    Started=true;Result=XWORK_RESULT_OK;goto done;
++invalid:Result=xwork__tool_fail(Output,"invalid merge_stderr, notify or remind_after_ms");goto done;
++fail:Result=xwork__tool_fail(Output,Error&&Error->sMessage[0]?Error->sMessage:"process output storage unavailable");
++done:
++    if(Entry&&!Started)xwork__process_remove_entry(Agent,Entry);
++    xwork__task_entry_release(Entry);xwork__free_string_array(Argv,Argc);xwork__free_string_array(EnvStorage,EnvStorageCount);
++    free(Env);free(Cwd);xrtValueRelease(Args);return Result;
++}
++
++static xwork_result xwork__tool_poll(void* User,const xwork_tool_context* Context,
++    const char* Arguments,xwork_tool_output* Output,xwork_error* Error)
++{
++    xwork_agent* Agent=User;xvalue* Args=xwork__json_parse_object(Arguments);bool Valid=false;
++    uint64_t Id=Args?xwork__json_u64(Args,"task_id",0u,&Valid):0; (void)Context;
++    if(!Valid||!Id){xrtValueRelease(Args);return xwork__tool_fail(Output,"positive task_id is required");}
++    xwork_process_entry* Entry=xwork__process_find(Agent,Id,NULL);xrtValueRelease(Args);
++    if(!Entry)return xwork__tool_fail(Output,"unknown task_id");
++    xvalue* V=xwork__process_status_value(Agent,Entry);char* Json=V?xrtJsonStringify(V,false,NULL):NULL;
++    bool Ok=Json&&xworkToolOutputSet(Output,true,Json);if(Json)xrtFree(Json);xrtValueRelease(V);xwork__task_entry_release(Entry);
++    if(!Ok)xwork__set_error(Error,XWORK_ERROR_OUT_OF_MEMORY,"cannot build task status");return Ok?XWORK_RESULT_OK:XWORK_RESULT_ERROR;
++}
++
++static xwork_result xwork__tool_exec(void* User,const xwork_tool_context* Context,
++    const char* Arguments,xwork_tool_output* Output,xwork_error* Error)
++{
++    xwork_agent* Agent=User;xvalue* Args=xwork__json_parse_object(Arguments);
++    char** Argv=NULL,**EnvStorage=NULL;size_t Argc=0,EnvCount=0,EnvStorageCount=0;
++    xprocessenv* Env=NULL;char* Cwd=NULL;xwork_process_output* Capture=NULL;xwork_result Result=XWORK_RESULT_ERROR;
++    bool Valid=true,Merge=false,Expected=false;void* Lease=NULL;bool Held=false;xprocessresult Process={0};
++    if(!Args)return xwork__tool_fail(Output,"invalid arguments: expected a JSON object");
++    if(!xwork__parse_string_array(Args,"argv",&Argv,&Argc,256u)||!Argv){Result=xwork__tool_fail(Output,"argv must contain 1-256 strings");goto done;}
++    uint64_t Timeout=xwork__json_u64(Args,"timeout_ms",Agent->uCommandTimeoutMs,&Valid);
++    if(!Valid||!Timeout||Timeout>3600000u){Result=xwork__tool_fail(Output,"timeout_ms must be between 1 and 3600000");goto done;}
++    Merge=xwork__json_bool(Args,"merge_stderr",false,&Valid);if(!Valid){Result=xwork__tool_fail(Output,"merge_stderr must be boolean");goto done;}
++    xvalue* Codes=xwork__json_get(Args,"expected_exit_codes");
++    if(Codes) {
++        if(xrtValueType(Codes)!=XVALUE_ARRAY||!xrtValueCount(Codes)||xrtValueCount(Codes)>32u)goto invalid_codes;
++        for(size_t i=0;i<xrtValueCount(Codes);i++){int64_t Code=0;if(!xrtValueGetInt(xrtValueArrayGet(Codes,i),&Code)||Code<INT32_MIN||Code>INT32_MAX)goto invalid_codes;}
++    }
++    const char* Logical=xwork__json_text(Args,"cwd");if(!Logical||!Logical[0])Logical=".";
++    Cwd=xwork__resolve_path(Agent,Logical,Error);if(!Cwd)goto storage_error;
++    xrtClearError();if(!xrtDirExists(Cwd)){if(!xrtGetError())xrtSetErrorInfo(XERR_NOT_FOUND,"xwork.process",0,"working directory does not exist");Result=xwork__tool_process_fail(Output,"exec/cwd",Argv[0],Cwd,xrtGetError());goto done;}
++    if(!xwork__build_env(Args,&Env,&EnvCount,&EnvStorage,&EnvStorageCount))goto done;
++    Capture=xwork__process_output_create(Agent,Args,false,Merge,Error);if(!Capture)goto storage_error;
++    xprocessconfig Config;xrtProcessConfigInit(&Config);xwork__apply_argv_config(&Config,Argv,Argc);
++    Config.WorkDir=Cwd;Config.InheritEnv=true;Config.Env=Env;Config.EnvCount=EnvCount;Config.NewGroup=true;Config.HideWindow=true;
++    Config.Stdin.Mode=XPROCESS_IO_NULL;Config.Stdout.Mode=XPROCESS_IO_PIPE;Config.Stderr.Mode=Merge?XPROCESS_IO_MERGE:XPROCESS_IO_PIPE;
++    xprocessrunoptions Options;xrtProcessRunOptionsInit(&Options);
++    uint64_t Scope=Context&&Context->uDeadline?Context->uDeadline:xwork__active_deadline(Agent);
++    uint64_t Deadline=xllmDeadlineAfterUs(Timeout*UINT64_C(1000));if(Scope!=XLLM_DEADLINE_NEVER&&Scope<Deadline)Deadline=Scope;
++    Options.Timeout=xllmDeadlineWaitMs(Deadline);Options.Cancel=Context&&Context->pCancel?Context->pCancel:xwork__active_cancel(Agent);
++    Options.StdoutLimit=Options.StderrLimit=0;Options.Overflow=XPROCESS_OVERFLOW_KEEP_FIRST;
++    Options.Output=xwork__process_run_output;Options.UserData=Capture;
++    if(Agent->OnProcessAcquire){if(!Agent->OnProcessAcquire(Agent->pProcessOwnerData,&Lease)){Result=xwork__tool_process_fail(Output,"exec/resources",Argv[0],Cwd,xrtGetError());goto done;}Held=true;}
++    xrtClearError();bool Ran=xrtProcessRun(&Config,&Options,&Process);
++    /* Format the native cause before closing output files can replace the
++     * thread's error. Retaining partial logs must not hide the launch error. */
++    if(!Ran)Result=xwork__tool_process_fail(Output,"exec/start-or-capture",Argv[0],Cwd,xrtGetError());
++    xworkProcessOutputFinish(Capture);
++    if(!Ran){
++        if(xrtMutexLock(Capture->Lock)) {xwork__output_error(Capture,"process_capture_failed");xrtMutexUnlock(Capture->Lock);}
++        xvalue* Partial=xworkProcessOutputSnapshot(Capture,true);char* Json=Partial?xrtJsonStringify(Partial,false,NULL):NULL;
++        if(Json){xwork_buf Detail={0};if(xwork__buf_append_cstr(&Detail,Output->sContent?Output->sContent:"")&&
++            xwork__buf_append_char(&Detail,'\n')&&xwork__buf_append_cstr(&Detail,Json))
++                (void)xworkToolOutputSet(Output,false,Detail.pData);xwork__buf_unit(&Detail);xrtFree(Json);}
++        xrtValueRelease(Partial);goto done;
++    }
++    Expected=Process.Wait==XWAIT_OK&&Process.Status.Kind==XPROCESS_EXIT_CODE;
++    if(Expected&&Codes) {Expected=false;for(size_t i=0;i<xrtValueCount(Codes);i++){int64_t Code=0;xrtValueGetInt(xrtValueArrayGet(Codes,i),&Code);if(Code==Process.Status.Code)Expected=true;}}
++    else if(Expected)Expected=Process.Status.Code==0;
++    xvalue* V=xworkProcessOutputSnapshot(Capture,true);char* Json=NULL;
++    bool Built=V&&xrtValueObjectSetNew(V,XRT_STR_LITERAL("exit_code"),xrtValueInt(Process.Status.Code))&&
++        xrtValueObjectSetNew(V,XRT_STR_LITERAL("signal"),xrtValueInt(Process.Status.Signal))&&
++        xwork__output_uint(V,"duration_ms",Process.Duration)&&xwork__output_bool(V,"exit_expected",Expected)&&
++        xwork__output_put(V,"state",Process.Wait==XWAIT_CANCELLED?"cancelled":Process.Wait==XWAIT_TIMEOUT?"timed_out":Expected?"succeeded":"failed");
++    if(Built)Json=xrtJsonStringify(V,false,NULL);
++    bool Complete=false;if(V)xrtValueGetBool(xrtValueObjectGet(V,XRT_STR_LITERAL("output_complete")),&Complete);
++    if(Json&&xworkToolOutputSet(Output,Expected&&Complete,Json))Result=XWORK_RESULT_OK;
++    if(Json)xrtFree(Json);xrtValueRelease(V);
++    /* Preserve partial output in the tool receipt even on scope cancellation. */
++    if(Process.Wait==XWAIT_CANCELLED){xwork__set_error(Error,XWORK_ERROR_CANCELLED,"agent operation cancelled during execution");Result=XWORK_RESULT_CANCELLED;}
++    else if(Process.Wait==XWAIT_TIMEOUT&&Scope!=XLLM_DEADLINE_NEVER&&xllmDeadlineExpired(Scope)){
++        xwork__set_error(Error,XWORK_ERROR_TIMEOUT,"agent operation deadline exceeded during execution");Result=XWORK_RESULT_TIMEOUT;
++    }
++    goto done;
++invalid_codes:Result=xwork__tool_fail(Output,"expected_exit_codes must contain 1-32 signed 32-bit integers");goto done;
++storage_error:Result=xwork__tool_fail(Output,Error&&Error->sMessage[0]?Error->sMessage:"process output storage unavailable");
++done:
++    if(Held)Agent->OnProcessRelease(Agent->pProcessOwnerData,Lease);
++    xrtProcessResultUnit(&Process);xworkProcessOutputDestroy(Capture);
++    xwork__free_string_array(Argv,Argc);xwork__free_string_array(EnvStorage,EnvStorageCount);
++    free(Env);free(Cwd);xrtValueRelease(Args);return Result;
++}
+--- a/lib/xwork/src/xwork_schedule.c
++++ b/lib/xwork/src/xwork_schedule.c
+@@ -406,9 +406,13 @@
+                          "invalid tool batch execution arguments");
+         return false;
+     }
+-    pPlan = xworkAgentPlanToolBatch(pAgent, pCalls, iCallCount, pContext, pError);
+-    if (!pPlan)
+-        return false;
++    uint32_t PlanRecoveries=0;
++    while(!(pPlan=xworkAgentPlanToolBatch(pAgent,pCalls,iCallCount,pContext,pError))){
++        /* No worker or tool has started; this planning allocation is safe. */
++        if(!pError||pError->eCode!=XWORK_ERROR_OUT_OF_MEMORY||
++            !xwork__recover(pAgent,"resource",pError,++PlanRecoveries,true))return false;
++        pAgent->uMaxParallelTools=1;
++    }
+     uLimit = pAgent->uMaxParallelTools ? pAgent->uMaxParallelTools : 1u;
+     if (uLimit > 64u)
+         uLimit = 64u;
 --- a/lib/xwork/xwork-xrt-roots.h
 +++ b/lib/xwork/xwork-xrt-roots.h
 @@ -7,6 +7,8 @@
@@ -337,8 +1656,69 @@ index 04bd0f3574aa48cbff76fc15b2588ee55e6f707b..73d26847b7e3f96472c7d4234be6a9ae
  #define XHTTP_MODULE_HTTP_CLIENT_REDIRECT
  #define XHTTP_MODULE_HTTP_CLIENT_DECOMPRESS
  #define XHTTP_MODULE_HTTP_SSE_PARSER
-diff --git a/src/core/root_rename.h b/src/core/root_rename.h
-index 83f5f0302b26e02c6370ee3e14c9728bd5f7f2ba..db82183e324a6cfcb450270470221700e1045a7a 100644
+--- a/lib/xwork/xwork.h
++++ b/lib/xwork/xwork.h
+@@ -16,7 +16,7 @@
+ #define XWORK_VERSION_MINOR 11
+ #define XWORK_VERSION_PATCH 0
+ #define XWORK_VERSION_TEXT "3.11.0"
+-#define XWORK_ABI_VERSION 9u
++#define XWORK_ABI_VERSION 10u
+ #define XWORK_EVENT_SCHEMA_VERSION 3u
+ #define XWORK_EVENT_SNAPSHOT_MAX_RECORDS 1024u
+ #define XWORK_ARTIFACT_READ_DEFAULT_BYTES (64u * 1024u)
+@@ -331,7 +331,8 @@
+     XWORK_EVENT_ARTIFACT_CREATED,
+     XWORK_EVENT_TASK_UPDATED,
+     XWORK_EVENT_RECOVERY_REQUIRED,
+-    XWORK_EVENT_RECOVERY_RESOLVED
++    XWORK_EVENT_RECOVERY_RESOLVED,
++    XWORK_EVENT_RECOVERY_WAIT
+ } xwork_event_kind;
+ 
+ typedef enum xwork_recovery_action {
+@@ -520,7 +521,8 @@
+     XWORK_AGENT_EXTENSION_CONTEXT,
+     XWORK_AGENT_EXTENSION_RELEASE,
+     XWORK_AGENT_EXTENSION_CHILD_READY,
+-    XWORK_AGENT_EXTENSION_MODEL_DISPATCH
++    XWORK_AGENT_EXTENSION_MODEL_DISPATCH,
++    XWORK_AGENT_EXTENSION_RECOVERY
+ } xwork_agent_extension_phase;
+ struct xwork_run_result;
+ typedef xwork_result (*xwork_agent_default_run_fn)(xwork_agent*,const char*,
+@@ -551,6 +553,20 @@
+     const void* pDelegationToolOwner;
+     bool bOverrideDelegationApproval;
+     xwork_approval_mode eDelegationApproval;
++    /* RECOVERY is a host policy seam, never a request to replay a tool.
++     * Only an explicitly safe operation may be retried. Callback success
++     * alone does not opt in: set bRecoveryHandled and uRecoveryDelayMs. */
++    const char* sRecoveryStage;
++    const xwork_error* pRecoveryError;
++    uint32_t uRecoveryAttempt;
++    bool bRecoverySafe;
++    bool bRecoveryHandled;
++    bool bRecoveryWaiting;
++    uint32_t uRecoveryDelayMs;
++    bool bRecoveryNeedsChange;
++    bool bRecoveryProbe; /* Poll only; must not run a model or tool. */
++    bool bRecoveryReady;
++    uint64_t uRecoveryRevision;
+ } xwork_agent_extension_context;
+ typedef xwork_result (*xwork_agent_extension_fn)(void*,xwork_agent_extension_context*,xwork_error*);
+ 
+@@ -750,6 +766,10 @@
+ } xwork_readonly_subagent_config;
+ 
+ void xworkErrorInit(xwork_error* pError);
++/* Safe host boundary only: retain the failed operation and wait through the
++ * installed recovery policy. Does not invoke/replay any model or tool. */
++bool xworkAgentWaitRecovery(xwork_agent* pAgent, const char* sStage,
++    xwork_error* pError, uint32_t uAttempt);
+ const char* xworkErrorCodeName(xwork_error_code eCode);
+ void xworkRecoveryCallInfoInit(xwork_recovery_call_info* pInfo);
+ void xworkRecoveryDecisionInit(xwork_recovery_decision* pDecision);
 --- a/src/core/root_rename.h
 +++ b/src/core/root_rename.h
 @@ -10,13 +10,13 @@
@@ -359,7 +1739,7 @@ index 83f5f0302b26e02c6370ee3e14c9728bd5f7f2ba..db82183e324a6cfcb450270470221700
  {
  	HANDLE hSource;
  	NTSTATUS Status;
-@@ -33,8 +33,8 @@ static bool XSRootNativeRenameNoReplace(xrootnative SourceParent,
+@@ -33,8 +33,8 @@
  		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
  		FILE_OPEN,
  		FILE_SYNCHRONOUS_IO_NONALERT |
@@ -370,7 +1750,7 @@ index 83f5f0302b26e02c6370ee3e14c9728bd5f7f2ba..db82183e324a6cfcb450270470221700
  		return false;
  	}
  	if ( !__xrtRootNtSuccess(Status) ) {
-@@ -68,7 +68,7 @@ static bool XSRootNativeRenameNoReplace(xrootnative SourceParent,
+@@ -68,7 +68,7 @@
  		(void)CloseHandle(hSource);
  		return false;
  	}
@@ -379,7 +1759,7 @@ index 83f5f0302b26e02c6370ee3e14c9728bd5f7f2ba..db82183e324a6cfcb450270470221700
  	pInfo->RootDirectory = TargetParent;
  	pInfo->FileNameLength = (DWORD)(iUnits * sizeof(WCHAR));
  	memcpy(pInfo->FileName, pWide, iUnits * sizeof(WCHAR));
-@@ -94,20 +94,21 @@ static bool XSRootNativeRenameNoReplace(xrootnative SourceParent,
+@@ -94,20 +94,21 @@
  			__xrtRootNtErrorCode(Status));
  		return false;
  	}
@@ -410,7 +1790,7 @@ index 83f5f0302b26e02c6370ee3e14c9728bd5f7f2ba..db82183e324a6cfcb450270470221700
  
  	#if defined(__linux__) && defined(SYS_renameat2)
  		iResult = (int)syscall(SYS_renameat2, SourceParent, sSource,
-@@ -160,18 +161,21 @@ static xrootstep XSRootRenameTargetProc(xrootnative Parent,
+@@ -160,18 +161,21 @@
  	Step = __xrtRootNativeStat(Parent, sName, false,
  		false, &Info, pLink);
  	if ( Step == XROOT_STEP_DONE ) {
@@ -422,6 +1802,10 @@ index 83f5f0302b26e02c6370ee3e14c9728bd5f7f2ba..db82183e324a6cfcb450270470221700
 -	if ( (Step != XROOT_STEP_ERROR) || (pError == NULL) ||
 -		 (xrtErrorKind(pError) != XERR_NOT_FOUND) ) {
 -		return XROOT_STEP_ERROR;
+-	}
+-	xrtClearError();
+-	return XSRootNativeRenameNoReplace(pSource->SourceParent,
+-		pSource->SourceName, Parent, sName) ?
 +		if ( !pSource->Replace ) {
 +			__xrtRootError(XERR_EXISTS, XS_ROOT_ERROR_RENAME, "rename", "the rename target already exists");
 +			return XROOT_STEP_ERROR;
@@ -434,16 +1818,13 @@ index 83f5f0302b26e02c6370ee3e14c9728bd5f7f2ba..db82183e324a6cfcb450270470221700
 +		pError = xrtGetError();
 +		if ( Step != XROOT_STEP_ERROR || !pError || xrtErrorKind(pError) != XERR_NOT_FOUND ) return XROOT_STEP_ERROR;
 +		xrtClearError();
- 	}
--	xrtClearError();
--	return XSRootNativeRenameNoReplace(pSource->SourceParent,
--		pSource->SourceName, Parent, sName) ?
++	}
 +	return XSRootNativeRename(pSource->SourceParent,
 +		pSource->SourceName, Parent, sName, pSource->Replace) ?
  		XROOT_STEP_DONE : XROOT_STEP_ERROR;
  }
  
-@@ -188,6 +192,12 @@ static xrootstep XSRootRenameSourceProc(xrootnative Parent,
+@@ -188,6 +192,12 @@
  			"rename", "the source must name a root-relative object");
  		return XROOT_STEP_ERROR;
  	}
@@ -456,7 +1837,7 @@ index 83f5f0302b26e02c6370ee3e14c9728bd5f7f2ba..db82183e324a6cfcb450270470221700
  	Source.SourceParent = Parent;
  	Source.SourceName = sName;
  	return __xrtRootResolve(pTarget->Root, pTarget->TargetPath,
-@@ -209,8 +219,17 @@ bool xsRootRenameNoReplace(xroot Root,
+@@ -209,8 +219,17 @@
  	}
  	Data.Root = Root;
  	Data.TargetPath = sTarget;
@@ -465,6 +1846,7 @@ index 83f5f0302b26e02c6370ee3e14c9728bd5f7f2ba..db82183e324a6cfcb450270470221700
  		0u, false,
  		XSRootRenameSourceProc, &Data);
  }
+-#endif
 +/* Atomic regular-file replacement anchored at both parent directory handles.
 + * No absolute path lookup and no following source/target reparse points. */
 +bool xsRootReplaceFile(xroot Root,cstr Source,cstr Target)
@@ -473,21 +1855,16 @@ index 83f5f0302b26e02c6370ee3e14c9728bd5f7f2ba..db82183e324a6cfcb450270470221700
 +    XSRootRenameSource Data={Root,Target,true};
 +    return __xrtRootResolve(Root,Source,0u,false,XSRootRenameSourceProc,&Data);
 +}
- #endif
-diff --git a/src/platform/credentials.h b/src/platform/credentials.h
-index 3f78c5cc1f91161d31f2bbce87c63f13d34472ac..15c06ed6013dcd6508ad0f5f88a2fad642f55378 100644
++#endif
 --- a/src/platform/credentials.h
 +++ b/src/platform/credentials.h
-@@ -83,4 +83,6 @@ bool xsOpenExternalUrl(cstr Url)
+@@ -83,4 +83,6 @@
      return xrtProcessOpen(Url);
  #endif
  }
 +#include "system_proxy.h"
 +#include "portable_system.h"
  #endif
-diff --git a/src/platform/portable_system.h b/src/platform/portable_system.h
-new file mode 100644
-index 0000000000000000000000000000000000000000..615cf509170d79c4e31e21c1337d0be8fc4300ca
 --- /dev/null
 +++ b/src/platform/portable_system.h
 @@ -0,0 +1,43 @@
@@ -534,9 +1911,6 @@ index 0000000000000000000000000000000000000000..615cf509170d79c4e31e21c1337d0be8
 +#endif
 +}
 +#endif
-diff --git a/src/platform/system_proxy.h b/src/platform/system_proxy.h
-new file mode 100644
-index 0000000000000000000000000000000000000000..b748dd51da4db880aeec8dd10cb008fe79c072e0
 --- /dev/null
 +++ b/src/platform/system_proxy.h
 @@ -0,0 +1,208 @@
@@ -748,11 +2122,9 @@ index 0000000000000000000000000000000000000000..b748dd51da4db880aeec8dd10cb008fe
 +#endif
 +}
 +#endif
-diff --git a/src/script/import_xhttp_product.inc b/src/script/import_xhttp_product.inc
-index 185e3a4d57a022c1def7d0a5a3abfd0b8dd241b9..0c453fe231102c198e5d347c508b7c3aef79f638 100644
 --- a/src/script/import_xhttp_product.inc
 +++ b/src/script/import_xhttp_product.inc
-@@ -89,6 +89,9 @@ XS_XRT_SYMBOL(xrtHttpClientDoAsync)
+@@ -89,6 +89,9 @@
  XS_XRT_SYMBOL(xrtHttpClientDoSync)
  XS_XRT_SYMBOL(xrtHttpClientDrain)
  XS_XRT_SYMBOL(xrtHttpClientEngine)
@@ -762,11 +2134,23 @@ index 185e3a4d57a022c1def7d0a5a3abfd0b8dd241b9..0c453fe231102c198e5d347c508b7c3a
  XS_XRT_SYMBOL(xrtHttpClientGet)
  XS_XRT_SYMBOL(xrtHttpClientGetAsync)
  XS_XRT_SYMBOL(xrtHttpClientGetSync)
-diff --git a/src/script/tcc_host.h b/src/script/tcc_host.h
-index 47d3597f7e86cdf4c6c6f376fff4943d8ae5bb97..78808de5438e8418e7bfc41210a07d2a814a3443 100644
+--- a/src/script/import_xllm_session.inc
++++ b/src/script/import_xllm_session.inc
+@@ -95,3 +95,4 @@
+ XS_XLLM_SESSION_SYMBOL(xllmSessionSnapshotRetain)
+ XS_XLLM_SESSION_SYMBOL(xllmSessionStateName)
+ XS_XLLM_SESSION_SYMBOL(xllmSessionTruncateAfter)
++XS_XLLM_SESSION_SYMBOL(xllmCompactionNormalizeSummary)
+--- a/src/script/import_xwork.inc
++++ b/src/script/import_xwork.inc
+@@ -197,3 +197,4 @@
+ XS_XWORK_SYMBOL(xworkToolResultWriterSetSuccess)
+ XS_XWORK_SYMBOL(xworkToolResultWriterWrite)
+ XS_XWORK_SYMBOL(xworkToolResultWriterWriteText)
++XS_XWORK_SYMBOL(xworkAgentWaitRecovery)
 --- a/src/script/tcc_host.h
 +++ b/src/script/tcc_host.h
-@@ -81,10 +81,14 @@ static const XS_TccSymbol g_XS_ApiSymbols[] = {
+@@ -81,10 +81,14 @@
  	XS_API_SYMBOL(xsCredentialSeal)
  	XS_API_SYMBOL(xsCredentialUnseal)
  	XS_API_SYMBOL(xsOpenExternalUrl)
@@ -781,11 +2165,9 @@ index 47d3597f7e86cdf4c6c6f376fff4943d8ae5bb97..78808de5438e8418e7bfc41210a07d2a
  	XS_API_SYMBOL(xsFetch)
  	XS_API_SYMBOL(xsFetchResponseUnit)
  	XS_API_SYMBOL(xsExtensionEnabled)
-diff --git a/src/sdk/xs_host.h b/src/sdk/xs_host.h
-index ce17b535b3f4e77ffe571ebdc7876016b0cbdb30..fbc3e3563de5f22011c8407de95e21fcef22282f 100644
 --- a/src/sdk/xs_host.h
 +++ b/src/sdk/xs_host.h
-@@ -24,7 +24,15 @@ typedef struct xs_host_options {
+@@ -24,7 +24,15 @@
      const char* InstalledPackage;
  } xs_host_options;
  
@@ -801,11 +2183,9 @@ index ce17b535b3f4e77ffe571ebdc7876016b0cbdb30..fbc3e3563de5f22011c8407de95e21fc
  void xsHostRequestStop(void);
  
  #ifdef __cplusplus
-diff --git a/src/sdk/xsbase.h b/src/sdk/xsbase.h
-index 429c16b0b1568b4e27603b45ec8b1d0d17cb7fb5..3b2c0e5f32330a03e6249c373f2510451f2244ef 100644
 --- a/src/sdk/xsbase.h
 +++ b/src/sdk/xsbase.h
-@@ -287,6 +287,36 @@ XS_API bool xsCredentialUnseal(cstr Scope, const void* Envelope, size_t Envelope
+@@ -287,6 +287,36 @@
  /* Open an HTTP(S) URL in the platform browser, never in the app WebView. */
  XS_API bool xsOpenExternalUrl(cstr Url);
  
@@ -842,7 +2222,7 @@ index 429c16b0b1568b4e27603b45ec8b1d0d17cb7fb5..3b2c0e5f32330a03e6249c373f251045
  /* Opt-in Android CPU execution, without lighting the screen or restarting the
   * app. Leases last 1..60 seconds and must be renewed by active work. Each token
   * is independent; expired/released tokens cannot be revived. Release on Unit,
-@@ -381,6 +411,8 @@ typedef enum xs_fetch_error {
+@@ -381,6 +411,8 @@
  /* Atomic no-replace move of a file, directory or final link within an
   * anchored root. Both parents are resolved without escaping Root. */
  XS_API bool xsRootRenameNoReplace(xroot Root, cstr Source, cstr Target);
@@ -851,8 +2231,6 @@ index 429c16b0b1568b4e27603b45ec8b1d0d17cb7fb5..3b2c0e5f32330a03e6249c373f251045
  
  XS_API bool xsFetch(const XS_FetchRequest* pRequest, XS_FetchResponse* pResponse);
  /* Accepts only a successful xsFetch response or a zero-initialized response. */
-diff --git a/src/webview/webview_impl.cpp b/src/webview/webview_impl.cpp
-index 1d0c78216fe3f50797cd8c7d66f928fa70d84bd4..9128d07122300d6441ae2479f8f3ab93d4744774 100644
 --- a/src/webview/webview_impl.cpp
 +++ b/src/webview/webview_impl.cpp
 @@ -9,6 +9,7 @@
@@ -863,7 +2241,7 @@ index 1d0c78216fe3f50797cd8c7d66f928fa70d84bd4..9128d07122300d6441ae2479f8f3ab93
  
  /* 版本钉子一致性门禁：vendored 头的版本宏必须与 xs_webview.h 的
   * XS_WEBVIEW_VERSION_NUMBER 相符——升级 webview 库时忘同步会编译失败。 */
-@@ -43,7 +44,7 @@ void* xsWvCreate(int iDebug, const char* sProfileDir)
+@@ -43,7 +44,7 @@
  
  void xsWvDestroy(void* pWebview)
  {
@@ -872,8 +2250,6 @@ index 1d0c78216fe3f50797cd8c7d66f928fa70d84bd4..9128d07122300d6441ae2479f8f3ab93
  }
  
  void xsWvRun(void* pWebview)
-diff --git a/src/webview/xs_app_window.c b/src/webview/xs_app_window.c
-index 293534eb13ad20cbd2b368ea365cc8814cd0613d..c22490e208f253808bf1016d18b702c16bca0f98 100644
 --- a/src/webview/xs_app_window.c
 +++ b/src/webview/xs_app_window.c
 @@ -18,6 +18,8 @@
@@ -885,7 +2261,7 @@ index 293534eb13ad20cbd2b368ea365cc8814cd0613d..c22490e208f253808bf1016d18b702c1
  
  /* webview_impl.cpp 提供的 C ABI 出口（webview 库薄封装，语义一致） */
  extern void* xsWvCreate(int iDebug, const char* sProfileDir);
-@@ -31,6 +33,7 @@ extern void xsWvSetTitle(void* pWebview, const char* sTitle);
+@@ -31,6 +33,7 @@
  extern void xsWvSetSize(void* pWebview, int iWidth, int iHeight, int iHint);
  extern void* xsWvGetWindow(void* pWebview);
  extern int xsWvEnableDirectoryDrop(void* pWebview, const char* sUrl);
@@ -893,7 +2269,7 @@ index 293534eb13ad20cbd2b368ea365cc8814cd0613d..c22490e208f253808bf1016d18b702c1
  
  /* TCC 探测契约（/xs/xs_webview.h + import_webview.inc）：只回答构建期事实 */
  int xsWebviewAvailable(void)
-@@ -260,16 +263,21 @@ typedef struct XS_AppWindow {
+@@ -260,16 +263,21 @@
  	char			sTitle[128];
  	char			sTargetUrl[1024];	/* 状态缓冲：写缓冲在置状态之前 */
  	char			sFailPage[2560];
@@ -915,7 +2291,7 @@ index 293534eb13ad20cbd2b368ea365cc8814cd0613d..c22490e208f253808bf1016d18b702c1
  static HANDLE g_hSingleMutex, g_hWakeEvent;
  static void* g_pWaitRegistration;
  
-@@ -376,10 +384,11 @@ static DWORD WINAPI app_ui_thread(LPVOID pParam)
+@@ -376,10 +384,11 @@
  
  	/* webview 官方契约：STA 前置（设计 §14 M0 记录第 3 条） */
  	CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
@@ -928,7 +2304,7 @@ index 293534eb13ad20cbd2b368ea365cc8814cd0613d..c22490e208f253808bf1016d18b702c1
  		CoUninitialize();
  		if ( pWin->iClose == XS_APP_CLOSE_STOP )
  			InterlockedDecrement(&g_iLiveStopWindows);
-@@ -398,10 +407,12 @@ static DWORD WINAPI app_ui_thread(LPVOID pParam)
+@@ -398,10 +407,12 @@
  		pWin->pOrigProc = (WNDPROC)SetWindowLongPtrW(pWin->hWnd,
  			GWLP_WNDPROC, (LONG_PTR)app_wnd_proc);
  	}
@@ -941,7 +2317,7 @@ index 293534eb13ad20cbd2b368ea365cc8814cd0613d..c22490e208f253808bf1016d18b702c1
  		pWin->iDirectoryDropChecked = 1;
  		xsWvNavigate((void*)pWin->pWebview, pWin->sTargetUrl);
  	} else if ( iState == XS_APP_NAV_FAIL )
-@@ -416,7 +427,8 @@ static DWORD WINAPI app_ui_thread(LPVOID pParam)
+@@ -416,7 +427,8 @@
  	pWin->pWebview = NULL;
  	CoUninitialize();
  	if ( pWin->iClose == XS_APP_CLOSE_STOP
@@ -951,7 +2327,7 @@ index 293534eb13ad20cbd2b368ea365cc8814cd0613d..c22490e208f253808bf1016d18b702c1
  		XS_RequestStop();	/* 全部 stop 型窗口已关闭：请求优雅停机 */
  	}
  	pWin->iAlive = 0;
-@@ -429,6 +441,7 @@ static void app_job_navigate(void* pWv, void* pArg)
+@@ -429,6 +441,7 @@
  	XS_AppWindow* pWin = (XS_AppWindow*)pArg;
  	if ( !pWin->iDirectoryDropChecked ) {
  		xsWvEnableDirectoryDrop(pWv, pWin->sTargetUrl);
@@ -959,7 +2335,7 @@ index 293534eb13ad20cbd2b368ea365cc8814cd0613d..c22490e208f253808bf1016d18b702c1
  		pWin->iDirectoryDropChecked = 1;
  	}
  	xsWvNavigate(pWv, pWin->sTargetUrl);
-@@ -479,6 +492,8 @@ static VOID CALLBACK app_wake_cb(PVOID pParam, BOOLEAN bTimeout)
+@@ -479,6 +492,8 @@
  	for ( i = 0; i < g_iWindowCount; i++ ) {
  		XS_AppWindow* pWin = &g_tWindows[i];
  
@@ -968,7 +2344,7 @@ index 293534eb13ad20cbd2b368ea365cc8814cd0613d..c22490e208f253808bf1016d18b702c1
  		if ( pWin->iClose == XS_APP_CLOSE_HIDE && pWin->iAlive
  			&& pWin->hWnd != NULL ) {
  			app_dispatch(pWin, app_job_show, pWin->hWnd);
-@@ -622,21 +637,26 @@ bool XS_AppWindowBoot(XS_App* pApp)
+@@ -622,21 +637,26 @@
  	XS_ServerInfo* pFirst = app_first_server(pApp);
  	xvalue* pWin;
  	char sFallback[16];
@@ -998,7 +2374,7 @@ index 293534eb13ad20cbd2b368ea365cc8814cd0613d..c22490e208f253808bf1016d18b702c1
  	if ( iFallback == XS_APP_FB_HEADLESS ) {
  		printf("[xs] app: WebView2 Runtime missing, headless "
  			"(install_fallback=headless)\n");
-@@ -647,14 +667,14 @@ bool XS_AppWindowBoot(XS_App* pApp)
+@@ -647,14 +667,14 @@
  			L"系统缺少 WebView2 运行时（约 240 MB），需要联网下载安装。\n"
  			L"现在安装吗？（取消则转为浏览器访问）",
  			L"xs", MB_OKCANCEL | MB_ICONQUESTION) != IDOK ) {
@@ -1017,7 +2393,7 @@ index 293534eb13ad20cbd2b368ea365cc8814cd0613d..c22490e208f253808bf1016d18b702c1
  	}
  	printf("[xs] app: WebView2 Runtime installed\n");
  	return true;
-@@ -668,20 +688,27 @@ void XS_AppWindowOpen(XS_App* pApp)
+@@ -668,20 +688,27 @@
  		XS_ServerInfo* pServer = pApp->Servers[i];
  		XS_AppWindow* pWin;
  		xvalue* pCfg;
@@ -1047,7 +2423,7 @@ index 293534eb13ad20cbd2b368ea365cc8814cd0613d..c22490e208f253808bf1016d18b702c1
  			app_cfg_str(pCfg, "title", pWin->sTitle, sizeof pWin->sTitle, "xs app");
  			app_cfg_str(pCfg, "url", pWin->sTargetUrl, sizeof pWin->sTargetUrl, "/");
  			pWin->iWidth = app_cfg_int(pCfg, "width", 1280, 200, 32767);
-@@ -707,6 +734,8 @@ void XS_AppWindowOpen(XS_App* pApp)
+@@ -707,6 +734,8 @@
  		if ( pWin->hThread == NULL ) {
  			printf("[xs] app '%s': UI thread create failed, headless\n",
  				pServer->Name);
@@ -1056,7 +2432,7 @@ index 293534eb13ad20cbd2b368ea365cc8814cd0613d..c22490e208f253808bf1016d18b702c1
  			xrtFree(pWin->sProfileDir);
  			pWin->sProfileDir = NULL;
  			if ( pWin->iClose == XS_APP_CLOSE_STOP )
-@@ -714,7 +743,6 @@ void XS_AppWindowOpen(XS_App* pApp)
+@@ -714,7 +743,6 @@
  			pWin->iAlive = 0;
  			continue;
  		}
@@ -1064,7 +2440,7 @@ index 293534eb13ad20cbd2b368ea365cc8814cd0613d..c22490e208f253808bf1016d18b702c1
  		printf("[xs] app '%s': frontend window loading (close=%s)\n",
  			pServer->Name, pWin->iClose == XS_APP_CLOSE_HIDE ? "hide" : "stop");
  	}
-@@ -760,6 +788,7 @@ void XS_AppWindowNavigate(XS_App* pApp)
+@@ -760,6 +788,7 @@
  		 * 后自查生效；若窗口已就绪则直接 dispatch 导航 */
  		snprintf(pWin->sTargetUrl, sizeof pWin->sTargetUrl, "%s", sUrl);
  		InterlockedExchange(&pWin->iNavState, XS_APP_NAV_URL);
@@ -1072,7 +2448,7 @@ index 293534eb13ad20cbd2b368ea365cc8814cd0613d..c22490e208f253808bf1016d18b702c1
  		if ( pWin->iAlive && pWin->pWebview != NULL )
  			app_dispatch(pWin, app_job_navigate, pWin);
  		printf("[xs] app '%s': frontend ready -> %s\n",
-@@ -813,6 +842,7 @@ void XS_AppWindowClose(void)
+@@ -813,6 +842,7 @@
  			g_tWindows[i].hThread = NULL;
  			/* A timed-out UI thread still reads this path during creation. */
  			if ( iWait == WAIT_OBJECT_0 ) {
@@ -1080,9 +2456,6 @@ index 293534eb13ad20cbd2b368ea365cc8814cd0613d..c22490e208f253808bf1016d18b702c1
  				xrtFree(g_tWindows[i].sProfileDir);
  				g_tWindows[i].sProfileDir = NULL;
  			}
-diff --git a/src/webview/xs_browser.inc.hpp b/src/webview/xs_browser.inc.hpp
-new file mode 100644
-index 0000000000000000000000000000000000000000..abf1fd3038e6d9e66aaff83568cb7de0ce10be10
 --- /dev/null
 +++ b/src/webview/xs_browser.inc.hpp
 @@ -0,0 +1,263 @@
@@ -1349,9 +2722,6 @@ index 0000000000000000000000000000000000000000..abf1fd3038e6d9e66aaff83568cb7de0
 +  {std::lock_guard<std::mutex> lock(xb_hosts_mutex);auto found=xb_hosts.find(view);if(found==xb_hosts.end())return;host=found->second;xb_hosts.erase(found);}
 +  host->alive=false;host->views.clear();host->main=nullptr;
 +}
-diff --git a/src/webview/xs_browser_fallback_win.h b/src/webview/xs_browser_fallback_win.h
-new file mode 100644
-index 0000000000000000000000000000000000000000..e2b2cf103cc2cc2a6c99e8287cd57e30dbbbbf1d
 --- /dev/null
 +++ b/src/webview/xs_browser_fallback_win.h
 @@ -0,0 +1,51 @@
@@ -1406,8 +2776,6 @@ index 0000000000000000000000000000000000000000..e2b2cf103cc2cc2a6c99e8287cd57e30
 +}
 +
 +#endif
-diff --git a/src/webview/xs_linux_ui.c b/src/webview/xs_linux_ui.c
-index 9d3a5cb88bb4163e4ae81502cf52718437862af7..0702fbebe4321098f713a4bd6a55fdb7d8dc3e34 100644
 --- a/src/webview/xs_linux_ui.c
 +++ b/src/webview/xs_linux_ui.c
 @@ -14,6 +14,7 @@
@@ -1418,7 +2786,7 @@ index 9d3a5cb88bb4163e4ae81502cf52718437862af7..0702fbebe4321098f713a4bd6a55fdb7
  static WebKitWebView* View;
  static GByteArray* Input;
  static char* Origin;
-@@ -159,7 +160,7 @@ static gboolean StopSignal(gpointer Data) { (void)Data; gtk_main_quit(); return
+@@ -159,7 +160,7 @@
  
  int main(int argc, char** argv)
  {
@@ -1427,7 +2795,7 @@ index 9d3a5cb88bb4163e4ae81502cf52718437862af7..0702fbebe4321098f713a4bd6a55fdb7
      /* The control descriptor must not leak into WebKit children or xdg-open. */
      fcntl(198, F_SETFD, FD_CLOEXEC);
      gchar* Cache = g_build_filename(argv[1], "cache", NULL);
-@@ -186,6 +187,7 @@ int main(int argc, char** argv)
+@@ -186,6 +187,7 @@
      gtk_window_set_default_size(GTK_WINDOW(AppWindow), atoi(argv[3]), atoi(argv[4]));
      GdkGeometry Geometry = {0}; Geometry.min_width = atoi(argv[5]); Geometry.min_height = atoi(argv[6]);
      gtk_window_set_geometry_hints(GTK_WINDOW(AppWindow), NULL, &Geometry, GDK_HINT_MIN_SIZE);
@@ -1435,7 +2803,7 @@ index 9d3a5cb88bb4163e4ae81502cf52718437862af7..0702fbebe4321098f713a4bd6a55fdb7
      HideOnClose = !strcmp(argv[8], "hide");
      View = WEBKIT_WEB_VIEW(webkit_web_view_new_with_context(Context));
      WebKitSettings* Settings = webkit_web_view_get_settings(View);
-@@ -204,6 +206,7 @@ int main(int argc, char** argv)
+@@ -204,6 +206,7 @@
      g_unix_signal_add(SIGINT, StopSignal, NULL);
      webkit_web_view_load_html(View, "<!doctype html><meta charset=utf-8><style>body{background:#202020;color:#eee;font:16px sans-serif;padding:40px}</style><p>Starting application…</p>", NULL);
      gtk_widget_show_all(AppWindow); Notify('R'); gtk_main();
@@ -1443,11 +2811,9 @@ index 9d3a5cb88bb4163e4ae81502cf52718437862af7..0702fbebe4321098f713a4bd6a55fdb7
      gtk_widget_destroy(AppWindow); g_object_unref(Context);
      g_byte_array_unref(Input); g_free(Origin); g_free(LastUrl); close(198);
      return 0;
-diff --git a/src/webview/xs_linux_window.c b/src/webview/xs_linux_window.c
-index c4c1c31fa771ad49bb21086f3b35182b199cc47c..42e8f7c40f393a9276c39a6ebb4fc2cabf0a812e 100644
 --- a/src/webview/xs_linux_window.c
 +++ b/src/webview/xs_linux_window.c
-@@ -123,11 +123,13 @@ void XS_AppWindowOpen(XS_App* App)
+@@ -123,11 +123,13 @@
          XS_ServerInfo* Server = App->Servers[Index];
          if (!Server || !Server->Enabled || !XS_ServerIsApp(Server)) continue;
          xvalue* Config = Server->Custom ? xrtValueObjectGet(Server->Custom, XRT_STR_LITERAL("window")) : NULL;
@@ -1462,7 +2828,7 @@ index c4c1c31fa771ad49bb21086f3b35182b199cc47c..42e8f7c40f393a9276c39a6ebb4fc2ca
          char* Helper = Profile ? WindowHelper(Profile) : NULL;
          char* Title = Config ? app_cfg_profile_text(Config, "title") : NULL;
          char* Close = Config ? app_cfg_profile_text(Config, "close") : NULL;
-@@ -142,7 +144,7 @@ void XS_AppWindowOpen(XS_App* App)
+@@ -142,7 +144,7 @@
              if (Config) xrtValueGetBool(xrtValueObjectGet(Config, XRT_STR_LITERAL("devtools")), &Debug);
              char* Arguments[] = {Helper, Profile, Title ? Title : Server->Name,
                  Width, Height, MinWidth, MinHeight, Debug ? "1" : "0",
@@ -1471,7 +2837,7 @@ index c4c1c31fa771ad49bb21086f3b35182b199cc47c..42e8f7c40f393a9276c39a6ebb4fc2ca
              posix_spawn_file_actions_t Actions;
              int Error = posix_spawn_file_actions_init(&Actions);
              bool Initialized = Error == 0;
-@@ -162,7 +164,7 @@ void XS_AppWindowOpen(XS_App* App)
+@@ -162,7 +164,7 @@
                  printf("[xs] Linux window could not start: %s\n", strerror(Error));
              }
          } else printf("[xs] Linux window extraction/socket failed; using browser/service mode\n");
@@ -1480,9 +2846,6 @@ index c4c1c31fa771ad49bb21086f3b35182b199cc47c..42e8f7c40f393a9276c39a6ebb4fc2ca
      }
  }
  
-diff --git a/src/webview/xs_window_geometry.h b/src/webview/xs_window_geometry.h
-new file mode 100644
-index 0000000000000000000000000000000000000000..3f59292dbe4806fee857a583ecf681199c9863f8
 --- /dev/null
 +++ b/src/webview/xs_window_geometry.h
 @@ -0,0 +1,52 @@
@@ -1538,11 +2901,9 @@ index 0000000000000000000000000000000000000000..3f59292dbe4806fee857a583ecf68119
 +    g.WorkX=x;g.WorkY=y;g.WorkWidth=w;g.WorkHeight=h;g.Dpi=dpi;return g;
 +}
 +#endif
-diff --git a/src/webview/xs_window_profile.h b/src/webview/xs_window_profile.h
-index 07461d0734d7e959737342c859dcf3cacd79dc4a..378b24a729a8ea57988a00b1b89d3583ed5f074f 100644
 --- a/src/webview/xs_window_profile.h
 +++ b/src/webview/xs_window_profile.h
-@@ -90,10 +90,10 @@ done:
+@@ -90,10 +90,10 @@
  /* A supplied profile path is an explicit storage decision. Invalid input must
   * not fall back to the library's per-exe AppData default. Relative strings
   * are confined to the app directory; the object form follows an app Home. */
@@ -1555,7 +2916,7 @@ index 07461d0734d7e959737342c859dcf3cacd79dc4a..378b24a729a8ea57988a00b1b89d3583
  	char* sRaw = NULL;
  	char* sJoined = NULL;
  	char* sResult = NULL;
-@@ -104,7 +104,7 @@ static bool app_cfg_profile_dir(xvalue* pWin, char** ppPath)
+@@ -104,7 +104,7 @@
  		*ppPath = app_cfg_profile_home(pValue);
  		return *ppPath != NULL;
  	}
@@ -1564,7 +2925,7 @@ index 07461d0734d7e959737342c859dcf3cacd79dc4a..378b24a729a8ea57988a00b1b89d3583
  	if ( sRaw == NULL ) return false;
  	if ( xrtPathIsAbs(sRaw) ) sResult = xrtPathAbs(sRaw);
  	else if ( xrtPathIsLocal(xrtStrView(sRaw), XPATH_NATIVE) ) {
-@@ -121,5 +121,7 @@ static bool app_cfg_profile_dir(xvalue* pWin, char** ppPath)
+@@ -121,5 +121,7 @@
  	return true;
  }
  
@@ -1572,9 +2933,6 @@ index 07461d0734d7e959737342c859dcf3cacd79dc4a..378b24a729a8ea57988a00b1b89d3583
 +{return app_cfg_window_path(pWin,"profile_dir",ppPath);}
  
  #endif
-diff --git a/src/webview/xs_window_state_gtk.h b/src/webview/xs_window_state_gtk.h
-new file mode 100644
-index 0000000000000000000000000000000000000000..40232fdc34902092b1b127d542047873974a516b
 --- /dev/null
 +++ b/src/webview/xs_window_state_gtk.h
 @@ -0,0 +1,70 @@
@@ -1648,9 +3006,6 @@ index 0000000000000000000000000000000000000000..40232fdc34902092b1b127d542047873
 +    if(WindowSaveTimer){g_source_remove(WindowSaveTimer);WindowSaveTimer=0;}
 +    WindowCapture();WindowSave(NULL);g_free(WindowStatePath);WindowStatePath=NULL;
 +}
-diff --git a/src/webview/xs_window_state_win.h b/src/webview/xs_window_state_win.h
-new file mode 100644
-index 0000000000000000000000000000000000000000..cf3fa2cb85a4385dad743c37e665105edffcf950
 --- /dev/null
 +++ b/src/webview/xs_window_state_win.h
 @@ -0,0 +1,82 @@
@@ -1736,8 +3091,6 @@ index 0000000000000000000000000000000000000000..cf3fa2cb85a4385dad743c37e665105e
 +    }
 +    if(!SetWindowSubclass(window,xws_proc,(UINT_PTR)state,(DWORD_PTR)state)){xrtFree(state->Parent);free(state->Path);free(state);}
 +}
-diff --git a/tools/extensions.json b/tools/extensions.json
-index 7f2dd84ecdd39fcf82a5cd2b65c12e91be2a11a2..a20506b1841d87edb4ef0a0f7674524251551ab0 100644
 --- a/tools/extensions.json
 +++ b/tools/extensions.json
 @@ -664,6 +664,35 @@

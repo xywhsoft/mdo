@@ -10,9 +10,15 @@ import test_agent_runtime as fixture
 LIFECYCLE=r'''
 static mdo_result Lifecycle(void* Data,mdo_agent_phase Phase,const mdo_agent_context_v1* C,char* Error,size_t Capacity){
  (void)Data;char Line[512];
+ static unsigned SafeAttempts;
+ if(Phase==MDO_AGENT_CONTEXT&&!strcmp(C->AgentId,"agent.life-config")&&SafeAttempts++<2){
+  Host->Core->Log(Host->Core->Context,MDO_LOG_INFO,"safe-callback-retry");
+  snprintf(Error,Capacity,"fixture temporary dependency");return MDO_RESULT_RETRY_SAFE;
+ }
  if(Phase==MDO_AGENT_RUN_PREPARE&&!strcmp(C->AgentId,"agent.life-denied")){
   snprintf(Error,Capacity,"lifecycle_prepare_denied");return MDO_RESULT_ERROR;
  }
+ if(Phase==MDO_AGENT_RUN_PREPARE&&!strcmp(C->AgentId,"agent.life-wait"))return MDO_RESULT_RETRY_SAFE;
  if(Phase==MDO_AGENT_CONTEXT){
   xvalue* Source=mdoAgentContextSource(C,"system");xstrview Text;
   if(Source&&xrtValueGetString(xrtValueObjectGet(Source,xrtStrView("text")),&Text)){
@@ -62,6 +68,10 @@ static void LifeExtra(xwork_runtime* Runtime){
  if(R&&MdoAgentRunStart(R,&E)){xwork_result Code=MdoAgentRunWait(R,MdoDeadlineAfterUs(5000000),&Result,&E);printf("life_denied=%d:%s\n",Code,E.sMessage);}
  else printf("life_extra_error=denied-create:%s\n",E.sMessage);
  xworkRunResultUnit(&Result);MdoAgentRunDestroy(R);MdoAgentSessionRelease(S);
+ Options.AgentId="agent.life-wait";S=MdoAgentSessionCreateWithRuntime(Runtime,&Options,&E);R=S?MdoAgentRunCreate(S,&O,&E):NULL;
+ if(R&&MdoAgentRunStart(R,&E)){xrtSleep(60);MdoAgentRunCancel(R);printf("life_cancel_result=%d\n",MdoAgentRunWait(R,MdoDeadlineAfterUs(2000000),&Result,&E));}
+ else printf("life_extra_error=wait-create:%s\n",E.sMessage);
+ xworkRunResultUnit(&Result);MdoAgentRunDestroy(R);MdoAgentSessionRelease(S);
 }
 '''
 
@@ -72,10 +82,13 @@ def main():
         for name in ('agent.h','sdk.h','lifecycle.h'):
             shutil.copy2(fixture.ROOT/'include/mdo'/name,site/'generated/module-sdk/mdo'/name)
         module=roles.MODULE.replace('#include "mdo/agent.h"','#include "mdo/agent.h"\n#include "mdo/lifecycle.h"')
+        module=module.replace('    (void)Data;xwork_error NativeError;','    static unsigned DriverAttempts;if(!strcmp(Context->AgentId,"agent.mod-main")&&DriverAttempts++==0){snprintf(Error,Capacity,"fixture temporary driver dependency");return MDO_RESULT_RETRY_SAFE;}\n    (void)Data;xwork_error NativeError;',1)
+        module=module.replace('    if(Phase==MDO_AGENT_BEFORE_TOOL){','    if(Phase==MDO_AGENT_BEFORE_TOOL){\n        static unsigned ToolAttempts;xwork_agent_extension_context* T=mdoAgentNative(Context);\n        if(T->pToolEvent&&!strcmp(T->pToolEvent->sToolName,"write")&&ToolAttempts++==0){Host->Core->Log(Host->Core->Context,MDO_LOG_INFO,"safe-tool-callback-retry");return MDO_RESULT_RETRY_SAFE;}',1)
         module=module.replace('static mdo_result Register(',LIFECYCLE+'\nstatic mdo_result Register(')
         module=module.replace('(void)Data;Host=H;mdo_result Result=',
             '(void)Data;Host=H;mdo_lifecycle_v1 L={sizeof(L),1,"global",NULL,10,false,MDO_AGENT_PHASES_ALL,NULL,Lifecycle};if(mdoRegisterLifecycle(R,&L,Error,Capacity)!=MDO_RESULT_OK)return MDO_RESULT_ERROR;mdo_result Result=')
         probe=roles.PROBE.replace('    char* At=Old?', '    char* Version=Old?strstr(Old,"LIFECYCLE-V1"):NULL;if(Version)Version[11]=\'2\';\n    char* At=Old?')
+        probe=probe.replace('    printf("mod_result=', '    printf("driver_recovery_clean=%u\\n",Error.eCode==XWORK_ERROR_NONE);\n    printf("mod_result=')
         main_profile=roles.MAIN
         if args.background:
             # Reuse the caller stack after session creation. Resolved profile
@@ -110,13 +123,17 @@ def main():
         main_code=main_code.replace('static mdo_result Register(',observer_callback+'\nstatic mdo_result Register(')
         main_code=main_code.replace('(void)Data;Host=H;', '(void)Data;Host=H;mdo_lifecycle_v1 Observer={sizeof(Observer),1,"observer",NULL,0,true,MDO_AGENT_PHASE_BIT(MDO_AGENT_BEFORE_REQUEST),NULL,Observe};if(mdoRegisterLifecycle(R,&Observer,Error,Capacity)!=MDO_RESULT_OK)return MDO_RESULT_ERROR;')
         files=[(p,main_code if p==main_path else t) for p,t in files]
-        for identity in ('life-config','life-denied'):
+        for identity in ('life-config','life-denied','life-wait'):
             files += roles.role_files('agents',identity,'---\nschema: mdo.agent.v1\nname: Config lifecycle\ntools: none\n---\nConfig lifecycle role')
         insertion='\n'.join(f'    MdoHomeAtomicWrite({json.dumps(p)}, {json.dumps(t)}, {len(t.encode())}u, false);' for p,t in files)
         source=source.replace('xworkRuntimeConfigInit(&runtime_config);',insertion+'\n    xworkRuntimeConfigInit(&runtime_config);')
         source=source.replace('MdoMemoryWriteOptionsInit(&memory_write);','ModProbe(runtime);LifeExtra(runtime);\n    MdoMemoryWriteOptionsInit(&memory_write);')
         (site/'probe.c').write_text(source,encoding='utf-8')
         output=fixture.run_probe(args.host.resolve(),site,Path(tmp)/'home')
+        assert output.count('safe-callback-retry')==2,output
+        assert 'life_cancel_result=-2' in output,output
+        assert 'driver_recovery_clean=1' in output,output
+        assert output.count('safe-tool-callback-retry')==1,output
         assert 'mod_result=0:mod-complete' in output,output
         assert 'LIFECYCLE-V1 finished:agent.mod-main:mod-complete' in output,output
         assert 'LIFECYCLE-V1 finished:subagent.mod-child:child-complete' in output,output

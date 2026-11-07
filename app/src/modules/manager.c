@@ -2443,9 +2443,14 @@ bool MdoModuleCatalogAgentEvent(const MdoModuleCatalog* Catalog,cstr Id,mdo_agen
     if(!Binding->Program.OnEvent)return true;
     mdo_sdk_context_v1 Application;MdoApplicationInvocation Invocation;
     MdoModulesAgentApplication(Binding,Frame,&Application,&Invocation,Catalog);
-    char Message[1024]={0};mdo_result Result=Binding->Program.OnEvent(Binding->UserData,Phase,Frame,Message,sizeof(Message));
+    char Message[1024]={0};mdo_result Result;uint32 Attempt=0;
+    do{Result=Binding->Program.OnEvent(Binding->UserData,Phase,Frame,Message,sizeof(Message));
+        if(Notification||Phase==MDO_AGENT_INSTANCE_RELEASE||
+            !MdoModulesCallbackRecover(Frame,Result,++Attempt,Error,Message))break;
+    }while(true);
     Frame->Application=NULL;
-    if(Result==MDO_RESULT_OK)return true;
+    if(Result==MDO_RESULT_OK){xworkErrorInit(Error);return true;}
+    if(MdoModulesCallbackStopped(Result,Error))return false;
     if(Notification){MdoModulesLifecycleWarning(&Application,Id,Phase,Message[0]?Message:"Agent lifecycle observer failed");return true;}
     xworkErrorInit(Error);if(Error){Error->eCode=Result==MDO_RESULT_CANCELLED?XWORK_ERROR_CANCELLED:Result==MDO_RESULT_TIMEOUT?XWORK_ERROR_TIMEOUT:Result==MDO_RESULT_LIMIT?XWORK_ERROR_LIMIT:XWORK_ERROR_CONTEXT;snprintf(Error->sMessage,sizeof(Error->sMessage),"%s",Message[0]?Message:"Agent event callback failed");}
     return false;
@@ -2457,8 +2462,13 @@ xwork_result MdoModuleCatalogAgentDrive(const MdoModuleCatalog* Catalog,cstr Id,
     if(!Binding || !Binding->Program.Run)return XWORK_RESULT_ERROR;
     mdo_sdk_context_v1 Application;MdoApplicationInvocation Invocation;
     MdoModulesAgentApplication(Binding,Frame,&Application,&Invocation,Catalog);
-    char Message[1024]={0};mdo_result Result=Binding->Program.Run(Binding->UserData,Frame,Message,sizeof(Message));
+    char Message[1024]={0};mdo_result Result;uint32 Attempt=0;
+    do{Result=Binding->Program.Run(Binding->UserData,Frame,Message,sizeof(Message));
+        if(!MdoModulesCallbackRecover(Frame,Result,++Attempt,Error,Message))break;
+    }while(true);
     Frame->Application=NULL;
+    if(MdoModulesCallbackStopped(Result,Error))return Error->eCode==XWORK_ERROR_CANCELLED?XWORK_RESULT_CANCELLED:XWORK_RESULT_TIMEOUT;
+    if(Result==MDO_RESULT_OK)xworkErrorInit(Error);
     if(Result!=MDO_RESULT_OK && Error){xworkErrorInit(Error);Error->eCode=Result==MDO_RESULT_CANCELLED?XWORK_ERROR_CANCELLED:Result==MDO_RESULT_TIMEOUT?XWORK_ERROR_TIMEOUT:Result==MDO_RESULT_LIMIT?XWORK_ERROR_LIMIT:XWORK_ERROR_CONTEXT;snprintf(Error->sMessage,sizeof(Error->sMessage),"%s",Message[0]?Message:"Agent driver failed");}
     return MdoModulesResult(Result);
 }

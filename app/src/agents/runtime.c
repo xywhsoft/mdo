@@ -19,6 +19,7 @@
 #include "../../include/mdo/knowledge.h"
 #include "../../include/mdo/agent_config.h"
 #include "../../include/mdo/agent_file.h"
+#include "../../include/mdo/sessions.h"
 
 #define MDO_AGENT_DEFAULT_ID "mdo.default"
 #define MDO_AGENT_PROMPT_LIMIT (512u * 1024u)
@@ -169,11 +170,28 @@ struct MdoAgentRun {
 /* Descendants inherit the Agent event callback. Their runtime identity is
  * available before permission discovery, unlike workspace-based guesses. */
 static bool MdoAgentsForwardEvent(MdoAgentOwner* Owner,xwork_event_fn Forward,void* Data,const xwork_event* Event){
+    xwork_event Recovery;
+    if(Event->eKind==XWORK_EVENT_RECOVERY_WAIT){Recovery=*Event;Recovery.eKind=MDO_AGENT_EVENT_MODEL_RETRY;Event=&Recovery;}
     if(Event->eKind==XWORK_EVENT_AGENT_START&&Event->uAgentId&&
         !MdoModuleAgentIdentityBegin(Owner,Event->uAgentId,Owner->ProductProject,Owner->ProductSession))xrtClearError();
     if(Event->eKind==XWORK_EVENT_AGENT_START&&Event->uAgentId)MdoModuleAgentSetMemberContext(NULL,Owner,Event->uAgentId,Owner->Namespace,Owner->MemberId);
-    MdoAgentsLifecycleRuntime(Owner,Event);
-    bool Ok=!Forward||Forward(Data,Event);
+    bool Ok=!Forward;uint32 Attempt=0;
+    while(!Ok){
+        xrtClearError();Ok=Forward(Data,Event);if(Ok)break;
+        /* Only the known, owned bridge promises idempotent display appends.
+         * User callbacks may have effects and must not be replayed here. */
+        if(!MdoSessionEventSinkRetrySafe(Forward)||xrtErrorKind(xrtGetError())!=XERR_IO)break;
+        xwork_agent* Agent=Owner->RootAgent;uint64 Thread=xrtThreadCurrentId();
+        xrtMutexLock(Owner->InstanceLock);
+        for(MdoAgentActiveFrame* A=Owner->ActiveFrames;A;A=A->Next)if(A->Thread==Thread){Agent=A->Native->pAgent;break;}
+        xrtMutexUnlock(Owner->InstanceLock);
+        xwork_error Error;xworkErrorInit(&Error);Error.eCode=XWORK_ERROR_IO;
+        if(!xworkAgentWaitRecovery(Agent,"storage",&Error,++Attempt)){
+            if(Error.eCode==XWORK_ERROR_CANCELLED||Error.eCode==XWORK_ERROR_TIMEOUT)xrtSetErrorKind(XERR_CANCELLED);
+            break;
+        }
+    }
+    if(Ok)MdoAgentsLifecycleRuntime(Owner,Event);
     if(Event->eKind==XWORK_EVENT_AGENT_DONE&&Event->uAgentId)MdoModuleAgentIdentityEnd(Owner,Event->uAgentId);
     return Ok;
 }
@@ -425,9 +443,6 @@ static xllm_result MdoAgentsRouteComplete(MdoAgentOwner* Owner,
     if ( Owner->ExternalComplete != NULL )
         return Owner->ExternalComplete(Owner->ExternalModelData, Request,
             Callbacks, Response, Error);
-    xllm_request Defaulted=*Request;
-    MdoModelApplyRequestDefaults(Owner->Models,Match->ModelId,&Defaulted);
-    Request=&Defaulted;
     if(MdoModelIsOnline(Owner->Models,Match->ModelId)){
         MdoModelClientOptionsInit(&Options);Options.ModelId=Match->ModelId;Options.Protocol=Match->Protocol;
         Options.ReasoningEffort=Match->ReasoningEffort;Options.MaxOutputTokens=Match->MaxOutputTokens;
@@ -466,8 +481,8 @@ static xllm_result MdoAgentsRouteComplete(MdoAgentOwner* Owner,
     Client = Match->Client;
     (void)xrtMutexUnlock(Owner->RouteLock);
     if ( Owned ) Client = MdoModelClientCreate(Owner->Models, &Options, NULL, Error);
-    if ( Client == NULL ) return XLLM_RESULT_ERROR;
-    xllm_result Result = MdoModelCompleteRestartableObserved(Client, Request, Callbacks, Response, Error, &Observer);
+    Options.RestartableStream=true;Options.RetryObserver=&Observer;
+    xllm_result Result = MdoModelConfiguredComplete(Owner->Models,Client,&Options,Request,Callbacks,Response,Error);
     if ( Owned ) xllmClientDestroy(Client);
     return Result;
 }

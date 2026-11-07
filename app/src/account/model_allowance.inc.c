@@ -67,18 +67,45 @@ static MdoModelLoginState MdoAccountModelState(void)
     xrtMutexUnlock(g_MdoAccount.Lock);return State;
 }
 
+static uint64 MdoAccountModelRecoveryRevision(void)
+{
+    if(!g_MdoAccount.Initialized)return 0;
+    uint64 Hash=UINT64_C(1469598103934665603),Value=0;
+    xrtMutexLock(g_MdoAccount.Lock);
+    Hash^=(uint64)MdoAccountModelStateLocked();Hash*=UINT64_C(1099511628211);
+    Hash^=g_MdoAccount.ModelCredentialRevision;Hash*=UINT64_C(1099511628211);
+    const char* Labels[]={g_MdoAccount.OnlineVersion,MdoAccountText(g_MdoAccount.Allowance,"plan_id",64),MdoAccountText(g_MdoAccount.Allowance,"group_id",64)};
+    for(size_t I=0;I<3;I++)for(const unsigned char* P=(const unsigned char*)(Labels[I]?Labels[I]:"");*P;P++){Hash^=*P;Hash*=UINT64_C(1099511628211);}
+    Value=0;(void)MdoAccountGetUInt(xrtValueObjectGet(g_MdoAccount.Allowance,XRT_STR_LITERAL("plan_expires_at")),&Value);Hash^=Value;Hash*=UINT64_C(1099511628211);
+    bool Vip=false;(void)xrtValueGetBool(xrtValueObjectGet(g_MdoAccount.Allowance,XRT_STR_LITERAL("is_vip")),&Vip);Hash^=(uint64)Vip;Hash*=UINT64_C(1099511628211);
+    (void)MdoAccountGetUInt(xrtValueObjectGet(g_MdoAccount.Balance,XRT_STR_LITERAL("available_micros")),&Value);Hash^=Value;Hash*=UINT64_C(1099511628211);
+    const xvalue* Quotas=xrtValueObjectGet(g_MdoAccount.Allowance,XRT_STR_LITERAL("daily_quotas"));
+    const char* Fields[]={"remaining_tokens","reserved_tokens","resets_at","limit_tokens"};
+    for(size_t I=0;I<xrtValueCount(Quotas);I++){
+      const xvalue* Q=xrtValueArrayGet(Quotas,I);cstr Id=MdoAccountText(Q,"model_id",128);
+      for(const unsigned char* P=(const unsigned char*)(Id?Id:"");*P;P++){Hash^=*P;Hash*=UINT64_C(1099511628211);}
+      bool Unlimited=false;(void)xrtValueGetBool(xrtValueObjectGet(Q,XRT_STR_LITERAL("unlimited")),&Unlimited);Hash^=(uint64)Unlimited;Hash*=UINT64_C(1099511628211);
+      for(size_t J=0;J<4;J++){
+        Value=0;(void)MdoAccountGetUInt(xrtValueObjectGet(xrtValueArrayGet(Quotas,I),xrtStrView(Fields[J])),&Value);
+        Hash^=Value;Hash*=UINT64_C(1099511628211);
+      }
+    }
+    xrtMutexUnlock(g_MdoAccount.Lock);return Hash;
+}
+
 static bool MdoAccountModelPin(xcancel* Cancel,MdoModelOnlineAccess* Access)
 {
     MdoAccountLease* Lease=xrtCalloc(1,sizeof(*Lease));
     if(!Lease||!g_MdoAccount.Initialized){xrtFree(Lease);return false;}
     bool Ok=false;
     xrtMutexLock(g_MdoAccount.Lock);
-    if(!g_MdoAccount.Stopping&&g_MdoAccount.SessionCancel&&g_MdoAccount.Tokens.MemberId&&
-        (g_MdoAccount.Tokens.Refresh[0]||(g_MdoAccount.Tokens.Access[0]&&!MdoDeadlineExpired(g_MdoAccount.Tokens.Expires)))&&
+    uint64 Member=g_MdoAccount.Tokens.MemberId;
+    if(!Member)(void)MdoAccountGetUInt(xrtValueObjectGet(g_MdoAccount.Profile,XRT_STR_LITERAL("id")),&Member);
+    if(!g_MdoAccount.Stopping&&g_MdoAccount.SessionCancel&&Member&&
         (!Cancel||!xrtCancelRequested(Cancel))){
         Lease->Cancel=xrtCancelChild(Cancel);
         if(Lease->Cancel)Lease->Watch=xrtCancelWatch(g_MdoAccount.SessionCancel,MdoAccountCancelLease,Lease->Cancel);
-        if(Lease->Watch){Lease->Generation=g_MdoAccount.Epoch;Lease->MemberId=g_MdoAccount.Tokens.MemberId;Lease->Managed=true;Ok=true;}
+        if(Lease->Watch){Lease->Generation=g_MdoAccount.Epoch;Lease->MemberId=Member;Lease->Managed=true;Ok=true;}
     }
     xrtMutexUnlock(g_MdoAccount.Lock);
     if(!Ok){MdoAccountRelease(Lease);xrtFree(Lease);return false;}
@@ -88,7 +115,7 @@ static bool MdoAccountModelPin(xcancel* Cancel,MdoModelOnlineAccess* Access)
 static bool MdoAccountModelAccess(xcancel* Cancel,uint64 Deadline,MdoModelOnlineAccess* Access)
 {
     MdoAccountLease* Lease=xrtCalloc(1,sizeof(*Lease));if(!Lease||!g_MdoAccount.Initialized){xrtFree(Lease);return false;}
-    uint64 Until=MdoDeadlineAfterUs(30000000);bool Ok=false;
+    uint64 Until=MdoDeadlineAfterUs(30000000);bool Ok=false;uint32 RetryLimit=MdoRecoveryRetryLimit();
     if(Deadline!=MDO_DEADLINE_NEVER&&Deadline<Until)Until=Deadline;
     xrtMutexLock(g_MdoAccount.Lock);++g_MdoAccount.Acquirers;
     uint64 Epoch=g_MdoAccount.Epoch,Serial=g_MdoAccount.RefreshSerial;
@@ -101,6 +128,7 @@ static bool MdoAccountModelAccess(xcancel* Cancel,uint64 Deadline,MdoModelOnline
         /* One failed renewal is one product recovery attempt. Do not hide
          * repeated refreshes in a second, uncounted 30-second retry loop. */
         if(g_MdoAccount.RefreshSerial!=Serial)break;
+        if(g_MdoAccount.RefreshFailures>RetryLimit&&!MdoDeadlineExpired(g_MdoAccount.NextRefresh))break;
         /* Switching during rotation discards the old refresh. Wait for the
          * pending login to settle so its session cancellation reaches the
          * pinned caller, rather than reporting a spurious login failure. */

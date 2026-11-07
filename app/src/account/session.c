@@ -1,10 +1,10 @@
 #include "../../include/mdo/time.h"
 #include "internal.h"
 #include "../../include/mdo/models.h"
+#include "../../include/mdo/recovery.h"
 #ifndef MDO_ACCOUNT_REFRESH_RETRY_BASE_MS
 #define MDO_ACCOUNT_REFRESH_RETRY_BASE_MS 1000u
 #endif
-#define MDO_ACCOUNT_REFRESH_RECOVERIES 10u
 static bool MdoAccountLeaseLocked(xcancel*,MdoAccountLease*);
 static bool MdoAccountQueueLocked(unsigned);
 static void MdoAccountCancelLease(void*);
@@ -170,6 +170,7 @@ static int32 MdoAccountWorker(void* Unused)
             xrtValueRelease(data); data = NULL;
         }
         MdoAccountSecretValueUnit(body);
+        uint32 RecoveryLimit=MdoRecoveryRetryLimit();
         xrtMutexLock(g_MdoAccount.Lock);
         g_MdoAccount.WorkCancel = NULL; g_MdoAccount.Busy = false; g_MdoAccount.BusyKind = 0;
         if (!g_MdoAccount.Stopping && work.Epoch == g_MdoAccount.Epoch) {
@@ -179,7 +180,9 @@ static int32 MdoAccountWorker(void* Unused)
                     bool replaced = work.Kind != MDO_ACCOUNT_WORK_REFRESH ||
                         strcmp(tokens.Refresh, work.Tokens.Refresh) != 0;
                     if (work.Kind == MDO_ACCOUNT_WORK_EXCHANGE || work.Kind == MDO_ACCOUNT_WORK_PASSWORD) {
-                        MdoAccountNewSessionLocked();
+                        uint64 Previous=g_MdoAccount.Tokens.MemberId;
+                        if(!Previous)(void)MdoAccountGetUInt(xrtValueObjectGet(g_MdoAccount.Profile,XRT_STR_LITERAL("id")),&Previous);
+                        if(Previous!=tokens.MemberId)MdoAccountNewSessionLocked();
                         xrtValueRelease(g_MdoAccount.Profile); g_MdoAccount.Profile = NULL;
                         xrtValueRelease(g_MdoAccount.Usage); g_MdoAccount.Usage = NULL;
                         MdoAccountClearModelsLocked();
@@ -187,22 +190,20 @@ static int32 MdoAccountWorker(void* Unused)
                         g_MdoAccount.Remember = work.Kind == MDO_ACCOUNT_WORK_PASSWORD ? work.Remember : work.Authorization.Remember;
                     }
                     g_MdoAccount.Tokens = tokens; g_MdoAccount.Message[0] = 0;
+                    ++g_MdoAccount.ModelCredentialRevision;
                     g_MdoAccount.NextRefresh = 0; g_MdoAccount.RefreshFailures = 0;
                     (void)MdoAccountCredentialSaveLocked(replaced);
                     (void)MdoAccountQueueLocked(MDO_ACCOUNT_WORK_PROFILE);
                 } else {
                     if (work.Kind == MDO_ACCOUNT_WORK_REFRESH) {
-                        /* A single rejected renewal can be transient (for
-                         * example an auth service replica lagging rotation).
-                         * Retain the same refresh identity for ten recoveries;
-                         * do not erase the lease before model recovery runs. */
-                        if (status == 410 || (status == 401 &&
-                                g_MdoAccount.RefreshFailures >= MDO_ACCOUNT_REFRESH_RECOVERIES)) MdoAccountClearTokensLocked();
+                        /* Exhaustion retains the same refresh identity. Only
+                         * an explicit revocation may erase its credentials. */
+                        if (status == 410) MdoAccountClearTokensLocked();
                         else {
                             if (status == 401) g_MdoAccount.Tokens.Expires = 0;
-                            if (g_MdoAccount.RefreshFailures < MDO_ACCOUNT_REFRESH_RECOVERIES) ++g_MdoAccount.RefreshFailures;
+                            if (g_MdoAccount.RefreshFailures < UINT32_MAX) ++g_MdoAccount.RefreshFailures;
                             unsigned shift = g_MdoAccount.RefreshFailures < 6u ? g_MdoAccount.RefreshFailures : 6u;
-                            uint64 delay = (uint64)MDO_ACCOUNT_REFRESH_RETRY_BASE_MS << shift;
+                            uint64 delay = g_MdoAccount.RefreshFailures>RecoveryLimit ? MDO_RECOVERY_WAIT_MS : (uint64)MDO_ACCOUNT_REFRESH_RETRY_BASE_MS << shift;
                             g_MdoAccount.NextRefresh = MdoDeadlineAfterUs(delay * 1000u);
                         }
                     }
@@ -268,7 +269,7 @@ bool MdoAccountInit(void)
     (void)MdoAccountAuthorizationLoad(&g_MdoAccount.Authorization);
     if (g_MdoAccount.Authorization.State[0]) xrtSecureZero(&g_MdoAccount.Work, sizeof(g_MdoAccount.Work));
     xrtMutexUnlock(g_MdoAccount.Lock);
-    MdoModelOnlineAuthority authority={MDO_ACCOUNT_SERVICE_ORIGIN,MdoAccountModelAccess,MdoAccountModelRelease,MdoAccountModelState,MdoAccountModelPin};
+    MdoModelOnlineAuthority authority={MDO_ACCOUNT_SERVICE_ORIGIN,MdoAccountModelAccess,MdoAccountModelRelease,MdoAccountModelState,MdoAccountModelPin,MdoAccountModelRecoveryRevision};
     MdoModelManagerSetOnlineAuthority(&authority);
     g_MdoAccount.Worker = xrtThreadCreate(MdoAccountWorker, NULL, 0);
     if (g_MdoAccount.Worker) return true;

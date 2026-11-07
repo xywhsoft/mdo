@@ -172,7 +172,8 @@ export function eventsToTimeline(events, historyLost = false,
     const scope = `${runKey}:${epoch}`;
     if (event.kind === "compaction_start") compactions.set(scope, event.event_id);
     if ((["model_text_delta", "model_reasoning_delta"].includes(event.kind) && event.text) ||
-        event.kind === "model_done" || event.kind === "tool_start") clearRetryNotice(event);
+        event.kind === "model_done" || event.kind === "tool_start" ||
+        event.kind === "tool_done" || event.kind === "compaction_done") clearRetryNotice(event);
     if (["error", "agent_done", "agent_start"].includes(event.kind)) clearRetryNotice(event, true);
     switch (event.kind) {
       case "model_retry": {

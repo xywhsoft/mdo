@@ -26,7 +26,13 @@ typedef enum mdo_result {
     MDO_RESULT_ERROR = -1,
     MDO_RESULT_CANCELLED = -2,
     MDO_RESULT_LIMIT = -3,
-    MDO_RESULT_TIMEOUT = -4
+    MDO_RESULT_TIMEOUT = -4,
+    /* Control callbacks only: explicit promise that a failed attempt left
+     * State, ContextPlan, request/response and all external effects unchanged.
+     * The host may retry THIS callback; already completed hooks are not run
+     * again. Never return these after an uncertain SDK/process/file effect. */
+    MDO_RESULT_RETRY_SAFE = -5,
+    MDO_RESULT_RESOURCE = -6
 } mdo_result;
 
 typedef uint64_t mdo_capabilities;

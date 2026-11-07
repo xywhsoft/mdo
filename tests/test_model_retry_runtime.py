@@ -35,7 +35,7 @@ static bool Retry(xllm_client* Client, const xllm_diagnostics* Diagnostics,
     uint32 Next, void* Data) {
     Observer* O=Data; (void)Client;
     if (Next != Diagnostics->uAttemptCount + 1u ||
-        Diagnostics->uMaxAttempts != MDO_MODEL_CONNECTION_ATTEMPTS ||
+        Diagnostics->uMaxAttempts != (MdoRecoveryRetryLimit()+1u) ||
         Diagnostics->uRetryAfterMs < O->LastDelay) return false;
     if (!O->FirstDelay) O->FirstDelay=Diagnostics->uRetryAfterMs;
     O->LastDelay=Diagnostics->uRetryAfterMs;
@@ -322,20 +322,20 @@ def main():
                         'malformed-recover': (0, 'unknown', 2),
                         'long-recover': (0, 'unknown', 2),
                         'local-invalid': (-1, 'request_configuration', 1),
-                        'persistent-budget': (-1, 'service_unavailable', 11), 'budget-expired': (-1, 'service_unavailable', 1), 'reset': (0, 'unknown', 2),
+                        'persistent-budget': (-1, 'service_unavailable', 11), 'budget-expired': (-1, 'service_unavailable', 11), 'reset': (0, 'unknown', 2),
                         'unknown-recover': (0, 'unknown', 11), 'retry-after-grow': (0, 'unknown', 3),
                         'empty-recover': (0, 'unknown', 11), 'thinking-recover': (0, 'unknown', 11),
                         'whitespace-recover': (0, 'unknown', 11), 'empty-exhausted': (-1, 'empty_response', 11),
                         'empty-protected': (0, 'unknown', 1), 'empty-cancel': (-3, 'cancelled', 10),
                         'empty-reset': (0, 'unknown', 2)}
-            expected['budget-stall'] = (-2, 'timeout', 2)
+            expected['budget-stall'] = (0, 'unknown', 2)
             for name, (result, kind, count) in expected.items():
                 assert f'case={name} result={result} kind={kind} attempts={count}' in output, output
                 assert Model.calls[name] == (0 if name == 'local-invalid' else count), (name, Model.calls, output)
             assert 'exhausted=1' in next(line for line in output.splitlines() if line.startswith('case=persistent-budget ')), output
             assert 'exhausted=1' in next(line for line in output.splitlines() if line.startswith('case=budget-expired ')), output
             stalled = next(line for line in output.splitlines() if line.startswith('case=budget-stall '))
-            assert 150 <= int(stalled.split('ms=')[1].split()[0]) < 1000 and 'exhausted=1' in stalled, output
+            assert int(stalled.split('ms=')[1].split()[0]) >= 200 and 'exhausted=0' in stalled, output
             assert 'backoff_growth=1 cap=80 retry_after_retained=1' in output, output
             assert 'daily_message=accurate' in output, output
             assert 'response_attempts_mismatch' not in output, output

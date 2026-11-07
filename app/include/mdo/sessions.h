@@ -5,6 +5,8 @@
 #include <xwork.h>
 
 #include "agents.h"
+/* True only for the managed, idempotent durable display sink. */
+bool MdoSessionEventSinkRetrySafe(xwork_event_fn Sink);
 
 #define MDO_SESSION_ID_CAPACITY 33u
 #define MDO_PROJECT_ID_CAPACITY 65u

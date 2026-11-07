@@ -3612,5 +3612,12 @@
   "recovery.waiting.network": "Waiting for the network or service; task retained",
   "recovery.waiting.resource": "Waiting for system resources; task retained",
   "recovery.waiting.account": "Waiting for account recovery; task retained",
-  "recovery.waiting.model": "Waiting for model or configuration changes; task retained"
+  "recovery.waiting.model": "Waiting for model or configuration changes; task retained",
+  "recovery.waiting.storage": "Waiting for storage; task and results retained",
+  "recovery.waiting.context": "Waiting for context or configuration changes; task retained",
+  "recovery.waiting.compaction": "Waiting for compaction recovery; original history retained",
+  "recovery.waiting.callback": "Waiting for extension recovery; task retained",
+  "recovery.waiting.verification": "Waiting for verification changes; task retained",
+  "recovery.waiting.tools": "Waiting for tool or approach changes; task retained",
+  "recovery.waiting.condition": "Resumes when conditions recover; you can stop the task at any time."
 }

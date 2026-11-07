@@ -31,8 +31,19 @@ def main() -> int:
         "xwork-xrt-roots.h", "src/xwork_process_output.inc.c",
         "src/xwork_process_tools.inc.c", "src/xwork_task.c",
         "src/xwork_schedule.c", "src/xwork_read.inc.c", "src/xwork_process_grep.inc.c"))
-    names.update('lib/xwork/' + item.relative_to(sdk/'lib/xwork').as_posix()
-                 for item in build_mdo.production_files(sdk/'lib/xwork'))
+    for library in ('xllm', 'xllm-session', 'xwork'):
+        names.update('lib/'+library+'/' + item.relative_to(sdk/'lib'/library).as_posix()
+                     for item in build_mdo.production_files(sdk/'lib'/library))
+        names.add('lib/'+library+'/UPSTREAM.txt')
+    for relative, declaration in (
+        ('src/script/import_xwork.inc', 'XS_XWORK_SYMBOL(xworkAgentWaitRecovery)'),
+        ('src/script/import_xllm_session.inc', 'XS_XLLM_SESSION_SYMBOL(xllmCompactionNormalizeSummary)'),
+    ):
+        target=sdk/relative
+        content=target.read_text(encoding='utf-8')
+        if declaration not in content:
+            target.write_text(content.rstrip()+'\n'+declaration+'\n',encoding='utf-8',newline='\n')
+        names.add(relative)
     native = ROOT / 'tools/native'
     for source, target in (
         ('xs_system_proxy.h', 'src/platform/system_proxy.h'),
@@ -72,12 +83,16 @@ def main() -> int:
         if old.returncode and b"does not exist" not in old.stderr and b"exists on disk, but not in" not in old.stderr:
             raise RuntimeError("Cannot read SDK baseline: " + name)
         before = old.stdout.decode("utf-8").replace("\r\n", "\n") if old.returncode == 0 else ""
-        after = (sdk / name).read_text(encoding="utf-8")
+        # Old overlay inventories may name fragments which were incorporated
+        # into the canonical implementation. Represent a real removal; ignore
+        # names absent from both snapshots rather than inventing dead files.
+        after = (sdk / name).read_text(encoding="utf-8") if (sdk / name).is_file() else ""
         result.extend(difflib.unified_diff(before.splitlines(keepends=True), after.splitlines(keepends=True),
                       fromfile="a/" + name if old.returncode == 0 else "/dev/null", tofile="b/" + name))
     patch.write_text("".join(result), encoding="utf-8", newline="\n")
     lock["libraries"]["xwork"]["production_tree_sha256"] = build_mdo.production_tree_sha256(sdk / "lib/xwork")
     lock["libraries"]["xllm"]["production_tree_sha256"] = build_mdo.production_tree_sha256(sdk / "lib/xllm")
+    lock["libraries"]["xllm-session"]["production_tree_sha256"] = build_mdo.production_tree_sha256(sdk / "lib/xllm-session")
     lock["sdk_overlay"]["sha256"] = hashlib.sha256(patch.read_bytes()).hexdigest()
     (ROOT / "deps.lock").write_text(json.dumps(lock, indent=2) + "\n", encoding="utf-8", newline="\n")
     print("SDK overlay:", lock["sdk_overlay"]["sha256"])

@@ -6,12 +6,6 @@
 #ifndef MDO_MODEL_RETRY_BASE_MS
 #define MDO_MODEL_RETRY_BASE_MS 1000u
 #endif
-/* Initial attempt plus ten recoveries for a completed but unusable draft. */
-#define MDO_MODEL_REPAIR_ATTEMPTS 11u
-#define MDO_MODEL_CONNECTION_ATTEMPTS 11u
-#ifndef MDO_MODEL_RECOVERY_BUDGET_US
-#define MDO_MODEL_RECOVERY_BUDGET_US UINT64_C(900000000)
-#endif
 #ifndef MDO_MODEL_RETRY_MAX_MS
 #define MDO_MODEL_RETRY_MAX_MS 300000u
 #endif
@@ -336,9 +330,14 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
         Stream.pUserData = &Guard;
         Stream.OnEvent = MdoModelsStream;
         xllm_request AttemptRequest = *ActiveRequest;
+        MdoConfigSnapshot AttemptConfig={0};AttemptConfig.Size=sizeof(AttemptConfig);
+        (void)MdoConfigGetSnapshot(&AttemptConfig);
+        uint64 AttemptAccountRevision=Complete&&g_MdoModelsOnline.RecoveryRevision?g_MdoModelsOnline.RecoveryRevision():0;
+        uint64 AttemptModelGeneration=MdoModelManagerGeneration();
         Result = MdoModelsScope(Request, &Error);
         if (Result != XLLM_RESULT_OK) { Retryable = false; break; }
         if (AttemptsMade != UINT32_MAX) ++AttemptsMade;
+        xllmErrorInit(&Error);
         Result = Complete ? Complete(Data, &Client, &AttemptRequest,
             Callbacks ? &Stream : NULL, Response, &Error) :
             MdoModelsClientComplete(Client, &AttemptRequest, Callbacks ? &Stream : NULL,
@@ -382,6 +381,21 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
             !xrtAtomic32Load(&Guard.Delivered, XMEMORY_ACQUIRE) &&
             !xrtAtomic32Load(&Guard.Stopped, XMEMORY_ACQUIRE);
         bool Resource=Error.eCode==XLLM_ERROR_OUT_OF_MEMORY;
+        bool WaitAccount=Complete&&!strcmp(Kind,"profile_login_required");
+        bool WaitSettings=!strncmp(Kind,"profile_",8)&&!WaitAccount&&!RenewAuthentication;
+        bool WaitBusiness=!strcmp(Kind,"insufficient_balance")||!strcmp(Kind,"daily_token_limit")||
+            !strcmp(Kind,"daily_spending_limit")||!strcmp(Kind,"quota_exceeded")||
+            !strcmp(Kind,"membership_required")||!strcmp(Kind,"model_changed")||
+            !strcmp(Kind,"model_unavailable")||!strcmp(Kind,"authentication_failed")||
+            !strcmp(Kind,"permission_denied")||!strcmp(Kind,"service_configuration")||
+            !strcmp(Kind,"service_quota_exceeded")||!strcmp(Kind,"context_limit")||
+            !strcmp(Kind,"request_too_large")||!strcmp(Kind,"invalid_request")||!strcmp(Kind,"account_restricted");
+        bool ExternalWait=(WaitAccount||WaitSettings||WaitBusiness)&&Observer&&Observer->WaitForRecovery&&
+            !*Response&&!xrtAtomic32Load(&Guard.Stopped,XMEMORY_ACQUIRE)&&
+            (Restartable||(!Error.tDiagnostics.bModelDataDelivered&&!xrtAtomic32Load(&Guard.Delivered,XMEMORY_ACQUIRE)));
+        bool AccountChangeWakes=WaitAccount||RenewAuthentication||!strcmp(Kind,"insufficient_balance")||
+            !strcmp(Kind,"daily_token_limit")||!strcmp(Kind,"daily_spending_limit")||
+            !strcmp(Kind,"quota_exceeded")||!strcmp(Kind,"membership_required");
         Retryable = (Resource&&!*Response&&!xrtAtomic32Load(&Guard.Stopped,XMEMORY_ACQUIRE)&&
             (Restartable||!xrtAtomic32Load(&Guard.Delivered,XMEMORY_ACQUIRE))) || RenewAuthentication || ((MdoModelsRetryable(&Error) || (Restartable &&
             (!strcmp(MdoModelErrorKind(&Error), "invalid_response") ||
@@ -391,13 +405,13 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
             (!Error.tDiagnostics.bModelDataDelivered &&
              !xrtAtomic32Load(&Guard.Delivered, XMEMORY_ACQUIRE))) &&
             !xrtAtomic32Load(&Guard.Stopped, XMEMORY_ACQUIRE));
-        if (!Retryable) break;
+        if(!Retryable&&!ExternalWait)break;
         MaxAttempts=MdoRecoveryRetryLimit()+1u;
         bool Exhausted=Attempt>=MaxAttempts;
-        bool Waiting=Exhausted&&Observer&&Observer->WaitForRecovery;
-        MdoConfigSnapshot WaitConfig={0};WaitConfig.Size=sizeof(WaitConfig);
-        bool NeedsChange=Waiting&&!Resource&&!RenewAuthentication&&!MdoModelsRetryable(&Error);
-        if(NeedsChange)(void)MdoConfigGetSnapshot(&WaitConfig);
+        bool Waiting=(Exhausted||ExternalWait)&&Observer&&Observer->WaitForRecovery;
+        MdoConfigSnapshot WaitConfig=AttemptConfig;
+        bool NeedsChange=Waiting&&!Resource&&!RenewAuthentication&&!WaitAccount&&!MdoModelsRetryable(&Error);
+        uint64 AccountRevision=AttemptAccountRevision;
         if(Exhausted&&!Waiting)break;
         if ((Error.eCode == XLLM_ERROR_OUTPUT_LIMIT ||
              MdoModelsCode(&Error, "empty_response"))) {
@@ -443,7 +457,10 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
             Error.tDiagnostics.uRetryAfterMs, PreviousDelay, &Jitter);
         if(Resource)Delay=MdoRecoveryResourceDelay(Attempt);
         if(Waiting&&Delay<MDO_RECOVERY_WAIT_MS)Delay=MDO_RECOVERY_WAIT_MS;
-        PreviousDelay = Delay;
+        /* Low-frequency waiting is not active retry backoff. After a real
+         * condition change, don't impose another five-minute delay on a
+         * subsequent credential rotation. The failure streak is retained. */
+        if(!Waiting)PreviousDelay = Delay;
         Error.tDiagnostics.uAttemptCount = Attempt;
         Error.tDiagnostics.uMaxAttempts = MaxAttempts;
         Error.tDiagnostics.uRetryAfterMs = Delay;
@@ -456,9 +473,10 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
             break;
         }
         uint64 End = Now + (uint64)Delay * 1000u;
+        uint64 NextProbe=Now;
         xllm_error Notice=Error;
         if(Waiting)snprintf(Notice.sProviderCode,sizeof(Notice.sProviderCode),"%s",Resource?"waiting_resource":
-            RenewAuthentication?"waiting_account":MdoModelsRetryable(&Error)?"waiting_network":"waiting_model");
+            RenewAuthentication||WaitAccount?"waiting_account":MdoModelsRetryable(&Error)?"waiting_network":"waiting_model");
         if (Observer && Observer->Notify && !Observer->Notify(Observer->UserData,
                 &Notice, Attempt == UINT32_MAX ? Attempt : Attempt + 1u, Delay)) {
             Error.eCode = XLLM_ERROR_HOOK;
@@ -469,6 +487,20 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
             Result = MdoModelsScope(Request, &Error);
             if (Result != XLLM_RESULT_OK) { Retryable = false; goto done; }
             uint64 Current = MdoMonotonicUs();
+            if(Waiting&&Current>=NextProbe){
+                NextProbe=Current+1000000u;
+                /* Repeatedly issuing new tokens cannot bypass an exhausted
+                 * streak of actual model-side 401s. Credential-only waits can
+                 * still wake as soon as an account becomes usable. */
+                if((WaitAccount||(RenewAuthentication&&(!Exhausted||!Error.tDiagnostics.uAttemptCount)))&&g_MdoModelsOnline.State&&g_MdoModelsOnline.State()==MDO_MODEL_LOGIN_READY&&
+                    (!g_MdoModelsOnline.RecoveryRevision||g_MdoModelsOnline.RecoveryRevision()!=AccountRevision))break;
+                if(NeedsChange){
+                    MdoConfigSnapshot CurrentConfig={0};CurrentConfig.Size=sizeof(CurrentConfig);
+                    if((MdoConfigGetSnapshot(&CurrentConfig)&&CurrentConfig.Revision!=WaitConfig.Revision)||
+                        MdoModelManagerGeneration()!=AttemptModelGeneration||
+                        (AccountChangeWakes&&Complete&&g_MdoModelsOnline.RecoveryRevision&&g_MdoModelsOnline.RecoveryRevision()!=AccountRevision))break;
+                }
+            }
             if (Current >= End) {
                 MdoConfigSnapshot CurrentConfig={0};CurrentConfig.Size=sizeof(CurrentConfig);
                 if(!NeedsChange||(MdoConfigGetSnapshot(&CurrentConfig)&&CurrentConfig.Revision!=WaitConfig.Revision))break;

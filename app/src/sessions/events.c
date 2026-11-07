@@ -68,6 +68,8 @@ struct MdoSessionEventBridge {
     struct MdoEventStream* Streams;
     size_t StreamBytes;
     bool WatermarkAttached;
+    bool AppendRollbackPending;
+    uint64 AppendRollbackSize;
 
 };
 
@@ -403,6 +405,32 @@ static bool MdoEventsAppendBytes(const char* Path, const char* Json,
     return Ok;
 }
 
+/* Bridge's runtime lock owns the file. Restore the uncommitted tail before
+ * replaying a failed append; never publish or consume an ID until it lands. */
+static bool MdoEventsAppendOwned(MdoSessionEventBridge* Bridge,const char* Json,size_t Size)
+{
+    bool Ok=true,Exists=false;xfileinfo Info={0};
+    if(Bridge->AppendRollbackPending){
+        /* XRT intentionally forbids resizing append-only handles. */
+        xfile Repair=MdoHomeOpenWrite(Bridge->Path,XFILE_SYNC);
+        if(!Repair)return false;
+        Ok=xrtFileResize(Repair,Bridge->AppendRollbackSize)&&xrtFlush(Repair);
+        if(!xrtClose(Repair))Ok=false;
+        if(Ok)Bridge->AppendRollbackPending=false;
+    }
+    if(!Ok)return false;
+    xfile File=MdoHomeOpenWrite(Bridge->Path,XFILE_CREATE|XFILE_APPEND|XFILE_SYNC);
+    if(!File)return false;
+    if(Ok)Ok=MdoHomeExternalStat(Bridge->Path,&Exists,&Info)&&Exists&&(Info.Available&XFILE_INFO_SIZE)!=0u;
+    if(Ok){
+        Bridge->AppendRollbackSize=Info.Size;Bridge->AppendRollbackPending=true;
+        Ok=xrtWriteFull(File,Json,Size,NULL)&&xrtWriteFull(File,"\n",1u,NULL)&&xrtFlush(File);
+    }
+    if(!xrtClose(File))Ok=false;
+    if(Ok)Bridge->AppendRollbackPending=false;
+    return Ok;
+}
+
 static bool MdoEventsAppend(MdoSessionEventBridge* Bridge,
     const xwork_event* Event)
 {
@@ -432,7 +460,7 @@ static bool MdoEventsAppend(MdoSessionEventBridge* Bridge,
     }
     /* Display history is independent of model context compaction. Only an
      * explicit user clear/edit may remove records; append never evicts them. */
-    Ok = MdoEventsAppendBytes(Bridge->Path, Json, Size);
+    Ok = MdoEventsAppendOwned(Bridge, Json, Size);
     if ( Ok ) {
         MdoSessionsInternalEventIssued(Bridge->ProjectId, Bridge->SessionId, Bridge->NextEventId,true);
         MdoSessionsInternalPublish(Bridge->ProjectId, Bridge->SessionId,
@@ -1562,7 +1590,7 @@ bool MdoSessionEventBridgeOnEvent(void* Value, const xwork_event* Event)
     if ( Bridge == NULL || Event == NULL ) return false;
     DataLease = MdoSessionDataAcquire(Bridge->ProjectId, Bridge->SessionId,
         MDO_SESSION_DATA_WRITE, NULL);
-    if ( DataLease == NULL ) return false;
+    if ( DataLease == NULL ) { xrtSetErrorKind(XERR_IO); return false; }
     UserEvent = *Event;
     xrtMutexLock(Bridge->Lock);
     Ok = MdoEventsStreamDelta(Event) || MdoEventsStreamFinish(Bridge, Event);
@@ -1609,9 +1637,15 @@ bool MdoSessionEventBridgeOnEvent(void* Value, const xwork_event* Event)
         xrtSetErrorKind(XERR_IO);
         return false;
     }
-    return Bridge->UserEvent == NULL ||
-        Bridge->UserEvent(Bridge->UserEventData, Event);
+    if(Bridge->UserEvent&&!Bridge->UserEvent(Bridge->UserEventData,Event)){
+        /* The append already committed. A custom callback refusal is a
+         * cancellation boundary, never permission to append the event again. */
+        xrtSetErrorKind(XERR_CANCELLED);return false;
+    }
+    return true;
 }
+
+bool MdoSessionEventSinkRetrySafe(xwork_event_fn Sink){return Sink==MdoSessionEventBridgeOnEvent;}
 
 static bool MdoEventsSnapshotGrow(MdoSessionEventSnapshot* Snapshot)
 {

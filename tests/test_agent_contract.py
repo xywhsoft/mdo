@@ -69,7 +69,7 @@ class AgentContractTests(unittest.TestCase):
         lock = json.loads((ROOT / "deps.lock").read_text(encoding="utf-8"))
         libraries = lock["libraries"]
         self.assertEqual(libraries["xwork"]["version"], "3.11.0")
-        self.assertEqual(libraries["xwork"]["abi_version"], 9)
+        self.assertEqual(libraries["xwork"]["abi_version"], 10)
         # Independently pinned libraries may share a commit after a mainline merge.
         for name in ("xllm", "xllm-session", "xwork"):
             self.assertRegex(libraries[name]["source_commit"], r"^[0-9a-f]{40}$")

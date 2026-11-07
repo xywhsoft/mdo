@@ -3612,5 +3612,12 @@
   "recovery.waiting.network": "等待网络或服务恢复，任务已保留",
   "recovery.waiting.resource": "等待系统资源释放，任务已保留",
   "recovery.waiting.account": "等待账号恢复，任务已保留",
-  "recovery.waiting.model": "等待模型或配置调整，任务已保留"
+  "recovery.waiting.model": "等待模型或配置调整，任务已保留",
+  "recovery.waiting.storage": "等待存储恢复，任务和执行结果已保留",
+  "recovery.waiting.context": "等待上下文或配置调整，任务已保留",
+  "recovery.waiting.compaction": "等待压缩恢复，原始历史已保留",
+  "recovery.waiting.callback": "等待扩展恢复，任务已保留",
+  "recovery.waiting.verification": "等待验证条件调整，任务已保留",
+  "recovery.waiting.tools": "等待工具或执行方式调整，任务已保留",
+  "recovery.waiting.condition": "条件恢复后自动继续；可随时停止任务。"
 }

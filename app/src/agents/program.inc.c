@@ -136,6 +136,7 @@ static xwork_result MdoAgentsLifecycleRun(MdoAgentOwner* Owner,MdoAgentInstance*
             Status=MdoModuleCatalogAgentDrive(Owner->Modules,Frame.AgentId,&Frame,Error);
         }else Status=Native->DefaultRun(Native->pAgent,Native->sPrompt,Native->pUserMessage,Native->bResume,Native->pResumeOptions,Native->pResult,Error);
     }
+    if(Status!=XWORK_RESULT_OK&&Error){if(Error->eCode==XWORK_ERROR_CANCELLED)Status=XWORK_RESULT_CANCELLED;else if(Error->eCode==XWORK_ERROR_TIMEOUT)Status=XWORK_RESULT_TIMEOUT;}
     Active.Status=Status;mdo_agent_phase Phase=Status==XWORK_RESULT_OK?MDO_AGENT_RUN_FINISHED:Status==XWORK_RESULT_CANCELLED?MDO_AGENT_RUN_CANCELLED:MDO_AGENT_RUN_FAILED;
     MdoAgentsLifecycleNotify(Owner,&Active,Phase,Active.Settled?&Active.Completion:NULL);
     if(Instance->Agent!=Owner->RootAgent)MdoAgentsLifecycleNotify(Owner,&Active,MDO_AGENT_DELEGATE_FINISHED,Active.Settled?&Active.Completion:NULL);
@@ -246,9 +247,11 @@ static xvalue* MdoAgentsRequestPreview(const xllm_request* Request)
         xrtValueObjectSetNew(Data,XRT_STR_LITERAL("preview_truncated"),xrtValueBool(Truncated));
     xrtValueRelease(Messages);xrtValueRelease(Tools);if(!Ok){xrtValueRelease(Data);Data=NULL;}return Data;
 }
+#include "recovery.inc.c"
 static xwork_result MdoAgentsExtension(void* Data,xwork_agent_extension_context* Native,xwork_error* Error)
 {
     MdoAgentOwner* Owner=Data;
+    if(Native->ePhase==XWORK_AGENT_EXTENSION_RECOVERY)return MdoAgentsRecoveryPolicy(Native);
     /* Native SDK clients may publish their own runtime-only child definitions.
      * They retain xwork's policy and lifecycle without becoming module roles. */
     MdoModuleAgentInfo Known={0};Known.Size=sizeof(Known);
@@ -319,9 +322,20 @@ static xwork_result MdoAgentsExtension(void* Data,xwork_agent_extension_context*
         if(!MdoAgentConfigNumber(MdoAgentConfigGet(Instance->Configuration,"runtime"),"max_model_calls",0,100000,&Limit) || (Limit && Instance->RunModelCalls>=Limit)){
             MdoAgentsError(Error,XWORK_ERROR_LIMIT,"role model-call budget exhausted");return XWORK_RESULT_LIMIT;
         }
-        xllm_request Copy;if(!MdoAgentsRequestCopy(Native->pRequest,&Copy)){xllmRequestUnit(&Copy);return XWORK_RESULT_ERROR;}
+        xllm_request Copy;uint32 PrepareAttempt=0;
+        while(!MdoAgentsRequestCopy(Native->pRequest,&Copy)){
+            xllmRequestUnit(&Copy);MdoAgentsError(Error,XWORK_ERROR_OUT_OF_MEMORY,"cannot copy the role request");
+            if(!xworkAgentWaitRecovery(Native->pAgent,"resource",Error,++PrepareAttempt))return XWORK_RESULT_ERROR;
+        }
         xllmRequestUnit(Native->pRequest);*Native->pRequest=Copy;
-        if(!MdoAgentsRequestContext(Instance,Native->pRequest,Error) || !MdoAgentsRequestOptions(Instance,Native->pRequest,Error) ||
+        PrepareAttempt=0;xworkErrorInit(Error);
+        while(!MdoAgentsRequestContext(Instance,Native->pRequest,Error)){
+            /* This helper is transactional and has not called a C hook. */
+            if(Error&&Error->eCode!=XWORK_ERROR_NONE&&Error->eCode!=XWORK_ERROR_OUT_OF_MEMORY)return XWORK_RESULT_ERROR;
+            if(!xworkAgentWaitRecovery(Native->pAgent,"resource",Error,++PrepareAttempt))return XWORK_RESULT_ERROR;
+            xworkErrorInit(Error);
+        }
+        if(!MdoAgentsRequestOptions(Instance,Native->pRequest,Error) ||
             !MdoAgentsProgramEvent(Owner,Instance,Native,Instance->Plan,MDO_AGENT_BEFORE_REQUEST,Error))return XWORK_RESULT_ERROR;
         /* Tool schemas may be customized, but executing a name still requires
          * its real managed descriptor and live permission checks. */
@@ -332,7 +346,12 @@ static xwork_result MdoAgentsExtension(void* Data,xwork_agent_extension_context*
             }
         }
         xworkToolCatalogRelease(Catalog);
-        xvalue* Preview=MdoAgentsRequestPreview(Native->pRequest);if(!Preview)return XWORK_RESULT_ERROR;
+        xvalue* Preview=NULL;PrepareAttempt=0;
+        while(!(Preview=MdoAgentsRequestPreview(Native->pRequest))){
+            MdoAgentsError(Error,XWORK_ERROR_OUT_OF_MEMORY,"cannot retain the prepared request preview");
+            /* The completed BEFORE_REQUEST callback is never run again. */
+            if(!xworkAgentWaitRecovery(Native->pAgent,"resource",Error,++PrepareAttempt))return XWORK_RESULT_ERROR;
+        }
         xllm_session_budget Budget;xllmSessionBudgetInit(&Budget);uint64 Input=0;
         if(!xllmSessionGetBudget(Native->pSession,&Budget) ||
            !MdoAgentConfigNumber(Preview,"estimated_input_tokens",0,UINT64_MAX,&Input)){

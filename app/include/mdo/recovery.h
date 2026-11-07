@@ -12,6 +12,16 @@ uint32 MdoRecoveryRetryLimit(void);
 #ifndef MDO_RECOVERY_RESOURCE_BASE_MS
 #define MDO_RECOVERY_RESOURCE_BASE_MS 10000u
 #endif
+#ifndef MDO_RECOVERY_BASE_MS
+#define MDO_RECOVERY_BASE_MS 1000u
+#endif
+
+static inline uint32 MdoRecoveryDelay(uint32 Failure)
+{
+    uint64 Delay=MDO_RECOVERY_BASE_MS;
+    for(uint32 I=1;I<Failure&&Delay<60000u;I++)Delay*=2;
+    return (uint32)(Delay>60000u?60000u:Delay);
+}
 
 static inline uint32 MdoRecoveryResourceDelay(uint32 Failure)
 {

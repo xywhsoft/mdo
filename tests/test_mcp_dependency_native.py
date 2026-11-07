@@ -22,6 +22,11 @@ CONTRACT=CONTRACT.replace('    char ArchiveHash[65];', r'''
 
     MdoAgentOwner ChildOwner={0};snprintf(ChildOwner.ProductProject,sizeof(ChildOwner.ProductProject),"global");MdoModuleAgentInfo ChildRole={0};ChildRole.Size=sizeof(ChildRole);ChildRole.ExtensionId="agent:qa.child";xvalue* ChildConfig=SdkParse("{\"mcp_servers\":[\"mcp:qa.bundled-fixture\"]}");
     bool Inherited=MdoAgentsBindMcp(&ChildOwner,&ChildRole,ChildConfig,&Work);xstrview InheritedText={0};Inherited=Inherited&&xrtValueGetString(xrtValueArrayGet(MdoAgentConfigGet(ChildConfig,"mcp_servers"),0),&InheritedText)&&!strcmp(InheritedText.Data,"qa-two");xrtValueObjectSetNew(R,XRT_STR_LITERAL("inherited_mcp_selection_keeps_parent_private_binding"),xrtValueBool(Inherited));xrtValueRelease(ChildConfig);
+    bool Off=MdoMcpManagerSetEnabled("qa-two",false,&Work);
+    ChildConfig=SdkParse("{\"mcp_servers\":[\"mcp:qa.bundled-fixture\"]}");
+    bool BoundIdentityKept=Off&&MdoAgentsBindMcp(&ChildOwner,&ChildRole,ChildConfig,&Work)&&xrtValueGetString(xrtValueArrayGet(MdoAgentConfigGet(ChildConfig,"mcp_servers"),0),&InheritedText)&&!strcmp(InheritedText.Data,"qa-two");
+    xrtValueObjectSetNew(R,XRT_STR_LITERAL("unavailable_private_binding_never_substitutes_another_account"),xrtValueBool(BoundIdentityKept));
+    xrtValueRelease(ChildConfig);(void)MdoMcpManagerSetEnabled("qa-two",true,&Work);
     xvalue* ChildRemoved=NULL;MdoExtensionsRemove("agents","child",&ChildRemoved,Error);xrtValueRelease(ChildRemoved);
     xrtValueObjectSetNew(R,XRT_STR_LITERAL("stale_private_binding_edit_rejected"),xrtValueBool(!MdoExtensionsBind("skill:qa.consumer","mcp:qa.bundled-fixture","global","qa-one",BindingRevision,&Bound,Error)));xrtValueRelease(Bound);
     Binding=MdoExtensionsBindings("skill:qa.consumer","project-one",Error);BoundOk=MdoExtensionsBind("skill:qa.consumer","mcp:qa.bundled-fixture","project-one","qa-one",MdoExtensionText(Binding,"revision",64),&Bound,Error);xrtValueRelease(Bound);xrtValueRelease(Binding);

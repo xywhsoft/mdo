@@ -56,7 +56,7 @@ static bool MdoEventsStreamCommit(MdoSessionEventBridge* Bridge, MdoEventStream*
         size_t Count=MdoEventsStreamPrefix(Stream,Stream->Written), Size=0u;
         if (!Count || !Bridge->NextEventId || Bridge->NextEventId==UINT64_MAX) return false;
         char* Json=MdoEventsStreamJson(Bridge,Stream,Stream->Written,Count,false,&Size);
-        bool Ok=Json && Size<=MDO_SESSION_EVENT_RECORD_LIMIT && MdoEventsAppendBytes(Bridge->Path,Json,Size);
+        bool Ok=Json && Size<=MDO_SESSION_EVENT_RECORD_LIMIT && MdoEventsAppendOwned(Bridge,Json,Size);
         if (Ok) {
             MdoSessionsInternalEventIssued(Bridge->ProjectId,Bridge->SessionId,Bridge->NextEventId,true);
             MdoSessionsInternalPublish(Bridge->ProjectId,Bridge->SessionId,xrtStrViewN(Json,Size),false);

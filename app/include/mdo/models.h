@@ -84,6 +84,12 @@ typedef struct MdoModelClientOptions {
     const MdoModelRetryObserver* RetryObserver;
 } MdoModelClientOptions;
 
+/* Agent recovery reopens a configured client after a failed attempt so edited
+ * credentials/endpoints can take effect without replaying its tool history.
+ * First is borrowed; replacement clients remain owned by this call. */
+xllm_result MdoModelConfiguredComplete(const MdoModelCatalog* Pinned, xllm_client* First,const MdoModelClientOptions*,
+    const xllm_request*,const xllm_stream_callbacks*,xllm_response**,xllm_error*);
+
 /* Apply captured model defaults only where a request has no explicit value.
  * Agent, Application SDK and verification use this same allocation-free seam. */
 bool MdoModelApplyRequestDefaults(const MdoModelCatalog*, const char*, xllm_request*);
@@ -117,6 +123,9 @@ typedef struct MdoModelOnlineAuthority {
     /* Pin identity/cancellation even while no usable bearer is available.
      * Optional for custom authorities; Release owns this tokenless lease too. */
     bool (*Pin)(xcancel*,MdoModelOnlineAccess*);
+    /* Changes only when recoverable account conditions (not poll timestamps)
+     * change. Nonsecret, allocation-free readiness hint; not an access grant. */
+    uint64 (*RecoveryRevision)(void);
 } MdoModelOnlineAuthority;
 void MdoModelManagerSetOnlineAuthority(const MdoModelOnlineAuthority* Authority);
 bool MdoModelManagerSetOnlineCatalog(const xvalue* Catalog);

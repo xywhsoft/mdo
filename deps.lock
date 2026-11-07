@@ -47,20 +47,20 @@
   "libraries": {
     "xllm": {
       "version": "3.2.0",
-      "source_commit": "f49b186de53221d67babe29591fc71e2e0672e13",
+      "source_commit": "a01b4a13f0c1b82e4a428236800230671bcbd6aa",
       "production_tree_sha256": "c6432b4cf9cb001bf4ce23553ba45244c5b0fd5852e66bb37fbdd393371cfc32"
     },
     "xllm-session": {
       "version": "3.0.0-dev",
-      "source_commit": "f49b186de53221d67babe29591fc71e2e0672e13",
-      "production_tree_sha256": "b15f24962301eeb5be1cb77fb2d12c223ab566bd6932a60ad19652135f4dba23",
+      "source_commit": "a01b4a13f0c1b82e4a428236800230671bcbd6aa",
+      "production_tree_sha256": "1308eccbf2e9c1beeee6b1f117fefaa4a5db1ae4f4b57a1c840f690d4c9f9c3c",
       "persistence_schema_version": 4
     },
     "xwork": {
       "version": "3.11.0",
-      "source_commit": "f49b186de53221d67babe29591fc71e2e0672e13",
-      "production_tree_sha256": "2066157b406a32cb0c4f9d4bab0e5999bee57c8fd96e1e0b68bc91f224b285df",
-      "abi_version": 9,
+      "source_commit": "a01b4a13f0c1b82e4a428236800230671bcbd6aa",
+      "production_tree_sha256": "228c3a266a34e9855ee7dab7a4bd89b7e6d4c283e0a2ead4b8535501115602d5",
+      "abi_version": 10,
       "event_schema_version": 3
     }
   },
@@ -75,9 +75,9 @@
   },
   "sdk_overlay": {
     "path": "tools/dependencies/xwork-mcp.patch",
-    "sha256": "dd8b39e4d0d4387e6e74b977fcc2cde4d9e9ce85c576b545976aa2a5ebb3b665",
+    "sha256": "a58a1e59cdc630ad69b3172af9d550fb9db7bf9b656f2212f738effb629397a9",
     "base_commit": "e9a3551a5a533de34e2ca4291a8def71612fbf35",
-    "purpose": "Native host compatibility only: browser panels/window state/fallback, platform credentials and system proxy, rooted replacement, process ownership and PID-safe cleanup, and host-owned SDK bridges; canonical agent-library bodies are exported in the bundled base snapshot",
+    "purpose": "Native host compatibility and mechanical agent-library export from pinned XRT mainline; no independent agent-library fork",
     "xrt_single_header_sha256": "f99fe10ea60b5cb48217be91bc786620b683aae8a7af1b582329c210aa9da83f"
   }
 }

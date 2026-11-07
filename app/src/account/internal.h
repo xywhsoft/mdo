@@ -60,6 +60,7 @@ typedef struct MdoAccountManager {
     xvalue* Balance;
     uint64 NextProfile, NextRefresh;
     unsigned RefreshFailures;
+    uint64 ModelCredentialRevision; /* successful identity material changes only */
     uint16 ModelsStatus;
     uint16 CatalogStatus;
     uint16 BalanceStatus;

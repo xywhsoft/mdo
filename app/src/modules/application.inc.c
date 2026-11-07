@@ -51,6 +51,22 @@ static void MdoModulesLifecycleWarning(const mdo_sdk_context_v1* C,cstr Id,unsig
     mdo_error_v1 Error={0};(void)mdoCall(C,"events.emit",Params,&Result,&Error);xrtValueRelease(Warning);xrtValueRelease(Params);xrtValueRelease(Result);
 }
 typedef struct SdkLifecycleBinding {const mdo_lifecycle_v1* Hook;cstr Module;} SdkLifecycleBinding;
+static bool MdoModulesCallbackRecover(mdo_agent_context_v1* Frame,mdo_result Code,
+    uint32 Attempt,xwork_error* Error,cstr Message)
+{
+    if(Code!=MDO_RESULT_RETRY_SAFE&&Code!=MDO_RESULT_RESOURCE)return false;
+    xwork_agent_extension_context* Native=Frame?Frame->Native:NULL;
+    if(!Native||!Native->pAgent)return false;
+    xworkErrorInit(Error);if(Error){Error->eCode=Code==MDO_RESULT_RESOURCE?XWORK_ERROR_OUT_OF_MEMORY:XWORK_ERROR_CONTEXT;
+        snprintf(Error->sMessage,sizeof(Error->sMessage),"%s",Message&&Message[0]?Message:"Extension requested safe recovery");}
+    bool Quiet=Native->ePhase==XWORK_AGENT_EXTENSION_BEFORE_TOOL||Native->ePhase==XWORK_AGENT_EXTENSION_AFTER_TOOL;
+    cstr Stage=Code==MDO_RESULT_RESOURCE?(Quiet?"callback_resource_quiet":"resource"):(Quiet?"callback_quiet":"callback");
+    return xworkAgentWaitRecovery(Native->pAgent,Stage,Error,Attempt);
+}
+static bool MdoModulesCallbackStopped(mdo_result Code,const xwork_error* Error){
+    return (Code==MDO_RESULT_RETRY_SAFE||Code==MDO_RESULT_RESOURCE)&&Error&&
+        (Error->eCode==XWORK_ERROR_CANCELLED||Error->eCode==XWORK_ERROR_TIMEOUT);
+}
 static int SdkLifecycleCompare(const void* L,const void* R){
     const SdkLifecycleBinding *A=L,*B=R;if(A->Hook->Priority!=B->Hook->Priority)return A->Hook->Priority<B->Hook->Priority?-1:1;
     int N=strcmp(A->Module,B->Module);return N?N:strcmp(A->Hook->Id,B->Hook->Id);
@@ -78,10 +94,14 @@ bool MdoModuleCatalogLifecycle(const MdoModuleCatalog* Source,mdo_agent_phase Ph
     Frame->Application=&Application;
     for(size_t I=0;Ok&&I<Count;I++){
         const mdo_lifecycle_v1* H=List[I].Hook;Application.ExtensionId=List[I].Module;
-        char Message[1024]={0};mdo_result Code=H->OnEvent(H->UserData,Phase,Frame,Message,sizeof(Message));
-        if(Code==MDO_RESULT_OK)continue;
+        char Message[1024]={0};mdo_result Code;uint32 Attempt=0;
+        do{Code=H->OnEvent(H->UserData,Phase,Frame,Message,sizeof(Message));
+            if(H->ObserveOnly||Notification||Phase==MDO_AGENT_INSTANCE_RELEASE)break;
+            if(!MdoModulesCallbackRecover(Frame,Code,++Attempt,Error,Message))break;
+        }while(true);
+        if(Code==MDO_RESULT_OK){xworkErrorInit(Error);continue;}
         bool Observer=H->ObserveOnly||Notification||Phase==MDO_AGENT_INSTANCE_RELEASE;
-        if(!Observer){Ok=false;if(Error){xworkErrorInit(Error);Error->eCode=Code==MDO_RESULT_CANCELLED?XWORK_ERROR_CANCELLED:Code==MDO_RESULT_TIMEOUT?XWORK_ERROR_TIMEOUT:Code==MDO_RESULT_LIMIT?XWORK_ERROR_LIMIT:XWORK_ERROR_CONTEXT;snprintf(Error->sMessage,sizeof(Error->sMessage),"%s",Message[0]?Message:"Lifecycle control hook rejected execution");}}
+        if(!Observer){Ok=false;if(Error&&!MdoModulesCallbackStopped(Code,Error)){xworkErrorInit(Error);Error->eCode=Code==MDO_RESULT_CANCELLED?XWORK_ERROR_CANCELLED:Code==MDO_RESULT_TIMEOUT?XWORK_ERROR_TIMEOUT:Code==MDO_RESULT_LIMIT?XWORK_ERROR_LIMIT:XWORK_ERROR_CONTEXT;snprintf(Error->sMessage,sizeof(Error->sMessage),"%s",Message[0]?Message:"Lifecycle control hook rejected execution");}}
         else MdoModulesLifecycleWarning(&Application,H->Id,Phase,Message[0]?Message:"Lifecycle observer failed");
     }
     Frame->Application=Previous;xrtFree(List);MdoModuleCatalogRelease(Catalog);

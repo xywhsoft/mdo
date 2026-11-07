@@ -100,3 +100,12 @@ test("rate limit notices and countdowns use the UI language, without provider pr
     }
   } finally { globalThis.fetch = fetch; }
 });
+
+test("condition waits do not promise another model call after a countdown", () => {
+  const copy = modelRetryCopy({ errorKind: "waiting_model", attempts: 11, retryWaiting: true, retryAt: 1000 }, 2000);
+  assert.match(copy.title, /Waiting|等待/);
+  assert.doesNotMatch(copy.detail, /12|即将|scheduled|Connecting/);
+  const detail={textContent:""};
+  updateModelRetryCountdowns({querySelectorAll:()=>[{dataset:{retryKind:"waiting_model",retryAt:"1000",retryWaiting:"true",retryAttempts:"11"},querySelector:()=>detail}]},2000);
+  assert.equal(detail.textContent,copy.detail);
+});

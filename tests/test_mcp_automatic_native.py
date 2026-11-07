@@ -46,9 +46,14 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  xwork_agent_options AgentConfig;xworkAgentOptionsInit(&AgentConfig);AgentConfig.pSession=Session;AgentConfig.sWorkspaceRoot=SdkField(P,"root");AgentConfig.OnModelComplete=QaUnavailableComplete;
  xwork_agent* Agent=xworkAgentCreateWithRuntime(Runtime,Definition,&AgentConfig,&E);char LimitId[97];McpDefaultId("mcp:qa.limit-fixture",LimitId);const char* Selected[]={LimitId};
  xwork_run_result Run={0};bool Continues=Agent&&MdoMcpConfigureRole(Agent,SdkField(P,"root"),Selected,1,&E)&&xworkAgentRun(Agent,"Continue without the unavailable MCP",&Run,&E)==XWORK_RESULT_OK;
- xrtValueObjectSetNew(R,XRT_STR_LITERAL("unavailable_mcp_does_not_interrupt_agent"),xrtValueBool(Continues));xworkRunResultUnit(&Run);if(Agent)xworkAgentDestroy(Agent);xllmSessionDestroy(Session);xworkAgentDefinitionRelease(Definition);
+ xrtValueObjectSetNew(R,XRT_STR_LITERAL("unavailable_mcp_does_not_interrupt_agent"),xrtValueBool(Continues));xworkRunResultUnit(&Run);
  xvalue* RecoveryWarnings=xrtValueArray();bool WarnRecovery=MdoMcpWarnings(RecoveryWarnings)&&xrtValueCount(RecoveryWarnings)>0;MdoMcpServerStatus Retained={0};Retained.Size=sizeof(Retained);
  xrtValueObjectSetNew(R,XRT_STR_LITERAL("unavailable_mcp_warns_and_retains_enabled_setting"),xrtValueBool(WarnRecovery&&MdoMcpManagerGetStatus(LimitId,&Retained)&&Retained.Enabled));xrtValueRelease(RecoveryWarnings);
+ bool Recovered=Continues&&MdoMcpManagerRefresh(LimitId,NULL,MdoDeadlineAfterUs(3000000),&E)&&xworkAgentLoadMcpTool(Agent,LimitId,"echo",&E);
+ xrtValueObjectSetNew(R,XRT_STR_LITERAL("reconnected_identity_is_available_without_replacing_the_agent"),xrtValueBool(Recovered));
+ RecoveryWarnings=xrtValueArray();bool GoneWarning=MdoMcpWarnings(RecoveryWarnings);for(size_t I=0;I<xrtValueCount(RecoveryWarnings);I++){cstr Name=SdkField(xrtValueArrayGet(RecoveryWarnings,I),"subject_id");if(Name&&!strcmp(Name,LimitId))GoneWarning=false;}
+ xrtValueObjectSetNew(R,XRT_STR_LITERAL("recovered_connection_clears_its_warning"),xrtValueBool(Recovered&&GoneWarning));xrtValueRelease(RecoveryWarnings);
+ if(Agent)xworkAgentDestroy(Agent);xllmSessionDestroy(Session);xworkAgentDefinitionRelease(Definition);
  xvalue* Warnings=xrtValueArray();bool Warn=MdoExtensionsWarnings(Warnings),InputWarning=false,AuthWarning=false;for(size_t I=0;I<xrtValueCount(Warnings);I++){cstr Code=SdkField(xrtValueArrayGet(Warnings,I),"code");if(Code&&!strcmp(Code,"mcp_configuration_required"))InputWarning=true;if(Code&&!strcmp(Code,"mcp_authorization_required"))AuthWarning=true;}xrtValueObjectSetNew(R,XRT_STR_LITERAL("actionable_states_use_the_existing_unified_warning_feed"),xrtValueBool(Warn&&InputWarning&&AuthWarning));xrtValueRelease(Warnings);
  bool Changed=MdoHomeAtomicWrite("mcp/qa-auto/support/banner.txt","tampered",8,false)&&MdoMcpManagerReload();S=MdoMcpExtensionStatus(Ref);State=SdkField(S,"state");MdoMcpServerStatus Blocked={0};Blocked.Size=sizeof(Blocked);Changed=Changed&&State&&(!strcmp(State,"failed")||!strcmp(State,"needs_approval"))&&!MdoMcpManagerGetStatus(AutoId,&Blocked);xrtValueRelease(S);xrtValueObjectSetNew(R,XRT_STR_LITERAL("modified_directory_is_not_autoapproved"),xrtValueBool(Changed));
  bool Back=QaAutoInstall(Id,"data/ready.zip",Error)&&QaAutoReady(Ref);char Digest[65];Back=Back&&MdoExtensionsFingerprint("mcp",Id,Digest,NULL,Error);xvalue* Input=xrtValueObject(),*Result=NULL;SdkPut(Input,"kind","mcp");SdkPut(Input,"id",Id);SdkPut(Input,"action","remove");SdkPut(Input,"expected_revision",Digest);bool Gone=Back&&MdoExtensionsManage(Input,NULL,NULL,&Result,Error);xrtValueRelease(Input);xrtValueRelease(Result);
@@ -66,12 +71,14 @@ class Peer(BaseHTTPRequestHandler):
   if self.path=='/auth':Peer.auth_requests+=1;status=401;result={}
   elif self.path=='/limit':
    if method=='initialize':Peer.limit_requests+=1
-   status=503;result={}
+   status=503 if Peer.limit_requests<=3 else 200
+   result={} if status==503 else dict(protocolVersion='2025-11-25',serverInfo=dict(name='limit',version='1'),capabilities=dict(tools={})) if method=='initialize' else {'tools':[dict(name='echo',description='Recovered fixture',inputSchema=dict(type='object',properties={}))]} if method=='tools/list' else {}
   elif method=='initialize':
    Peer.retry_initializes+=1;status=503 if Peer.retry_initializes<3 else 200
    result=dict(protocolVersion='2025-11-25',serverInfo=dict(name='retry',version='1'),capabilities=dict(tools={}))
   elif method=='tools/list':result={'tools':[dict(name='echo',description='Retry fixture',inputSchema=dict(type='object',properties={}))]}
   else:result={};status=202 if 'id' not in body else 200
+  if status==200 and 'id' not in body:status=202
   payload=json.dumps(dict(jsonrpc='2.0',id=body.get('id'),result=result)).encode();self.send_response(status);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(payload)));self.end_headers();self.wfile.write(payload)
  def do_DELETE(self):self.send_response(204);self.end_headers()
 def main():

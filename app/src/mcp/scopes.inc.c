@@ -48,7 +48,9 @@ static bool MdoMcpConfigureSelection(xwork_agent* Agent,cstr Workspace,cstr Scop
     MdoMcpCatalog* Catalog=MdoMcpCatalogSnapshot();char DependencyError[512]={0};xvalue* Templates=MdoExtensionsList("mcp",DependencyError);const char* Allowed[MDO_MCP_SERVER_LIMIT];size_t Count=0;bool Ok=Catalog&&Templates;
     for(size_t I=0;Ok&&I<Catalog->Count;I++){
         MdoMcpServerEntry* Entry=&Catalog->Entries[I];if(!Entry->Enabled||!McpDirectoryProjectMatches(Entry,Workspace))continue;
-        if(!Prompt){MdoMcpServerStatus Status={0};Status.Size=sizeof(Status);if(!MdoMcpManagerGetStatus(Entry->Id,&Status)||!Status.Connected||!Status.ToolsDiscovered)continue;}
+        /* Pin identity, not transient readiness. Lazy discovery filters the
+         * current live tools; reconnecting the same approved service must not
+         * require widening this immutable run scope. */
         cstr Ref=NULL;for(size_t J=0;Entry->DirectoryId&&J<xrtValueCount(Templates);J++){const xvalue* T=xrtValueArrayGet(Templates,J);cstr Directory=MdoExtensionText(T,"directory_id",96);if(Directory&&!strcmp(Directory,Entry->DirectoryId)){Ref=MdoExtensionText(T,"id",MDO_EXTENSION_REF_BYTES);break;}}char Why[512];if(Ref&&(!MdoExtensionsProjectAllows(Ref,Workspace,Why)||(!Prompt&&!MdoExtensionsRuntimeCheck(Ref,Workspace,Scope,Agent,false,Why))))continue;
         bool Included=!Restrict;for(size_t J=0;J<SelectionCount;J++)if(!strcmp(Selected[J],Entry->Id))Included=true;
         if(Included)Allowed[Count++]=Entry->Id;

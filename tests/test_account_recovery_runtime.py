@@ -19,9 +19,14 @@ def main():
         ('test_online_model_auth_retry.py', []),
         ('test_online_model_auth_account.py', []),
         ('test_agent_account_recovery.py', []),
+        ('test_agent_account_recovery.py', ['--storage-fault']),
+        ('test_agent_account_recovery.py', ['--storage-cancel']),
         ('test_agent_account_recovery.py', ['--refresh-status', '401']),
+        ('test_agent_account_recovery.py', ['--refresh-status', '410','--refresh-failures','1','--relogin']),
         ('test_agent_account_recovery.py', ['--refresh-status', '401',
              '--refresh-failures', '99', '--exhausted']),
+        ('test_agent_account_recovery.py', ['--refresh-status', '401',
+             '--refresh-failures', '99', '--exhausted','--retries','2']),
     ]
     for script, options in cases:
         subprocess.run([sys.executable, str(ROOT / 'tests' / script),
