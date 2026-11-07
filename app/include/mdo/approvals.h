@@ -43,7 +43,7 @@ typedef struct MdoApprovalInfo {
     int64 CreatedAt;
     uint64 CreatedMicroseconds;
     uint64 Deadline; /* xwork request deadline; zero means none. */
-    uint64 ExpiresAt; /* earliest request or product wait deadline. */
+    uint64 ExpiresAt; /* explicit request deadline, otherwise MDO_DEADLINE_NEVER. */
     size_t ResourceCount;
     char ToolName[MDO_APPROVAL_TOOL_CAPACITY];
     char ToolCallId[MDO_APPROVAL_CALL_ID_CAPACITY];

@@ -92,7 +92,7 @@ static bool MdoApiApprovalValue(const MdoApprovalInfo* Info, xvalue** Value)
     xvalue* Item = xrtValueObject();
     xvalue* Resources = xrtValueArray();
     uint64 Now = MdoMonotonicUs();
-    uint64 Remaining = Info->ExpiresAt > Now ? Info->ExpiresAt - Now : 0u;
+    uint64 Remaining = Info->ExpiresAt != MDO_DEADLINE_NEVER && Info->ExpiresAt > Now ? Info->ExpiresAt - Now : 0u;
     size_t Index;
     bool Ok = Item != NULL && Resources != NULL &&
         MdoApiValueSetUInt(Item, "id", Info->RequestId) &&

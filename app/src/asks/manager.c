@@ -4,7 +4,7 @@
 
 #include "../../include/mdo/asks.h"
 
-#define MDO_ASK_TIMEOUT_US (4u * 60u * 60u * 1000000u)
+#define MDO_ASK_TIMEOUT_US (UINT64_C(4) * 60u * 60u * 1000000u)
 #define MDO_ASK_POLL_US 250000u
 
 struct MdoAskBinding {

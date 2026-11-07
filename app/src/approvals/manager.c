@@ -6,7 +6,6 @@
 #include "../../include/mdo/approvals.h"
 
 #define MDO_APPROVAL_POLL_MICROSECONDS UINT64_C(250000)
-#define MDO_APPROVAL_MAX_WAIT_MICROSECONDS (UINT64_C(5) * 60u * 1000000u)
 
 typedef struct MdoApprovalEntry {
     bool Used;
@@ -93,7 +92,7 @@ static bool MdoApprovalCapture(MdoApprovalInfo* Info,
     Info->CreatedAt = MdoUtcUs();
     Info->CreatedMicroseconds = MdoMonotonicUs();
     Info->Deadline = Request->uDeadline;
-    Info->ExpiresAt = MdoDeadlineAfterUs(MDO_APPROVAL_MAX_WAIT_MICROSECONDS);
+    Info->ExpiresAt = MDO_DEADLINE_NEVER;
     if ( Request->uDeadline != 0u && Request->uDeadline < Info->ExpiresAt )
         Info->ExpiresAt = Request->uDeadline;
     Info->ResourceCount = Request->iResourceCount;
