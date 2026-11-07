@@ -1,4 +1,4 @@
-"""Bounded packed/TCC checks for Responses follow-ups and failed-run recovery.
+"""Bounded packed/TCC checks for Responses follow-ups and stopped recovery.
 
 The loopback provider rejects string assistant history with an explicit message
 discriminator, matching strict Responses servers. No account bypass or external
@@ -124,7 +124,18 @@ def run(packed: Path, session_copy: Path | None):
                     raise
 
             def send(path, prompt, expected='succeeded'):
+                before = len(Provider.requests)
                 operation, _ = api(port, 'POST', path + '/runs', {'prompt': prompt})
+                if expected == 'cancelled':
+                    deadline = time.monotonic() + 10
+                    while len(Provider.requests) <= before:
+                        assert time.monotonic() < deadline
+                        time.sleep(.02)
+                    # Repairable request rejection retains the task. Stop it
+                    # deliberately to exercise durable manual continuation.
+                    active, _ = api(port, 'GET', '/api/v1/runs/' + operation['id'])
+                    assert not active['terminal'], active
+                    api(port, 'DELETE', '/api/v1/runs/' + operation['id'])
                 value = terminal(port, operation)
                 if value['state'] != expected:
                     events = home / 'sessions/default' / session['id'] / 'ui-events.jsonl'
@@ -159,7 +170,7 @@ def run(packed: Path, session_copy: Path | None):
                 process = launch()
                 send(path, 'Continue after reopening')
                 Provider.fail_next = True
-                send(path, 'Recover this follow-up', 'failed')
+                send(path, 'Recover this follow-up', 'cancelled')
                 stop(process)
                 process = launch()
                 resume(path)
@@ -167,7 +178,7 @@ def run(packed: Path, session_copy: Path | None):
                 assert sum(item.get('content') == 'Recover this follow-up' for item in pending) == 1
                 send(path, 'Next question after recovery')
                 assert len(Provider.requests) == 6, len(Provider.requests)
-                print('PASS first reply, follow-up, reopen, failed follow-up recovery, next question')
+                print('PASS first reply, follow-up, reopen, stopped follow-up recovery, next question')
                 if session_copy:
                     stop(process)
                     process = None
