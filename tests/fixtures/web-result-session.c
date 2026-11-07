@@ -1,7 +1,7 @@
 /* Real session, xwork batch executor, model ledger and persistent UI events. */
 static unsigned g_WebSessionCalls;
 static bool g_WebSessionBudget = true;
-static bool g_WebRecoveryIo;
+#include "recovery-crash-tail.h"
 
 static char* WebSessionCopy(const char* Text)
 {
@@ -60,7 +60,6 @@ static bool WebRecoveryEvent(void* Data, const xwork_event* Event)
 {
     (void)Data;
     if (Event->eKind == XWORK_EVENT_TOOL_START) {
-        if (g_WebRecoveryIo) xrtSetErrorKind(XERR_IO);
         return false;
     }
     return true;
@@ -120,7 +119,6 @@ void ServiceInit(XS_HostInfo* Host)
     for (unsigned Mode = 0u; Mode < 2u; ++Mode) {
         xworkRunResultUnit(&Result); MdoAgentRunDestroy(Run); Run = NULL;
         MdoAgentSessionRelease(Agent); Agent = NULL; MdoSessionRelease(Session); Session = NULL;
-        g_WebRecoveryIo = Mode != 0u;
         Create.RequestedId = Mode ? "read-io-session" : "read-stop-session";
         Create.Agent.OnModelComplete = WebRecoveryModel; Create.Agent.OnEvent = WebRecoveryEvent;
         Session = MdoSessionCreate(&Create, &Error);
@@ -128,8 +126,9 @@ void ServiceInit(XS_HostInfo* Host)
         Run = Agent ? MdoAgentRunCreate(Agent, &Options, &Error) : NULL;
         if (!Run || !MdoAgentRunStart(Run, &Error)) goto done;
         xwork_result Outcome = MdoAgentRunWait(Run, MdoDeadlineAfterUs(5000000u), &Result, &Error);
-        if (Mode ? (Outcome != XWORK_RESULT_ERROR || Error.eCode != XWORK_ERROR_IO)
-                 : Outcome != XWORK_RESULT_CANCELLED) goto done;
+        if (Outcome != XWORK_RESULT_CANCELLED) goto done;
+        MdoAgentRunDestroy(Run); Run = NULL;
+        if (Mode && !QaRecoveryCrashTail("sessions/default/read-io-session/ui-events.jsonl")) goto done;
     }
     Ok = true;
 done:

@@ -17,6 +17,7 @@ def prepare_fixture(base: Path):
     workspace.mkdir(); (workspace / "input.txt").write_text("One safe read", encoding="utf-8")
     shutil.copytree(ROOT / "app", site)
     shutil.copy2(ROOT / "tests/fixtures/recovery-history.c", site / "recovery-history.c")
+    shutil.copy2(ROOT / "tests/fixtures/recovery-crash-tail.h", site / "recovery-crash-tail.h")
     # Exercise a filesystem without a stable file ID in the copied reader.
     # No product switch, persistence change or real disk error is introduced.
     projection = site / "src/sessions/conversation_page.inc.c"

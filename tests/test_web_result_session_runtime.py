@@ -64,6 +64,7 @@ def run(host: Path, *, page_recovery: bool = False, page_denied: bool = False,
             workspace.mkdir(); shutil.copytree(ROOT / "app", site)
             (workspace / "input.txt").write_text("bounded recovery fixture", encoding="utf-8")
             shutil.copy2(ROOT / "tests/fixtures/web-result-session.c", site / "web-result-session.c")
+            shutil.copy2(ROOT / "tests/fixtures/recovery-crash-tail.h", site / "recovery-crash-tail.h")
             if page_recovery or denied:
                 fixture = site / "web-result-session.c"
                 text = fixture.read_text(encoding="utf-8")
