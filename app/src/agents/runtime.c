@@ -438,7 +438,16 @@ static xllm_result MdoAgentsRouteComplete(MdoAgentOwner* Owner,
     MdoModelClientOptions Options;
     xllm_client* Client;
     MdoAgentModelProgress Progress = {0};
-    MdoModelRetryObserver Observer = { MdoAgentsRetryProgress, &Progress, true };
+    /* A standalone SDK/manual compaction is an interactive operation, not an
+     * unattended Agent turn. Only the current run's frame may retain a model
+     * call indefinitely; descendants on other threads do not grant that scope. */
+    bool RetainRecovery = false;
+    uint64 Thread = xrtThreadCurrentId();
+    xrtMutexLock(Owner->InstanceLock);
+    for (MdoAgentActiveFrame* Active = Owner->ActiveFrames; Active; Active = Active->Next)
+        if (Active->Thread == Thread) { RetainRecovery = true; break; }
+    xrtMutexUnlock(Owner->InstanceLock);
+    MdoModelRetryObserver Observer = { MdoAgentsRetryProgress, &Progress, RetainRecovery };
     MdoAgentsProgressSnapshot(Owner, &Progress);
     if ( Owner->ExternalComplete != NULL )
         return Owner->ExternalComplete(Owner->ExternalModelData, Request,
