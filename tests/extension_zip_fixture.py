@@ -1,5 +1,6 @@
 """Small ordinary-directory archives for platform format validation tests."""
 import json
+import re
 import zipfile
 from mcp_template_fixture import template
 
@@ -47,8 +48,20 @@ def directory_zip(path, kind, *, alias='zip-fixture', version=None):
 
 def platform_store_source(directory, sqlite_header='/app/qa/sqlite3.h'):
     source = (directory/'directory_store.inc.c').read_text(encoding='utf-8')
-    for name in ('directory_content.inc.c', 'directory_presentation.inc.c', 'directory_lifecycle.inc.c', 'directory_versions.inc.c', 'directory_dependencies.inc.c'):
-        source = source.replace(f'#include "{name}"', (directory/name).read_text(encoding='utf-8'))
+    for _ in range(32):
+        fragments = set(re.findall(r'^#include "([A-Za-z0-9_]+\.inc\.c)"\s*$', source, re.M))
+        if not fragments:
+            break
+        for name in fragments:
+            source = source.replace(f'#include "{name}"', (directory/name).read_text(encoding='utf-8'))
+    else:
+        raise ValueError('Platform fixture has recursive source includes')
+    # This is the platform's own validation fragment, not a public client SDK
+    # header. Keep testing the current server implementation without requiring
+    # its private include path to exist inside the client TCC VFS.
+    private = 'local_model_format.h'
+    if f'#include "{private}"' in source:
+        source = source.replace(f'#include "{private}"', (directory/private).read_text(encoding='utf-8'))
     for name in ('extension_manifest.h', 'extension_graph.h', 'agent_config_format.h', 'knowledge_format.h', 'mcp_template.h', 'external_tool.h', 'plugin_format.h'):
         source = source.replace(f'#include "{name}"', f'#include "/app/include/mdo/{name}"')
     if sqlite_header: source = source.replace('#include <sqlite3.h>', f'#include "{sqlite_header}"')
