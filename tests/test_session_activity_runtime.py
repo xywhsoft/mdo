@@ -104,9 +104,12 @@ def check(host):
         def order():
             return [s["id"] for s in call("GET", "/api/v1/sessions")["items"]]
 
-        def run(session, prompt):
+        def run(session, prompt, timeout_ms=None):
             entered.clear()
-            result = call("POST", path(session) + "/runs", {"prompt": prompt}, 202)
+            body = {"prompt": prompt}
+            if timeout_ms is not None:
+                body["timeout_ms"] = timeout_ms
+            result = call("POST", path(session) + "/runs", body, 202)
             assert entered.wait(8), "loopback model did not start"
             return result
 
@@ -143,8 +146,10 @@ def check(host):
             assert succeeded["last_run_at"] >= succeeded["last_message_at"]
 
             mode = "fail"
-            failed = run(a, "controlled failure")
-            finish(failed, "failed")
+            # Repairable model errors now wait. An explicit caller deadline is
+            # still a terminal failure and must preserve the unread red result.
+            failed = run(a, "controlled failure", timeout_ms=1000)
+            finish(failed, "timed_out")
             assert meta(a)["last_run_outcome"] == "failed"
 
             mode = "hold"
