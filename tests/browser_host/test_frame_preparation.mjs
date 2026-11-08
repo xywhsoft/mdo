@@ -8,7 +8,7 @@ const source=async name=>(await readFile(new URL('../../app/web/js/features/work
   .replace(/from (["'])\.\/automation-runtime\.js\1/g,`from ${JSON.stringify(new URL('../../app/web/js/features/workbench/automation-runtime.js',import.meta.url).href)}`);
 const url=code=>`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
 let dispatcher=await source('automation-dispatch');
-for(const name of ['capture-image','visual-snapshot','visual-dispatch','upload-dispatch','download-dispatch','download-save'])
+for(const name of ['capture-image','visual-snapshot','visual-dispatch','upload-dispatch','download-dispatch','download-save','script-dispatch'])
   dispatcher=dispatcher.replace(`from "./${name}.js"`,`from ${JSON.stringify(new URL('../../app/web/js/features/workbench/'+name+'.js',import.meta.url).href)}`);
 const {executeBrowserAutomation}=await import(url(dispatcher));
 const reader=url(await source('frame-reader'));

@@ -75,14 +75,14 @@
   },
   "sdk_overlay": {
     "path": "tools/dependencies/xwork-mcp.patch",
-    "sha256": "2b7a81a70b820db822144154b91adf79b22af2bf74f1c019679f5865e49643db",
+    "sha256": "3667317897b1601d91d28824b53f08df405463e836b00af6b13c1bf7f4a0eff6",
     "base_commit": "e9a3551a5a533de34e2ca4291a8def71612fbf35",
     "purpose": "Pinned XRT agent exports, native browser automation, lifecycle/transfer guards and model media compatibility",
     "xrt_single_header_sha256": "f99fe10ea60b5cb48217be91bc786620b683aae8a7af1b582329c210aa9da83f",
     "native_sources": {
       "src/webview/xs_browser.inc.hpp": {
         "path": "tools/native/xs_browser.inc.hpp",
-        "sha256": "86f36928fc3f952ebf2b8ff10000db5c4376709cb6d30832fb8590a10d7fafbe"
+        "sha256": "91bbbb81077d0fec3e70cd2c2479403e7badbb62d7ccacf8a40a7f7b5e9c26f4"
       },
       "src/webview/xs_browser_automation.inc.hpp": {
         "path": "tools/native/xs_browser_automation.inc.hpp",
@@ -106,7 +106,7 @@
       },
       "src/webview/xs_browser_frames.inc.hpp": {
         "path": "tools/native/xs_browser_frames.inc.hpp",
-        "sha256": "8efec273bb75b1c7e578fabcdb082eadd547e33e4f03fa07ec31833e02dd6ebb"
+        "sha256": "6f2853a468b2d9e9c0f0913d380c247c470e473e80cc02ad9dd35fb2f26bf665"
       },
       "src/webview/xs_browser_navigation.inc.hpp": {
         "path": "tools/native/xs_browser_navigation.inc.hpp",
@@ -126,7 +126,7 @@
       },
       "src/webview/xs_browser_worlds.inc.hpp": {
         "path": "tools/native/xs_browser_worlds.inc.hpp",
-        "sha256": "1a9741681d11e519ecf0e9c20b2ddb64dffbfaff3f880223e20aecefec81ccb7"
+        "sha256": "e3d60cca546e79b9b6ebebe6877b95ad21252dcdbd86f66b7916de8890f44550"
       },
       "android/native/MdoBrowserCdpJni.inc.c": {
         "path": "tools/native/android/MdoBrowserCdpJni.inc.c",

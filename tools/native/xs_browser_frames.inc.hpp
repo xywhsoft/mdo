@@ -157,6 +157,7 @@ static xb_frame_node* xb_frame_upsert(const std::shared_ptr<xb_frame_state>& sta
 static void xb_frame_detach(const std::shared_ptr<xb_frame_state>& state,const std::string& raw){
   std::vector<std::string> remove{raw};
   for(size_t index=0;index<remove.size()&&index<64;index++)for(const auto& item:state->nodes)if(item.second.parent==remove[index])remove.push_back(item.first);
+  for(auto at=state->scriptContexts.begin();at!=state->scriptContexts.end();){if(std::find(remove.begin(),remove.end(),at->second->frame)!=remove.end()){at->second->alive=false;at=state->scriptContexts.erase(at);}else ++at;}
   for(const auto& key:remove){state->nodes.erase(key);state->previousNodes.erase(key);state->loading.erase(key);}
 }
 static bool xb_frame_attached(const std::shared_ptr<xb_frame_state>& state,const xb_frame_node& node){
@@ -177,8 +178,34 @@ static bool xb_frame_chain(const std::shared_ptr<xb_view>& view,const std::strin
     at=state->nodes.find(at->second.parent);
   }guard.clear();return false;
 }
+// Default page contexts are private, immutable pins. Public callers select only
+// observed frame aliases/documents; numeric renderer IDs are never selectors.
+static void xb_script_metadata(const std::shared_ptr<xb_view>& view,const std::string& method,const std::string& source,const std::string& data){
+  auto state=view->frames;if(!state||state->closed)return;
+  if(method=="Runtime.executionContextCreated"){
+    const auto context=xb_get(data,"context"),aux=xb_get(context,"auxData");
+    if(xb_get(aux,"isDefault")!="true")return;
+    const auto frame=xb_get(aux,"frameId"),unique=xb_get(context,"uniqueId");const int numeric=xb_world_number(xb_get(context,"id"));
+    if(frame.empty()||frame.size()>128||unique.empty()||unique.size()>256||!numeric)return;
+    const auto key=xb_quote(source)+"/"+xb_quote(frame);auto at=state->scriptContexts.find(key);
+    if(at!=state->scriptContexts.end()){
+      if(at->second->unique==unique&&at->second->numeric==numeric&&at->second->alive)return;
+      at->second->alive=false;state->scriptContexts.erase(at);
+    }
+    if(state->scriptContexts.size()>=128)return;
+    auto pin=std::make_shared<xb_script_context>();pin->frame=frame;pin->session=source;pin->unique=unique;pin->numeric=numeric;
+    if(!source.empty()){auto owner=state->sessions.find(source);if(owner==state->sessions.end())return;pin->sourceOwner=owner->second.identity;}
+    state->scriptContexts.emplace(key,pin);return;
+  }
+  const auto unique=xb_get(data,"executionContextUniqueId");const int numeric=xb_world_number(xb_get(data,"executionContextId"));
+  for(auto at=state->scriptContexts.begin();at!=state->scriptContexts.end();){auto pin=at->second;
+    if(pin->session==source&&(method=="Runtime.executionContextsCleared"||method=="Runtime.executionContextDestroyed"&&
+       (!unique.empty()?pin->unique==unique:numeric&&pin->numeric==numeric))){pin->alive=false;at=state->scriptContexts.erase(at);}else ++at;
+  }
+}
 static void xb_frame_event(const std::shared_ptr<xb_view>& view,const std::string& method,const std::string& source,const std::string& data){
   auto state=view->frames;if(!state||state->closed||!xb_frame_source(state,source))return;
+  if(method.rfind("Runtime.",0)==0){xb_script_metadata(view,method,source,data);return;}
   if(method=="Target.attachedToTarget"){
     const auto target=xb_get(data,"targetInfo"),session=xb_get(data,"sessionId"),raw=xb_get(target,"targetId");
     if(session.empty()||session.size()>128||raw.empty()||raw.size()>128)return;
@@ -197,6 +224,7 @@ static void xb_frame_event(const std::shared_ptr<xb_view>& view,const std::strin
     std::vector<std::string> remove{session};
     for(size_t index=0;index<remove.size()&&index<64;index++)for(const auto& item:state->sessions)
       if(item.second.parent==remove[index]&&std::find(remove.begin(),remove.end(),item.first)==remove.end())remove.push_back(item.first);
+    for(auto at=state->scriptContexts.begin();at!=state->scriptContexts.end();){if(std::find(remove.begin(),remove.end(),at->second->session)!=remove.end()){at->second->alive=false;at=state->scriptContexts.erase(at);}else ++at;}
     for(const auto& key:remove){auto child=state->sessions.find(key);if(child!=state->sessions.end()){xb_world_retire_source(view,key,child->second.identity);xb_frame_detach(state,child->second.target);state->sessions.erase(child);}}return;
   }
   const auto frame=xb_get(data,"frame"),raw=frame.empty()?xb_get(data,"frameId"):xb_get(frame,"id");
@@ -221,7 +249,7 @@ static bool xb_frames_install(const std::shared_ptr<xb_view>& view){
   if(view->frames)return true;auto state=std::make_shared<xb_frame_state>();
   if(FAILED(view->core->QueryInterface(IID_ICoreWebView2_11,reinterpret_cast<void**>(&state->source))))return false;
   view->frames=state;
-  const wchar_t* events[]={L"Page.frameAttached",L"Page.frameDetached",L"Page.frameNavigated",L"Page.frameStartedLoading",L"Page.frameStoppedLoading",L"Target.attachedToTarget",L"Target.detachedFromTarget"};
+  const wchar_t* events[]={L"Page.frameAttached",L"Page.frameDetached",L"Page.frameNavigated",L"Page.frameStartedLoading",L"Page.frameStoppedLoading",L"Target.attachedToTarget",L"Target.detachedFromTarget",L"Runtime.executionContextCreated",L"Runtime.executionContextDestroyed",L"Runtime.executionContextsCleared"};
   for(auto event:events){
     auto receiver=std::make_shared<xb_frame_receiver>();
     if(FAILED(view->core->GetDevToolsProtocolEventReceiver(event,&receiver->source))||!receiver->source){view->frames.reset();return false;}
@@ -244,6 +272,8 @@ struct xb_frame_job:std::enable_shared_from_this<xb_frame_job>{
   std::weak_ptr<xb_host> host;std::weak_ptr<xb_view> view;std::weak_ptr<xb_frame_state> state;
   std::string id,action,alias,expected,script,selected,document,session,parentRaw,parentAlias,parentDocument,parentSession,parentLoader,objectGroup;
   std::shared_ptr<xb_world_context> world;
+  std::shared_ptr<xb_script_context> scriptContext;std::string scriptWorld="page";
+  unsigned scriptTimeout=10000;
   double pointX=0,pointY=0;UINT64 navigation=0;uint64_t generation=0;
   ULONGLONG deadline=0;bool done=false,started=false,complete=true,evaluationSent=false;size_t next=0;
   std::vector<std::string> sources;std::map<std::string,bool> seen;
@@ -285,7 +315,7 @@ struct xb_frame_job:std::enable_shared_from_this<xb_frame_job>{
     if(next==sources.size()){
       for(auto item=current->nodes.begin();item!=current->nodes.end();)if(!seen.count(item->first))item=current->nodes.erase(item);else ++item;
       for(const auto& item:current->sessions)if(!item.second.ready||std::find(sources.begin(),sources.end(),item.first)==sources.end())complete=false;
-      if(action=="evaluate"||action=="owner"||action=="upload_policy"||action=="capture_owner"){evaluate();return;}std::string rows;
+      if(action=="evaluate"||action=="script"||action=="owner"||action=="upload_policy"||action=="capture_owner"){evaluate();return;}std::string rows;
       for(const auto& item:current->nodes){const auto& node=item.second;if(!xb_frame_attached(current,node))continue;
         bool ready=node.session.empty()||current->sessions.count(node.session)&&current->sessions.at(node.session).ready;
         if(!rows.empty())rows+=",";const auto parent=current->nodes.find(node.parent);
@@ -303,6 +333,36 @@ struct xb_frame_job:std::enable_shared_from_this<xb_frame_job>{
   bool selected_live(){
     if(!live())return false;auto current=state.lock();auto node=xb_frame_alias(current,alias);
     if(!node||node->raw!=selected||node->document!=document||node->session!=session||node->loading){finish("","stale_frame");return false;}return true;
+  }
+  bool script_live(){
+    if(!selected_live())return false;
+    if(scriptWorld=="isolated"){
+      if(!xb_world_live(view.lock(),world)){finish("","frame_world_unavailable");return false;}
+    }else{
+      auto current=state.lock();const auto key=xb_quote(session)+"/"+xb_quote(selected);auto at=current->scriptContexts.find(key);
+      if(!scriptContext||!scriptContext->alive||at==current->scriptContexts.end()||at->second!=scriptContext||
+         !xb_world_source_live(view.lock(),session,scriptContext->sourceOwner)){finish("","script_context_changed");return false;}
+    }
+    return true;
+  }
+  void script_execute(){
+    if(!script_live())return;std::weak_ptr<xb_frame_job> weak=shared_from_this();
+    auto current=state.lock();
+    if(current->scriptBudget->pending>=16){finish("","script_pending_limit");return;}
+    // This reservation belongs to the provider callback, not to the client
+    // receipt. A timed-out never-settling Promise cannot free its own slot.
+    auto lease=std::make_shared<xb_script_reservation>(current->scriptBudget);
+    const auto selector=scriptWorld=="isolated"?xb_world_selector(world):"\"uniqueContextId\":"+xb_quote(scriptContext->unique);
+    evaluationSent=true;
+    const auto completeScript=[weak,lease](bool ready,const std::string& value){lease->release();auto self=weak.lock();if(!self||!self->script_live())return;
+        const auto result=xb_cdp_value(xb_get(value,"result"));
+        if(!ready||!xb_get(value,"exceptionDetails").empty()||result.empty()){self->finish("","javascript_execution_failed");return;}
+        if(result.size()>131072){self->finish("","script_result_limit");return;}
+        self->finish("{\"ok\":true,\"frame\":"+xb_quote(self->alias)+",\"frame_document\":"+xb_quote(self->document)+",\"world\":"+xb_quote(self->scriptWorld)+",\"value\":"+result+"}");
+      };
+    const auto parameters="{\"expression\":"+xb_quote(script)+","+selector+",\"returnByValue\":true,\"awaitPromise\":true,\"timeout\":"+std::to_string(std::min(3000u,scriptTimeout))+"}";
+    if(world)xb_world_protocol(view.lock(),session,world->sourceOwner,L"Runtime.evaluate",parameters,completeScript);
+    else xb_frame_cdp(view.lock(),session,L"Runtime.evaluate",parameters,completeScript);
   }
   bool owner_live(){
     if(!selected_live())return false;auto current=state.lock();auto child=current->nodes.find(selected),parent=current->nodes.find(parentRaw);
@@ -349,6 +409,17 @@ struct xb_frame_job:std::enable_shared_from_this<xb_frame_job>{
     if(!session.empty()&&(!current->sessions.count(session)||!current->sessions.at(session).ready)){finish("","frame_session_unavailable");return;}
     if(action=="owner"||action=="upload_policy"||action=="capture_owner"){owner_geometry();return;}
     std::weak_ptr<xb_frame_job> weak=shared_from_this();
+    if(action=="script"){
+      if(!complete){finish("","frame_not_ready");return;}
+      if(scriptWorld=="page"){
+        call(session,L"Runtime.enable","{}",[weak](bool ready,const std::string&){auto self=weak.lock();if(!self||!self->selected_live())return;
+          auto current=self->state.lock();auto at=current->scriptContexts.find(xb_quote(self->session)+"/"+xb_quote(self->selected));
+          if(!ready||at==current->scriptContexts.end()){self->finish("","script_context_unavailable");return;}
+          self->scriptContext=at->second;self->script_execute();});return;
+      }
+      xb_world_frame(host.lock(),view.lock(),navigation,session,selected,node->loader,[weak](){auto self=weak.lock();return self&&self->selected_live();},
+        [weak](std::shared_ptr<xb_world_context> world){auto self=weak.lock();if(!self||!self->selected_live())return;self->world=world;self->script_execute();},"scripts");return;
+    }
     xb_world_frame(host.lock(),view.lock(),navigation,session,selected,node->loader,[weak](){auto self=weak.lock();return self&&self->selected_live();},[weak](std::shared_ptr<xb_world_context> world){
       auto self=weak.lock();if(!self||!self->selected_live())return;
       if(!xb_world_live(self->view.lock(),world)){self->finish("","frame_world_unavailable");return;}self->world=world;
@@ -377,9 +448,14 @@ static void xb_frames_request(const std::shared_ptr<xb_host>& host,const std::sh
   try{
     if(!xb_frames_install(view)){host->reply(id,"{\"ok\":false,\"error\":{\"code\":\"unsupported_frame_sessions\"}}");return;}
     auto state=view->frames;const auto action=xb_get(json,"action");
-    if((action!="list"&&action!="evaluate"&&action!="owner"&&action!="upload_policy"&&action!="capture_owner")||id.empty()||id.size()>128||state->jobs.size()>=16||state->jobs.count(id)){host->reply(id,"{\"ok\":false,\"error\":{\"code\":\"frame_request_invalid\"}}");return;}
+    if((action!="list"&&action!="evaluate"&&action!="script"&&action!="owner"&&action!="upload_policy"&&action!="capture_owner")||id.empty()||id.size()>128||state->jobs.size()>=16||state->jobs.count(id)){host->reply(id,"{\"ok\":false,\"error\":{\"code\":\"frame_request_invalid\"}}");return;}
     auto job=std::make_shared<xb_frame_job>();job->host=host;job->view=view;job->state=state;job->id=id;job->action=action;
     job->alias=xb_get(json,"frame");job->expected=xb_get(json,"document");job->script=xb_get(json,"script");
+    if(action=="script"){
+      job->scriptWorld=xb_get(json,"world");const auto timeout=xb_get(json,"timeout_ms");
+      try{size_t end=0;const auto milliseconds=std::stoul(timeout,&end);if(end!=timeout.size()||milliseconds<100||milliseconds>10000)throw 0;job->scriptTimeout=static_cast<unsigned>(milliseconds);}catch(...){host->reply(id,"{\"ok\":false,\"error\":{\"code\":\"script_request_invalid\"}}");return;}
+      if((job->scriptWorld!="page"&&job->scriptWorld!="isolated")||job->alias.empty()||job->alias.size()>64||job->expected.empty()||job->expected.size()>64||job->script.empty()||job->script.size()>131072){host->reply(id,"{\"ok\":false,\"error\":{\"code\":\"script_request_invalid\"}}");return;}
+    }
     if(action=="evaluate"&&(job->alias.empty()||job->alias.size()>64||job->expected.size()>64||job->script.empty()||job->script.size()>131072)){host->reply(id,"{\"ok\":false,\"error\":{\"code\":\"frame_request_invalid\"}}");return;}
     if((action=="upload_policy"||action=="capture_owner")&&(job->alias.empty()||job->alias.size()>64||job->expected.empty()||job->expected.size()>64)){host->reply(id,"{\"ok\":false,\"error\":{\"code\":\"frame_request_invalid\"}}");return;}
     if(action=="owner"){
@@ -387,12 +463,13 @@ static void xb_frames_request(const std::shared_ptr<xb_host>& host,const std::sh
       if(job->alias.empty()||job->alias.size()>64||job->expected.empty()||job->expected.size()>64||!std::isfinite(job->pointX)||!std::isfinite(job->pointY)||
          job->pointX<0||job->pointY<0||job->pointX>32768||job->pointY>32768){host->reply(id,"{\"ok\":false,\"error\":{\"code\":\"frame_point_invalid\"}}");return;}
     }
-    job->navigation=view->navigation;job->generation=state->generation;job->deadline=GetTickCount64()+10000;state->jobs.emplace(id,job);xb_frame_views[view->window]=view;
+    job->navigation=view->navigation;job->generation=state->generation;job->deadline=GetTickCount64()+(action=="script"?job->scriptTimeout:10000);state->jobs.emplace(id,job);xb_frame_views[view->window]=view;
     if(!SetTimer(view->window,xb_frames_timer,20,xb_frames_expire)){job->finish("","frame_timer_unavailable");return;}job->start();
   }catch(...){host->reply(id,"{\"ok\":false,\"error\":{\"code\":\"frame_allocation_failed\"}}");}
 }
 static void xb_frames_navigation(const std::shared_ptr<xb_view>& view){
   if(!view->frames)return;auto state=view->frames;state->generation++;auto jobs=state->jobs;
+  for(auto& item:state->scriptContexts)item.second->alive=false;state->scriptContexts.clear();
   for(auto& item:jobs)item.second->finish("","stale_frame");state->previousNodes=std::move(state->nodes);state->nodes.clear();state->loading.clear();state->root.clear();
   if(state->error=="frame_limit"||state->error=="frame_session_limit"||state->error=="frame_event_limit"||state->error=="frame_identity_unavailable")state->error.clear();
 }

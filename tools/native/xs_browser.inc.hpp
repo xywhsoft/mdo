@@ -92,6 +92,17 @@ struct xb_frame_node{
   std::string raw,parent,id,document,loader,url,name,session;bool loading=false;
 };
 struct xb_frame_source_identity{bool alive=true;};
+struct xb_script_budget{unsigned pending=0;};
+struct xb_script_reservation{
+  std::shared_ptr<xb_script_budget> budget;
+  explicit xb_script_reservation(const std::shared_ptr<xb_script_budget>& value):budget(value){budget->pending++;}
+  void release(){if(budget){if(budget->pending)budget->pending--;budget.reset();}}
+  ~xb_script_reservation(){release();}
+};
+struct xb_script_context{
+  std::string frame,session,unique;int numeric=0;bool alive=true;
+  std::shared_ptr<xb_frame_source_identity> sourceOwner;
+};
 struct xb_frame_session{
   std::string target,parent,error;bool ready=false,chooserEnabled=false;
   std::shared_ptr<xb_frame_source_identity> identity=std::make_shared<xb_frame_source_identity>();
@@ -102,6 +113,8 @@ struct xb_frame_state{
   std::map<std::string,xb_frame_node> nodes;std::map<std::string,xb_frame_session> sessions;
   std::map<std::string,xb_frame_node> previousNodes;
   std::map<std::string,bool> loading;
+  std::map<std::string,std::shared_ptr<xb_script_context>> scriptContexts;
+  std::shared_ptr<xb_script_budget> scriptBudget=std::make_shared<xb_script_budget>();
   std::map<std::string,std::shared_ptr<xb_frame_job>> jobs;
   ~xb_frame_state(){receivers.clear();if(source)source->Release();}
 };
@@ -437,7 +450,7 @@ static void xb_receive(const std::shared_ptr<xb_host>& host,const std::string& j
     const bool attached=parent==view->window&&GetParent(view->window)==host->window;
     POINT center{view->bounds.left+(view->bounds.right-view->bounds.left)/2,view->bounds.top+(view->bounds.bottom-view->bounds.top)/2};
     const bool topmost=ChildWindowFromPointEx(host->window,center,CWP_SKIPINVISIBLE|CWP_SKIPTRANSPARENT)==view->window;
-    const auto viewport=std::string(",\"creating\":false")+xb_creation_json(view->creation,GetTickCount64())+",\"navigation\":"+xb_quote(std::to_string(view->navigation))+",\"automation\":true,\"automation_unique_world\":"+std::string(xb_world_live(view,view->automationWorld)?"true":"false")+",\"automation_world_error\":"+xb_quote(view->worlds?view->worlds->error:"")+",\"automation_world_metadata\":{\"other_frame_contexts\":"+std::to_string(view->worlds?view->worlds->otherFrames:0)+",\"original_context_refreshes\":"+std::to_string(view->worlds?view->worlds->refreshes:0)+"},\"frame_automation\":"+std::string(view->frameAutomation?"true":"false")+",\"frame_snapshot_input\":"+std::string(view->frameAutomation?"true":"false")+",\"frame_snapshot_drag\":"+std::string(view->frameAutomation?"true":"false")+",\"frame_snapshot_keyboard\":"+std::string(view->frameAutomation?"true":"false")+",\"frame_target_keyboard\":"+std::string(view->frameAutomation?"true":"false")+",\"viewport_attached\":"+std::string(attached?"true":"false")+",\"viewport_topmost\":"+(topmost?"true":"false")+
+    const auto viewport=std::string(",\"creating\":false")+xb_creation_json(view->creation,GetTickCount64())+",\"navigation\":"+xb_quote(std::to_string(view->navigation))+",\"automation\":true,\"script_execution\":true,\"automation_unique_world\":"+std::string(xb_world_live(view,view->automationWorld)?"true":"false")+",\"automation_world_error\":"+xb_quote(view->worlds?view->worlds->error:"")+",\"automation_world_metadata\":{\"other_frame_contexts\":"+std::to_string(view->worlds?view->worlds->otherFrames:0)+",\"original_context_refreshes\":"+std::to_string(view->worlds?view->worlds->refreshes:0)+"},\"frame_automation\":"+std::string(view->frameAutomation?"true":"false")+",\"frame_snapshot_input\":"+std::string(view->frameAutomation?"true":"false")+",\"frame_snapshot_drag\":"+std::string(view->frameAutomation?"true":"false")+",\"frame_snapshot_keyboard\":"+std::string(view->frameAutomation?"true":"false")+",\"frame_target_keyboard\":"+std::string(view->frameAutomation?"true":"false")+",\"viewport_attached\":"+std::string(attached?"true":"false")+",\"viewport_topmost\":"+(topmost?"true":"false")+
       ",\"controller_bounds\":{\"x\":"+std::to_string(actual.left)+",\"y\":"+std::to_string(actual.top)+",\"width\":"+std::to_string(actual.right-actual.left)+",\"height\":"+std::to_string(actual.bottom-actual.top)+"}";
     const auto bounds="{\"x\":"+std::to_string(view->bounds.left)+",\"y\":"+std::to_string(view->bounds.top)+",\"width\":"+std::to_string(view->bounds.right-view->bounds.left)+",\"height\":"+std::to_string(view->bounds.bottom-view->bounds.top)+"}";
     host->reply(id,"{\"url\":"+xb_quote(webview::detail::narrow_string(url.p?url.p:L""))+",\"title\":"+xb_quote(webview::detail::narrow_string(title.p?title.p:L""))+",\"can_go_back\":"+(back?"true":"false")+",\"can_go_forward\":"+(forward?"true":"false")+",\"loading\":"+((view->loading||view->initialNavigationPending)?"true":"false")+",\"manual\":"+(view->manual?"true":"false")+",\"visible\":"+(visible?"true":"false")+viewport+",\"navigation_events\":"+xb_navigation_events(view)+",\"initial_navigation_pending\":"+(view->initialNavigationPending?"true":"false")+",\"capture_capability\":true,\"advanced_mouse\":true,\"drag_capability\":true,\"upload_capability\":true,\"file_input_capability\":true,\"directory_upload_capability\":true,\"file_clear_capability\":true,\"chooser_upload_capability\":true,\"download_capability\":"+std::string(view->downloads&&view->downloads->supported?"true":"false")+",\"downloads_armed\":"+(view->downloads&&view->downloads->armed?"true":"false")+",\"download_sequence\":"+std::to_string(view->downloads?view->downloads->sequence:0)+",\"download_error\":"+xb_quote(view->downloads?view->downloads->error:"")+",\"chooser_capability\":"+std::string(view->chooser&&view->chooser->supported?"true":"false")+",\"chooser_armed\":"+(view->chooser&&view->chooser->enabled?"true":"false")+",\"chooser_open\":"+(view->chooser&&view->chooser->pending?"true":"false")+",\"chooser_cleanup_failed\":"+(view->chooser&&(view->chooser->policyFailed||view->chooser->objectFailed)?"true":"false")+",\"upload_cleanup_failed\":"+std::string(view->uploadCleanupFailed?"true":"false")+",\"drag_cleanup_failed\":"+std::string(view->drag&&view->drag->cleanupFailed?"true":"false")+",\"capture_busy\":"+std::string(host->captures?"true":"false")+",\"dialog_capability\":"+(view->dialogsEnabled?"true":"false")+",\"popup_capability\":"+(view->popupsEnabled?"true":"false")+",\"popup_open\":"+(xb_popup_blocked(view)?"true":"false")+",\"closed_by_page\":"+(view->requestedClose&&!xb_download_holds_page_close(host,view)?"true":"false")+",\"close_requested\":"+(view->requestedClose?"true":"false")+",\"opener\":"+xb_quote(view->opener)+",\"input_busy\":"+(view->input.expired()&&!view->drag&&!view->uploadBusy&&!(view->chooser&&(view->chooser->changing||view->chooser->deferredCancel||view->chooser->cleanupWanted))?"false":"true")+",\"dialog_open\":"+(view->dialog?"true":"false")+",\"process_failed\":"+(view->failed?"true":"false")+",\"bounds\":"+bounds+",\"platform\":\"webview2\",\"error_code\":"+std::to_string(view->errorCode)+",\"error\":"+xb_quote(view->error)+"}");return;

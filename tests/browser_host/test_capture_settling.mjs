@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {test} from 'node:test';
 
 let source=await readFile(new URL('../../app/web/js/features/workbench/automation-dispatch.js',import.meta.url),'utf8');
-for(const [name,path] of [['executeDownloadSave, downloadSaveState','download-save.js'],['visualSnapshots, hashVisualRaster','visual-snapshot.js'],['executeVisualAction','visual-dispatch.js']]){
+for(const [name,path] of [['executeDownloadSave, downloadSaveState','download-save.js'],['visualSnapshots, hashVisualRaster','visual-snapshot.js'],['executeVisualAction','visual-dispatch.js'],['executeBrowserScript','script-dispatch.js']]){
   source=source.replace(`import { ${name} } from "./${path}";`,`import {${name}} from ${JSON.stringify(new URL('../../app/web/js/features/workbench/'+path,import.meta.url).href)};`);
 }
 source=source.replace('import { browserRuntime } from "./automation-runtime.js";','function browserRuntime(){}')

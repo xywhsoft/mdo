@@ -5,6 +5,7 @@ import { executeVisualAction } from "./visual-dispatch.js";
 import { executeFileUpload } from "./upload-dispatch.js";
 import { executeBrowserDownload } from "./download-dispatch.js";
 import { executeDownloadSave, downloadSaveState } from "./download-save.js";
+import { executeBrowserScript } from "./script-dispatch.js";
 
 const writers = new Set();
 let capturing = false;
@@ -29,12 +30,12 @@ const captureChanges=(before,after)=>{
 };
 
 // Frozen workbench instances supply view/action. No selected-chat identity is
-// substituted, and this helper never exposes arbitrary script input to a model.
+// substituted. Arbitrary scripts use their own explicit, effectful command.
 export async function executeBrowserAutomation({ command, params, view, action, api, browser, alive = () => true, pageDriver = null, initialNavigation = null }) {
-  if (!["observe", "act", "navigate_to", "wait_for", "dialog", "chooser", "capture", "upload", "download", "save_download"].includes(command)) return { handled: false };
-  const writing = command === "save_download" || command === "act" || command === "navigate_to" || command === "dialog" && params.action === "respond" || command === "chooser" && params.action === "cancel" || command === "upload" && params.action !== "status" || command === "download" && !["list","get","wait"].includes(params.action);
+  if (!["observe", "act", "navigate_to", "wait_for", "dialog", "chooser", "capture", "upload", "download", "save_download", "execute_js"].includes(command)) return { handled: false };
+  const writing = command === "execute_js" || command === "save_download" || command === "act" || command === "navigate_to" || command === "dialog" && params.action === "respond" || command === "chooser" && params.action === "cancel" || command === "upload" && params.action !== "status" || command === "download" && !["list","get","wait"].includes(params.action);
   const writer = browser || view;
-  const timeout = Math.min(60000, Math.max(1, params.timeout_ms || 10000));
+  const timeout = Math.min(command==='execute_js'?10000:60000, Math.max(1, params.timeout_ms || 10000));
   const deadline = performance.now() + timeout;
   const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
   let dispatched = false,dragRequested = false,downloadCheckpointUntil=0,checkpointNavigation,inputFrameChain=null,inputFrameSnapshot=null,inputFocus=null,inputTarget=null;
@@ -51,7 +52,7 @@ export async function executeBrowserAutomation({ command, params, view, action, 
   // Retain only that original record, never adopt a replacement while waiting.
   let initialNavigationReference=command==='observe'||command==='wait_for'?initialNavigation:null,initialNavigationDocument=null,initialPageNavigation;
   const framePending=code=>['frame_not_ready','frame_tree_changed'].includes(code);
-  const canOpenDownload=command==='act'&&['click','double_click','right_click','middle_click','fill','type','key','drag'].includes(params.op);
+  const canOpenDownload=command==='execute_js'||command==='act'&&['click','double_click','right_click','middle_click','fill','type','key','drag'].includes(params.op);
   const fail = (code, message) => ({ handled: true, result: { ok: false,
     error: { code, message, effect_may_have_occurred: dispatched }, action: action.id } });
   const needsWorld=!['dialog','chooser','download','save_download'].includes(command)&&!(command==='upload'&&['status','release'].includes(params.action));
@@ -216,7 +217,7 @@ export async function executeBrowserAutomation({ command, params, view, action, 
       return fail('dialog_cleanup_failed','Native dialog cleanup was not confirmed; end this browser before further input');
     if (state.popup_cleanup_failed && (writing || command === 'capture') && !(command==='upload'&&params.action==='release'))
       return fail('popup_cleanup_failed','Native popup cleanup was not confirmed; end this browser before further input');
-    if (state.capture_busy && command==='act'&&!waitingCapture) return fail('browser_busy','The original native screenshot is still settling; wait for its cleanup before sending input');
+    if (state.capture_busy && (command==='act'||command==='execute_js')&&!waitingCapture) return fail('browser_busy','The original native screenshot is still settling; wait for its cleanup before sending input');
     if (command === "dialog") return state.dialog_capability ? { state } : fail("unsupported_capability", "This browser backend cannot inspect native dialogs");
     if (command === "chooser") {
       if(!state.chooser_capability)return fail("unsupported_capability","This browser backend cannot inspect native file pickers");
@@ -232,7 +233,7 @@ export async function executeBrowserAutomation({ command, params, view, action, 
     if (state.dialog_open) return dialogBoundary();
     if (state.popup_open) return popupBoundary();
     if (state.chooser_cleanup_failed && writing && !(command==='upload'&&params.action==='release')) return fail("chooser_cleanup_failed","File-picker cleanup was not confirmed; end this browser before further input");
-    if (state.chooser_open && ["act","navigate_to","wait_for"].includes(command) || state.chooser_open && command==='upload' && params.action!=='release'&&!params.chooser) return chooserBoundary();
+    if (state.chooser_open && ["act","navigate_to","wait_for","execute_js"].includes(command) || state.chooser_open && command==='upload' && params.action!=='release'&&!params.chooser) return chooserBoundary();
     const worldStopped=worldFailure(state);if(worldStopped)return worldStopped;
     if (navigation !== undefined && state.navigation !== navigation) return fail("stale_document", "The document changed; inspect it before another input");
     if(command==='observe'||command==='wait_for'){
@@ -361,6 +362,8 @@ export async function executeBrowserAutomation({ command, params, view, action, 
     return{drag_kind:native.drag_kind};
   };
   try {
+    if(command==='execute_js')return await executeBrowserScript({params,view,read,guard,deadline,action,
+      arm:async()=>await armDownloads()||await armPopups(),setDispatched:value=>{dispatched=value;},fail});
     if(initialNavigationReference!==null&&(typeof initialNavigationReference!=='string'||!/^nv-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(initialNavigationReference)))
       return fail('navigation_uncertain','The original initial navigation reference is invalid; inspect its receipt before retrying');
     if(command==='save_download')return await executeDownloadSave({browser:writer,params,view,api,action,guard,deadline,setDispatched:value=>{dispatched=value;},fail});

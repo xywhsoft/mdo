@@ -618,7 +618,7 @@ if (command === "act" || command === "navigate_to" || command === "capture" || c
         await ensureNativeBrowser({bridge,sdk:client,browser,clientId,alive:()=>!stopped&&displayTarget===(isRemoteTarget()?targetState().selected.id:"local"),bounds:{x:0,y:0,width:1024,height:768,scale:1}});
         view = { row: browser, execute: (operation, parameters = {}) => bridge.call(operation, { browser:id, ...parameters }) }; browserViews.set(id, view);
       }
-      const routedCommand=["observe","act","navigate_to","wait_for","capture","upload"].includes(command);
+      const routedCommand=["observe","act","navigate_to","wait_for","capture","upload","execute_js"].includes(command);
       const frameState=routedCommand?await view.execute("state"):null;
       const executePage=(operation,parameters)=>view.execute(operation,parameters);
       const pageDriver=frameState?.frame_automation===true?createFrameDriver({execute:executePage,...(frameState.platform==="android-webview"?{nativeCapture:{navigation:frameState.navigation},nativeFileInputs:true}:{})}):frameState?.isolated_world?.adapter==="android-main-document-v1"?createDocumentDriver({execute:executePage}):null;

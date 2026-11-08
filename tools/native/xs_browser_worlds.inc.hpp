@@ -229,7 +229,7 @@ static void xb_world_frame(const std::shared_ptr<xb_host>& host,const std::share
   std::shared_ptr<xb_world_request> request;
   try{
     const bool controlled=host&&view&&(cleanup?host->alive&&!view->closed&&!view->failed&&view->navigation==navigation&&!view->dialog&&!xb_popup_blocked(view):xb_automation_live(host,view,navigation));
-    if(!controlled||raw.empty()||raw.size()>128||loader.empty()||loader.size()>128||(purpose!="frames"&&purpose!="chooser")||!guard||!guard()||!xb_worlds_install(view)){
+    if(!controlled||raw.empty()||raw.size()>128||loader.empty()||loader.size()>128||(purpose!="frames"&&purpose!="chooser"&&purpose!="scripts")||!guard||!guard()||!xb_worlds_install(view)){
       auto callback=std::move(complete);callback(nullptr);return;
     }
     std::shared_ptr<xb_frame_source_identity> sourceOwner;

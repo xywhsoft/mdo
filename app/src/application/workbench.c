@@ -123,7 +123,7 @@ bool MdoApplicationWorkbenchCall(const mdo_sdk_context_v1* C,cstr Method,const x
     if(!strcmp(Method,"browser.workspace.lookup")||!strcmp(Method,"browser.workspace.adopt")||!strcmp(Method,"browser.workspace.prepare"))return BuBrowserWorkspace(C,Method,P,R,E);
     if(!strcmp(Method,"browser.command")){
         cstr Id=SdkField(P,"id"),Command=SdkField(P,"command");
-        const cstr Allowed[]={"navigate","back","forward","reload","stop","state","wait","snapshot","observe","act","navigate_to","wait_for","dialog","chooser","upload","download","save_download","capture","screenshot","click","type","scroll","evaluate","takeover","release"};bool Valid=false;
+        const cstr Allowed[]={"navigate","back","forward","reload","stop","state","wait","snapshot","observe","act","navigate_to","wait_for","execute_js","dialog","chooser","upload","download","save_download","capture","screenshot","click","type","scroll","evaluate","takeover","release"};bool Valid=false;
         for(size_t i=0;Command&&i<sizeof(Allowed)/sizeof(*Allowed);i++)if(!strcmp(Command,Allowed[i]))Valid=true;
         if(!Valid)return WbFail(E,"browser_command_invalid","Unknown browser command",400);
         xrtMutexLock(Workbench.Lock);xvalue* V=WbFind(Workbench.State,"browsers",Id);bool Ok=false;

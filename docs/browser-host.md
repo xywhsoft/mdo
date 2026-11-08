@@ -24,7 +24,7 @@ C 使用 `<mdo/workbench.h>` 中的便捷函数或 `mdoCall`。
 `tools/workbench_contracts.py` 生成 C 头文件、JS 包装和服务描述，不能单独修改生成物。
 
 `browser.command` 增加 `observe`、`act`、`navigate_to`、`wait_for`、`dialog`、
-`chooser`、`upload`、`download`、`save_download`、`capture` 等命令。
+`chooser`、`upload`、`download`、`save_download`、`capture`、`execute_js` 等命令。
 `browser.popup.admit/settle` 处理原生弹窗绑定；`browser.workspace.lookup/adopt/prepare`
 处理原任务工作目录。文件服务增加 `files.tree/digest/publish` 和 `files.receive.*`。
 具体参数和限制以实际宿主的 `sdk.describe` 为准。
@@ -33,6 +33,21 @@ C 使用 `<mdo/workbench.h>` 中的便捷函数或 `mdoCall`。
 动作从未执行，不应自动重放点击、表单提交或文件发布。必须指定显示客户端；
 远程项目的 localhost 仍属于远端设备，不提供隐式跨设备端口映射。
 基础面板和会话用法见 [工作区 SDK](workbench.md)。
+
+`execute_js` 在明确的浏览器文档或 iframe 内执行 JS 异步函数体。传入 `script`，
+用 `return` 返回 JSON，用 `await` 等待异步结果。`document` 是新观察的主文档 ID；
+iframe 还须指定观察结果中的 `frame` 和 `frame_document`。
+`world:page`（默认）访问网页全局变量；`world:isolated` 使用独立全局环境、共享 DOM，
+与受信任的观察运行时分开。执行环境没有 mdo 主窗口原生绑定。原生协议使用不可重绑的
+唯一上下文 ID，不接受调用方提供的原始协议身份。此功能目前仅支持 Windows。
+
+脚本上限 64 KiB UTF-8；整个调用最多 10 秒，原生同步执行最多 3 秒；JSON 结果默认
+16 KiB、最大 64 KiB。JS 可能改变页面，模型工具 `browser_evaluate` 按外部服务变更
+处理，受只读、审批与用户接管限制。超时或取消不能撤回已经运行的脚本、计时器或请求；
+需检查原页面，不能因丢失响应直接重放。
+每个浏览器最多保留 16 个未完成的原生脚本回调；超时不会提前释放其名额。
+达到 `script_pending_limit` 后需检查并明确结束浏览器，避免无限积累永不完成的 Promise。
+完整参数、模型工具与 C／JS 调用见 [浏览器 JavaScript 执行](browser-javascript.md)。
 
 ## 标准构建与原生源码
 
