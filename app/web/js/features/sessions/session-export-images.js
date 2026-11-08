@@ -87,12 +87,17 @@ export async function loadSessionMarkdownImages(session, transcript,
     `/sessions/${resourceId(session.id, "session")}`;
   // All metadata, backoff waits and binary bodies share the existing 30s cap.
   // The owner settles even if a fetch/reader ignores its cancellation signal.
-  const recovery = createRecovery({ requestMs: timeoutMs, recoveryMs: timeoutMs });
+  let budgetExpired = false;
+  const recovery = createRecovery({ requestMs: timeoutMs, recoveryMs: timeoutMs,
+    timeoutError: () => {
+      budgetExpired = true;
+      return new ApiError(uiErrorText("error.detail.requestTimedOut", {}, "Request timed out"), { code: "network_error" });
+    } });
   let reads = 0;
   let remaining = maxBytes;
   try {
     for (const id of ids) {
-      if (reads >= maxImages) break;
+      if (reads >= maxImages || budgetExpired) break;
       recovery.assertActive();
       reads += 1;
       try {

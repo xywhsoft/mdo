@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRequestRecovery } from "../app/web/js/api/request-recovery.js";
 
 import { loadSessionMarkdownImages } from
   "../app/web/js/features/sessions/session-export-images.js";
@@ -19,6 +20,25 @@ const transcript = (attachments, repeat = false) => ({ events: [
 ] });
 const imageResponse = (bytes = png, headers = {}) => new Response(bytes,
   { headers: { "Content-Type": "image/png", ...headers } });
+
+test("an early final-budget timer retires the export before later metadata reads", async () => {
+  const requests=[];let timer,aborted=false;
+  await withFetch(async (url,{signal}) => {
+    requests.push(String(url));
+    if (String(url).endsWith('/info')) return Response.json({ok:true,data:metadata(ids[0])});
+    return new Promise((resolve,reject) => {
+      signal.addEventListener('abort',()=>{aborted=true;reject(new DOMException('Aborted','AbortError'));},{once:true});
+      queueMicrotask(()=>timer());
+    });
+  }, async () => {
+    const result=await loadSessionMarkdownImages(session,transcript(ids.slice(0,2)), {
+      timeoutMs:10,createRecovery:options=>createRequestRecovery({...options,now:()=>0,
+        setTimer:callback=>{timer=callback;return 1;},clearTimer:()=>{}})
+    });
+    assert.equal(aborted,true);assert.equal(requests.length,2);
+    assert.equal(result.images.size,0);assert.equal(result.imagesIncomplete,true);
+  });
+});
 
 async function withFetch(fetch, body) {
   const original = globalThis.fetch;
