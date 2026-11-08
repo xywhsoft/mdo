@@ -3,6 +3,17 @@ import test from "node:test";
 globalThis.window = new EventTarget();
 const { applyApplicationAction } = await import("../app/web/js/api/application.js");
 const store = () => { const data = new Map(); return { getItem: key => data.get(key) || null, setItem: (key,value) => data.set(key,value) }; };
+
+test("browser results stay private even when the observation is small", async () => {
+  for (const method of ["workbench.browser", "browseruse.observe"]) {
+    const storage=store(), action={id:"private-read",action:method}; let calls=0;
+    const result=await applyApplicationAction(action,()=>{calls++;return {text:"private page",image:"private pixels"}},storage,"journal");
+    assert.equal(result.result.text,"private page");
+    assert.ok(!storage.getItem("journal").includes("private page"));
+    const replay=await applyApplicationAction(action,()=>calls++,storage,"journal");
+    assert.equal(replay.result.ephemeral,true);assert.equal(calls,1);
+  }
+});
 test("SDK UI acknowledgements survive retries without repeating effects", async () => {
   let calls = 0; const storage = store(), action = { id: "uia-test", action: "ui.new" };
   const execute = async () => { calls++; };

@@ -78,8 +78,11 @@ void MdoAccountSecretValueRelease(xvalue* Value)
     MdoAccountJsonSecretsClear(Value);
     xrtValueRelease(Value);
 }
+
+#include "browser_use_account_fetch.inc.c"
+
 static xvalue* MdoAccountJsonClient(cstr Origin, cstr Path, cstr Method, const xvalue* Body,
-    cstr Access, xcancel* Cancel, uint16* Status, bool Service)
+    cstr Access, xcancel* Cancel, uint16* Status, bool Service, MdoAccountTransport* Transport)
 {
     char url[1024], authorization[MDO_ACCOUNT_TOKEN_LIMIT + 8];
     XS_FetchRequest request; XS_FetchResponse response;
@@ -106,10 +109,13 @@ static xvalue* MdoAccountJsonClient(cstr Origin, cstr Path, cstr Method, const x
     request.Body = body; request.BodySize = body_size; request.Cancel = Cancel;
     request.Timeout = 15000000u; request.IdleTimeout = 10000000u; request.MaxBodyBytes = 64u * 1024u;
     /* Never forward credentials across a redirect or retry an ambiguous POST. */
-    if (!xsFetch(&request, &response)) goto done;
+    bool read_only = Service && !strcmp(Path,"/api/v1/devices") && !strcmp(Method,"GET") && !Body;
+    if (!MdoAccountFetch(&request,&response,read_only,Transport)) goto done;
+    if (Transport) Transport->Phase = "http";
     if (Status) *Status = response.Status;
     if ((response.Status != 200 && !(Service && response.Status == 201)) || !response.Body ||
         !xrtUtf8Valid((xstrview){(cstr)response.Body, response.BodySize}, NULL)) goto done;
+    if (Transport) Transport->Phase = "json";
     xjsonreadconfig limits; xrtJsonReadConfigInit(&limits);
     limits.MaxInputBytes = 64u * 1024u; limits.MaxDepth = 6;
     limits.MaxValues=Service||!strncmp(Path,"/api/v1/ai/",11)?2048u:256u;limits.MaxStringBytes=8192;
@@ -127,6 +133,7 @@ static xvalue* MdoAccountJsonClient(cstr Origin, cstr Path, cstr Method, const x
         data = xrtValueObjectTake(envelope,XRT_STR_LITERAL("data"));
         if (!data && Status) *Status = 502;
     }
+    if (Transport && (!Status || *Status < 400u)) Transport->Phase = "complete";
 done:
     if (body) { xrtSecureZero(body, body_size); xrtFree(body); }
     if (response.Body) xrtSecureZero(response.Body, response.BodySize);
@@ -138,16 +145,22 @@ done:
 xvalue* MdoAccountClient(cstr Origin, cstr Path, cstr Method, const xvalue* Body,
     cstr Access, xcancel* Cancel, uint16* Status)
 {
-    return MdoAccountJsonClient(Origin,Path,Method,Body,Access,Cancel,Status,false);
+    return MdoAccountJsonClient(Origin,Path,Method,Body,Access,Cancel,Status,false,NULL);
 }
 xvalue* MdoAccountServiceJson(cstr Path, cstr Method, const xvalue* Body,
     const MdoAccountLease* Lease, uint16* Status)
 {
+    return MdoAccountServiceJsonDetailed(Path,Method,Body,Lease,Status,NULL);
+}
+xvalue* MdoAccountServiceJsonDetailed(cstr Path, cstr Method, const xvalue* Body,
+    const MdoAccountLease* Lease, uint16* Status, MdoAccountTransport* Transport)
+{
+    if (Transport) { memset(Transport,0,sizeof(*Transport)); Transport->Phase = "account"; }
     if (Status) *Status = 0u;
     if (!Lease || !Lease->Managed || !Lease->MemberId || !Lease->AccessToken ||
         !Lease->Cancel || xrtCancelRequested(Lease->Cancel)) return NULL;
     return MdoAccountJsonClient(MDO_ACCOUNT_SERVICE_ORIGIN,Path,Method,Body,
-        Lease->AccessToken,Lease->Cancel,Status,true);
+        Lease->AccessToken,Lease->Cancel,Status,true,Transport);
 }
 bool MdoAccountClientTokens(const xvalue* Data, MdoAccountTokens* Tokens)
 {

@@ -2036,6 +2036,8 @@ bool MdoAgentSessionDriveNative(MdoAgentSession* Session,MdoAgentNativeDriveFn D
 done:MdoAgentSessionRelease(Session);return Ok;
 }
 
+#include "browser_use_native_tool_failure.inc.c"
+
 bool MdoAgentSessionLastSequence(MdoAgentSession* Session,
     uint64* LastSequence, xwork_error* Error)
 {

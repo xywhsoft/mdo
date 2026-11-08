@@ -12,7 +12,8 @@ static const cstr SdkWorkbenchMethods[]={
     "panel.get","panel.update","panel.attach","panel.report","panel.close","panel.reveal","panel.layout.get","panel.layout.put",
     "resource.list","resource.get","resource.put","resource.remove",
     "browser.capabilities","browser.list","browser.create","browser.get","browser.update","browser.attach","browser.command",
-    "browser.close","browser.result","browser.release","browser.report"
+    "browser.close","browser.result","browser.release","browser.report","browser.popup.admit","browser.popup.settle",
+    "browser.workspace.lookup","browser.workspace.adopt","browser.workspace.prepare"
 };
 static bool WbFail(mdo_error_v1* E,cstr Code,cstr Message,unsigned Status){
     return MdoApplicationError(E,Code,Message,"workbench",Status,false);
@@ -38,7 +39,7 @@ static void WbRemove(xvalue* S,cstr Key,cstr Id){
 }
 static xvalue* WbContext(const mdo_sdk_context_v1* C){
     xvalue* V=xrtValueObject();SdkPut(V,"device",C->DeviceId);SdkPut(V,"project",C->ProjectId&&C->ProjectId[0]?C->ProjectId:"default");
-    SdkPut(V,"session",C->SessionId);SdkPut(V,"run",C->RunId);return V;
+    SdkPut(V,"session",C->SessionId);SdkPut(V,"run",C->RunId);SdkPut(V,"workspace",C->Workspace);SdkPut(V,"namespace",C->Namespace);SdkPut(V,"member",C->MemberId);return V;
 }
 static bool WbEqual(cstr A,cstr B){return !strcmp(A?A:"",B?B:"");}
 static bool WbOwner(const mdo_sdk_context_v1* C,const xvalue* V){
@@ -108,21 +109,28 @@ static bool WbQueue(const mdo_sdk_context_v1* C,cstr Client,cstr Action,const xv
     bool Ok=MdoApplicationUiCall(&Bound,"ui.invoke",P,R,E,&Found);xrtValueRelease(P);return Ok;
 }
 static bool WbUrl(cstr Url){return Url&&strlen(Url)<=8192&&(!strncmp(Url,"https://",8)||!strncmp(Url,"http://",7))&&!strchr(Url,'\r')&&!strchr(Url,'\n');}
+#include "browser_popup_admission.inc.c"
+#include "browser_lifecycle.inc.c"
+#include "browser_use_workspace.inc.c"
+#include "browser_use_panel_activation.inc.c"
 bool MdoApplicationWorkbenchCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E,bool* Found){
     *Found=false;for(size_t i=0;i<sizeof(SdkWorkbenchMethods)/sizeof(*SdkWorkbenchMethods);i++)if(!strcmp(Method,SdkWorkbenchMethods[i]))*Found=true;
     if(!*Found)return true;
     if(!SdkIdValid(C->ExtensionId))return WbFail(E,"sdk_context_invalid","A stable extension identity is required",400);
     if(!Workbench.Ready)return WbFail(E,"workbench_unavailable","Workbench data is unavailable or damaged; the saved file was preserved",503);
+    if(!strcmp(Method,"browser.popup.admit")||!strcmp(Method,"browser.popup.settle"))return WbPopupCall(C,Method,P,R,E);
     if(!strcmp(Method,"browser.result")||!strcmp(Method,"browser.release"))return MdoApplicationUiCall(C,!strcmp(Method,"browser.result")?"ui.result":"ui.release",P,R,E,Found);
+    if(!strcmp(Method,"browser.workspace.lookup")||!strcmp(Method,"browser.workspace.adopt")||!strcmp(Method,"browser.workspace.prepare"))return BuBrowserWorkspace(C,Method,P,R,E);
     if(!strcmp(Method,"browser.command")){
         cstr Id=SdkField(P,"id"),Command=SdkField(P,"command");
-        const cstr Allowed[]={"navigate","back","forward","reload","stop","state","wait","snapshot","screenshot","click","type","scroll","evaluate","takeover","release"};bool Valid=false;
+        const cstr Allowed[]={"navigate","back","forward","reload","stop","state","wait","snapshot","observe","act","navigate_to","wait_for","dialog","chooser","upload","download","save_download","capture","screenshot","click","type","scroll","evaluate","takeover","release"};bool Valid=false;
         for(size_t i=0;Command&&i<sizeof(Allowed)/sizeof(*Allowed);i++)if(!strcmp(Command,Allowed[i]))Valid=true;
         if(!Valid)return WbFail(E,"browser_command_invalid","Unknown browser command",400);
-        xrtMutexLock(Workbench.Lock);xvalue* V=WbFind(Workbench.State,"browsers",Id);xvalue* Copy=V?xrtValueClone(V):NULL;xrtMutexUnlock(Workbench.Lock);
-        if(!Copy)return WbFail(E,"browser_missing","Browser session is unavailable",404);
-        if(!WbBound(C,Copy)){xrtValueRelease(Copy);return WbFail(E,"context_mismatch","Browser belongs to another extension or context",409);}
-        bool Ok=WbQueue(C,SdkField(Copy,"client"),"workbench.browser",P,R,E);xrtValueRelease(Copy);return Ok;
+        xrtMutexLock(Workbench.Lock);xvalue* V=WbFind(Workbench.State,"browsers",Id);bool Ok=false;
+        if(!V)WbFail(E,"browser_missing","Browser session is unavailable",404);
+        else if(!WbBound(C,V))WbFail(E,"context_mismatch","Browser belongs to another extension or context",409);
+        else Ok=WbQueue(C,SdkField(V,"client"),"workbench.browser",P,R,E);
+        xrtMutexUnlock(Workbench.Lock);return Ok;
     }
     xrtMutexLock(Workbench.Lock);xvalue* Next=NULL;bool Ok=false,Changed=false;
     cstr Id=SdkField(P,"id"),Client=SdkField(P,"client");
@@ -175,19 +183,27 @@ bool MdoApplicationWorkbenchCall(const mdo_sdk_context_v1* C,cstr Method,const x
     }else if(!strcmp(Method,"panel.open")||!strcmp(Method,"browser.create")){
         bool Browser=!strcmp(Method,"browser.create");cstr Type=SdkField(P,"type"),Key=SdkField(P,"key");
         if(!SdkIdValid(Client)||!WbString(P,"key",256,false)||(!Browser&&(!Type||!WbFind(Next,"types",Type)))||(Browser&&SdkGet(P,"url")&&!WbUrl(SdkField(P,"url")))){WbFail(E,"panel_arguments_invalid","An explicit client and registered type (or HTTP URL) are required",400);goto done;}
+        mdo_sdk_context_v1 Creation=*C;bool BrowserPanel=!Browser&&WbIsBrowserPanel(Next,P);
+        if(!Browser&&!WbBrowserPanelContext(C,Next,P,&Creation,E))goto done;
         cstr Kind=Browser?"browsers":"panels";xvalue* V=NULL;
         const xvalue* A=SdkGet(Next,Kind);
         for(size_t i=0;Key&&Key[0]&&i<xrtValueCount(A);i++){
             xvalue* Item=(xvalue*)xrtValueArrayGet(A,i);
-            if(WbBound(C,Item)&&WbEqual(Client,SdkField(Item,"client"))&&WbEqual(Key,SdkField(Item,"key"))&&(Browser||WbEqual(Type,SdkField(Item,"type")))){V=Item;break;}
+            if(WbBound(C,Item)&&(!BrowserPanel||WbBrowserPanelScopeBound(&Creation,Item))&&WbEqual(Client,SdkField(Item,"client"))&&WbEqual(Key,SdkField(Item,"key"))&&(Browser||WbEqual(Type,SdkField(Item,"type")))){V=Item;break;}
         }
-        if(V){*R=xrtValueClone(V);Ok=true;goto done;}
+        if(V){
+            if(Browser||!WbEqual(SdkField(P,"reveal"),"activate")){*R=xrtValueClone(V);Ok=true;goto done;}
+            if(!WbRequestPanelActivation(V,E))goto done;
+            *R=xrtValueClone(V);
+        }else{
         if(xrtValueCount(A)>=64){WbFail(E,"panel_limit","Close unused instances before opening more (limit 64)",429);goto done;}
         char NewId[64];if(!SdkRandomId(Browser?"browser-":"panel-",NewId))goto done;
         V=xrtValueClone(P);SdkPut(V,"id",NewId);SdkPut(V,"owner",C->ExtensionId);SdkPut(V,"state",Browser?"suspended":"open");
         if(Browser)SdkPut(V,"execution","display-client");
-        xrtValueObjectSetNew(V,XRT_STR_LITERAL("context"),WbContext(C));SdkPutUInt(V,"revision",1);
+        xrtValueObjectSetNew(V,XRT_STR_LITERAL("context"),WbContext(&Creation));SdkPutUInt(V,"revision",1);
+        if(!Browser&&WbEqual(SdkField(P,"reveal"),"activate")&&!SdkPutUInt(V,"reveal_revision",1)){xrtValueRelease(V);WbFail(E,"allocation_failed","Cannot retain initial panel activation",500);goto done;}
         xrtValueArrayAppendNew(WbArray(Next,Kind),V);*R=xrtValueClone(V);
+        }
     }else if(!strcmp(Method,"panel.layout.get")||!strcmp(Method,"panel.layout.put")){
         /* Layout belongs to the displaying window, never to a project. */
         if(!SdkIdValid(Id)){WbFail(E,"layout_invalid","A stable window profile ID is required",400);goto done;}
@@ -238,9 +254,11 @@ bool MdoApplicationWorkbenchCall(const mdo_sdk_context_v1* C,cstr Method,const x
                 const cstr Fields[]={"title","resource","params","pinned","view_state"};
                 for(size_t i=0;i<5;i++)if(SdkGet(P,Fields[i]))xrtValueObjectSet(V,xrtStrView(Fields[i]),SdkGet(P,Fields[i]));
             }
+            if(!strcmp(Kind,"panels")&&!WbPanelBrowserReference(C,Next,V,E))goto done;
             WbBump(V);*R=xrtValueClone(V);
         }else{
             if(!strcmp(Kind,"resources")&&!WbRevision(P,V,E))goto done;
+            if(!strcmp(Method,"browser.close")&&!WbCloseBrowserPanels(C,Next,Id,E))goto done;
             *R=xrtValueClone(V);WbRemove(Next,Kind,Id);
             if(!strcmp(Kind,"types")){
                 xvalue* A=xrtValueArray();const xvalue* Panels=SdkGet(Next,"panels");
@@ -252,6 +270,7 @@ bool MdoApplicationWorkbenchCall(const mdo_sdk_context_v1* C,cstr Method,const x
     WbBump(Next);
     if(!WbSave(Next)){WbFail(E,"workbench_save_failed","Workbench could not be saved; no in-memory change was published",503);goto done;}
     xrtValueRelease(Workbench.State);Workbench.State=Next;Next=NULL;Ok=true;Changed=true;
+    if(!strcmp(Method,"browser.close"))MdoApplicationUiCancelBrowser(C,Id);
     for(size_t i=xrtValueCount(Workbench.Runtime);i>0;i--){
         cstr Key=SdkKey(Workbench.Runtime,i-1);
         if(!WbFind(Workbench.State,"panels",Key)&&!WbFind(Workbench.State,"browsers",Key))xrtValueObjectRemove(Workbench.Runtime,xrtStrView(Key));

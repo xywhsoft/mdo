@@ -10,6 +10,7 @@ import { createCompositionTracker } from "../../utils/composition.js";
 import { createAskCard } from "../asks/ask-card.js";
 import { reconcileCards } from "../../utils/reconcile.js";
 import { taskBelongsToSession } from "../tasks/task-owner.js";
+import { approvalBelongsToSession } from "../approvals/approval-owner.js";
 import { renderToolPreview, renderToolArguments } from "../approvals/tool-preview.js";
 import { needsRecoveryCard } from "../../api/read-recovery.js";
 import { createDecisionReadNotice } from "./decision-read-notice.js";
@@ -416,7 +417,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       .filter((run) => run.session_id === sessionId && run.project_id === selected.projectId)
       .map((run) => String(run.agent_run_id)));
     const approvals = sessionId ? (approvalsStore.get().data?.items ?? []).filter((item) =>
-      runIds.has(String(item.run_id))) : [];
+      approvalBelongsToSession(item, selected.projectId, sessionId, runIds)) : [];
     const askData = asksStore.get().data;
     const askScope = askData?.projectId ? askData : selectedAsks();
     const asks = askData?.projectId === selected.projectId &&

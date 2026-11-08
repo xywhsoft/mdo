@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "browser_use_ui_wakeup.h"
 #include "write_admission.h"
 #include "../remote/lan.h"
 #include "../sessions/internal.h"
@@ -43,7 +44,7 @@ typedef struct MdoLiveClient {
     size_t HeadSize;
     char Project[MDO_PROJECT_ID_CAPACITY];
     char Session[MDO_SESSION_ID_CAPACITY];
-    uint64 Selection, Cursor, Revision, StateRevision;
+    uint64 Selection, Cursor, Revision, StateRevision, UiRevision;
     char Epoch[65];
     uint64 LastRead, LastPing;
     size_t Slot;
@@ -65,11 +66,23 @@ typedef struct MdoLiveState {
     xfuture* Futures[MDO_LIVE_CLIENTS];
     MdoLiveRecord Records[MDO_LIVE_RECORDS];
     size_t First, Count, Bytes;
-    uint64 Revision, StateRevision;
+    uint64 Revision, StateRevision, UiRevision;
     bool Stopping;
 } MdoLiveState;
 
 static MdoLiveState g_MdoLive;
+
+/* UI queue publication calls this only after releasing its own mutex. */
+void MdoApiLiveUiNotify(void)
+{
+    if ( g_MdoLive.Lock == NULL ) return;
+    xrtMutexLock(g_MdoLive.Lock);
+    if ( !g_MdoLive.Stopping ) {
+        ++g_MdoLive.UiRevision;
+        (void)xrtCondBroadcast(g_MdoLive.Changed);
+    }
+    xrtMutexUnlock(g_MdoLive.Lock);
+}
 
 void MdoApiLiveChanged(void* Data)
 {
@@ -457,7 +470,7 @@ static xtaskoutcome MdoLiveRun(xcancel* Cancel, ptr Data, xtaskvalue* Result)
          !MdoApiDownloadSend(&Client->Context, Client->Head, Client->HeadSize) ||
          !MdoLiveText(Client, "{\"type\":\"ready\",\"version\":1}") ) return XTASK_FAILED;
     for ( ; ; ) {
-        uint64 Now = MdoMonotonicUs(), StateRevision;
+        uint64 Now = MdoMonotonicUs(), StateRevision, UiRevision;
         bool Stop;
         Client->Context.SendDeadline = MdoDeadlineAfterUs(MDO_LIVE_SEND_US);
         if ( !MdoApiDownloadLive(&Client->Context) || !MdoLiveReceive(Client) ) break;
@@ -468,7 +481,7 @@ static xtaskoutcome MdoLiveRun(xcancel* Cancel, ptr Data, xtaskvalue* Result)
             Client->LastPing = Now;
         }
         xrtMutexLock(g_MdoLive.Lock);
-        Stop = g_MdoLive.Stopping; StateRevision = g_MdoLive.StateRevision;
+        Stop = g_MdoLive.Stopping; StateRevision = g_MdoLive.StateRevision; UiRevision = g_MdoLive.UiRevision;
         xrtMutexUnlock(g_MdoLive.Lock);
         if ( Stop || xrtCancelRequested(Cancel) ) break;
         if ( Now >= Tick ) {
@@ -476,6 +489,10 @@ static xtaskoutcome MdoLiveRun(xcancel* Cancel, ptr Data, xtaskvalue* Result)
             if ( Client->StateRevision != StateRevision ) {
                 if ( !MdoLiveText(Client, "{\"type\":\"changed\"}") ) break;
                 Client->StateRevision = StateRevision;
+            }
+            if ( Client->UiRevision != UiRevision ) {
+                if ( !MdoLiveText(Client, "{\"type\":\"ui_pending\"}") ) break;
+                Client->UiRevision = UiRevision;
             }
             Tick = MdoMonotonicUs() + MDO_LIVE_TICK_US;
         }

@@ -209,7 +209,8 @@ def frontend_checks() -> None:
         )
     run([node, "--experimental-vm-modules",
          str(ROOT / "tools/check_web_modules.mjs")])
-    tests = sorted(TESTS.glob("test_*.mjs"), key=lambda path: path.name)
+    tests = sorted([*TESTS.glob("test_*.mjs"), *(TESTS / "browser_host").glob("test_*.mjs")],
+                   key=lambda path: path.relative_to(TESTS).as_posix())
     if not tests:
         raise GateError("no frontend interaction tests were found")
     run([node, "--test", "--test-concurrency=1", *(str(path) for path in tests)])

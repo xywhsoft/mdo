@@ -26,7 +26,7 @@ import {
   refreshSelectedTask,
 } from "./state/tasks.js";
 import { runsStore, loadRuns, startRun, readRun, cancelRun } from "./state/runs.js";
-import { approvalsStore, loadApprovals } from "./state/approvals.js";
+import { approvalsStore, loadApprovals, selectApprovals, clearApprovals } from "./state/approvals.js";
 import { asksStore, selectAsks, clearAsks, refreshSelectedAsks } from "./state/asks.js";
 import { recoveryStore, selectRecovery, loadRecovery, readRecovery } from "./state/recovery.js";
 import { navigation } from "./state/navigation.js";
@@ -857,6 +857,7 @@ export async function boot() {
     return conversationContinuing(promptQueue?.snapshot(projectId, sessionId),
       [activeRun, ...(runsStore.get().data?.items ?? [])], projectId, sessionId);
   }
+  let applicationUi;
   const conversationDocks = createConversationDocks({
     container: $("#conversation-docks"), navigation, tasksStore, approvalsStore,
     asksStore, recoveryStore,
@@ -866,7 +867,14 @@ export async function boot() {
     onOpenTasks: () => taskDialog.open(),
     onChanged: () => Promise.all([loadTasks(), loadRuns(), refreshSelectedAsks()]),
     onDecisionArrived: (card) => {
-      if (!mobileLayout.matches) return;
+      const revealed = applicationUi?.revealConversation();
+      if (!mobileLayout.matches) {
+        if (revealed) {
+          const heading = card.querySelector("h3") ?? card;
+          heading.tabIndex = -1; heading.focus({ preventScroll: true });
+        }
+        return;
+      }
       const sidebarOpen = shell.dataset.sidebar === "open";
       if (document.querySelector("dialog[open]")) return;
       if (!sidebarOpen &&
@@ -1055,7 +1063,7 @@ export async function boot() {
     onPendingChange: () => syncSendDisabled(),
     onExecute: executeApplicationActions,
   });
-  const applicationUi = createApplicationUi({ navigation, executeActions: executeApplicationActions,
+  applicationUi = createApplicationUi({ navigation, executeActions: executeApplicationActions,
     refreshSession: async context => {
       const selected = navigation.workspace(), project = context.project || context.projectId || "default", session = context.session || context.sessionId;
       if (session && project === selected.projectId && session === selected.sessionId) await loadSession(project, session);
@@ -2354,6 +2362,7 @@ export async function boot() {
       clearTimeline();
       clearTodo();
       clearAsks();
+      clearApprovals();
       sessionDetailStore.reset();
       void newTaskController?.reconcile();
       return;
@@ -2363,6 +2372,7 @@ export async function boot() {
     selectTimeline(projectId, sessionId);
     void selectTodo(projectId, sessionId);
     void selectAsks(projectId, sessionId);
+    void selectApprovals(projectId, sessionId);
     const finishLoad = queueBlocked.beginLoad(key, "runtime");
     try {
       const detailReady = waitForSelectedDetail({ navigation,

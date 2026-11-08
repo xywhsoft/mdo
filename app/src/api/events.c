@@ -244,6 +244,12 @@ static bool MdoApiSessionEventValueLimit(const MdoSessionEventInfo* Event,
             MdoApiValueSetUInt(Item, "model_http_status", Event->ModelHttpStatus) &&
             MdoApiValueSetUInt(Item, "model_attempts", Event->ModelAttempts) &&
             MdoApiValueSetUInt(Item, "model_retry_after_ms", Event->ModelRetryAfterMs);
+    if (Ok && Event->Kind == XWORK_EVENT_TOOL_START && !Event->RunId && !Event->AgentDepth) {
+        xvalue* Outcome=NULL;
+        Ok=MdoApplicationToolOutcome(ProjectId,SessionId,Event->ToolCallId,Event->ToolName,&Outcome);
+        if(Ok&&Outcome)Ok=MdoApiValueSetTake(Item,"tool_outcome",&Outcome);
+        xrtValueRelease(Outcome);
+    }
     if ( Ok && Event->Kind == XWORK_EVENT_AGENT_START &&
          Event->AgentDepth == 0u )
         Ok = MdoSessionAttachmentEventRead(ProjectId, SessionId,

@@ -9,6 +9,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/http_url.h"
 #include "../../include/mdo/secrets.h"
+#include "browser_use_account_transport.h"
 
 #define MDO_ACCOUNT_ORIGIN_LIMIT 513u
 #define MDO_ACCOUNT_TOKEN_LIMIT 4097u

@@ -317,7 +317,8 @@ export function selectTimeline(projectId, sessionId) {
 }
 
 async function reloadTimeline(projectId, sessionId, force = false) {
-  rememberTimeline();
+  if (force) sessionCache.delete(cacheKey({ projectId, sessionId }));
+  else rememberTimeline();
   generation += 1;
   const token = generation;
   cancelRefresh();
@@ -580,7 +581,8 @@ export function applyLiveTimeline(replay) {
 }
 
 liveConnection.subscribe((event) => {
-  if (event.type === "events") applyLiveTimeline(event);
+  if (event.type === "runtime_changed") { clearTimelineCache(); void reloadSelectedTimeline(); }
+  else if (event.type === "events") applyLiveTimeline(event);
   else if (event.type === "status") {
     if (event.connected) {
       stopTimer();

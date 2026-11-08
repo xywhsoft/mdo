@@ -43,6 +43,9 @@ tools/*
 !tools/native/*.hpp
 !tools/native/*.h
 !tools/native/*.py
+!tools/native/android/
+!tools/native/android/*.c
+!tools/native/android/*.h
 !tools/build.py
 !tools/build_android.py
 !tools/host-profile.json

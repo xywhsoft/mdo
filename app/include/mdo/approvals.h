@@ -4,6 +4,8 @@
 #include <xsbase.h>
 #include <xwork.h>
 
+#define MDO_APPROVAL_PROJECT_CAPACITY 65u
+#define MDO_APPROVAL_SESSION_CAPACITY 33u
 #define MDO_APPROVAL_PENDING_MAX 32u
 #define MDO_APPROVAL_API_LIMIT 4u
 #define MDO_APPROVAL_TOOL_CAPACITY 129u
@@ -23,6 +25,8 @@ typedef struct MdoApprovalScope {
     bool Configured;
     xatomic32 Refs;
     xwork_file_scope* Files;
+    char ProjectId[MDO_APPROVAL_PROJECT_CAPACITY];
+    char SessionId[MDO_APPROVAL_SESSION_CAPACITY];
 } MdoApprovalScope;
 
 typedef struct MdoApprovalResourceInfo {
@@ -45,6 +49,8 @@ typedef struct MdoApprovalInfo {
     uint64 Deadline; /* xwork request deadline; zero means none. */
     uint64 ExpiresAt; /* explicit request deadline, otherwise MDO_DEADLINE_NEVER. */
     size_t ResourceCount;
+    char ProjectId[MDO_APPROVAL_PROJECT_CAPACITY];
+    char SessionId[MDO_APPROVAL_SESSION_CAPACITY];
     char ToolName[MDO_APPROVAL_TOOL_CAPACITY];
     char ToolCallId[MDO_APPROVAL_CALL_ID_CAPACITY];
     char ArgumentsJson[MDO_APPROVAL_ARGUMENTS_CAPACITY];
@@ -55,6 +61,8 @@ typedef struct MdoApprovalInfo {
 MdoApprovalScope* MdoApprovalScopeCreate(void);
 MdoApprovalScope* MdoApprovalScopeRef(MdoApprovalScope* Scope);
 void MdoApprovalScopeRelease(MdoApprovalScope* Scope);
+/* Immutable validated presentation owner; no authority is granted here. */
+bool MdoApprovalScopeBind(MdoApprovalScope* Scope, const char* ProjectId, const char* SessionId);
 bool MdoApprovalScopeInitialize(MdoApprovalScope* Scope, bool FullAccess);
 /* Commit runs under the approval lock before the mode changes. A failed
  * durable write leaves both approvals and file access unchanged. */

@@ -200,6 +200,7 @@ def prepare_sdk_overlay(source: Path, lock: dict) -> Path:
     if marker.is_file() and load_object(marker) == record:
         # Explicit SDK exports already contain the locked compatibility patch.
         # They need no Git metadata or dependency on a caller's cache setting.
+        verify_native_browser_sources(source, lock)
         return source
     cache = os.environ.get("MDO_SDK_OVERLAY_CACHE")
     cache_root = Path(cache).expanduser().resolve() if cache else ROOT / ".build/sdk-overlays"
@@ -207,6 +208,7 @@ def prepare_sdk_overlay(source: Path, lock: dict) -> Path:
     if destination.exists():
         if load_object(destination / ".mdo-sdk-overlay.json") != record:
             raise BuildError("SDK compatibility overlay metadata mismatch")
+        verify_native_browser_sources(destination, lock)
         return destination
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="prepare-", dir=destination.parent) as raw:
@@ -226,11 +228,25 @@ def prepare_sdk_overlay(source: Path, lock: dict) -> Path:
         patch_env["GIT_CEILING_DIRECTORIES"] = str(stage)
         subprocess.run(["git", "apply", "--whitespace=nowarn",
                         str(patch)], cwd=extracted, env=patch_env, check=True)
+        verify_native_browser_sources(extracted, lock)
         verify_dependencies(extracted, lock)
         (extracted / ".mdo-sdk-overlay.json").write_text(
             json.dumps(record, indent=2) + "\n", encoding="utf-8")
         extracted.rename(destination)
     return destination
+
+
+def verify_native_browser_sources(source: Path, lock: dict) -> None:
+    """Keep reviewed native sources and the locked dependency patch in sync."""
+    for relative, row in lock.get("sdk_overlay", {}).get("native_sources", {}).items():
+        native = (source / relative).resolve()
+        canonical = (ROOT / row["path"]).resolve()
+        if not native.is_relative_to(source.resolve()) or not canonical.is_relative_to(ROOT.resolve()):
+            raise BuildError("Native browser source escaped its repository")
+        if (not native.is_file() or not canonical.is_file() or
+                source_file_sha256(native) != row["sha256"] or
+                source_file_sha256(canonical) != row["sha256"]):
+            raise BuildError("Native browser source/SDK patch mismatch: " + relative)
 
 
 def normalized_source_bytes(path: Path) -> bytes:

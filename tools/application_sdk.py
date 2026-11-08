@@ -110,7 +110,7 @@ def native_contracts():
         names={'fs':['resolve','stat','read','write','append','list','mkdir','remove','copy','move'],'vfs':['read','list'],'storage':['read','write','remove']}[prefix]
         for action in names:
             fields=dict(path)
-            if action=='read':fields.update(offset=uint,limit={**uint,'minimum':1,'maximum':262144})
+            if action=='read':fields.update(offset=uint,limit={**uint,'minimum':1,'maximum':262144},**({'revision':string} if prefix!='vfs' else {}))
             if action=='list':fields.update(offset=uint,limit={**uint,'minimum':1,'maximum':1024})
             if action in ('write','append'):fields.update(text=string,base64=string,parents=boolean,revision=string)
             if action=='remove':fields.update(recursive=boolean)
@@ -158,6 +158,7 @@ def native_contracts():
     add('ui.invoke','Queue an action for an explicit client, or append it to the originating command receipt',{'client':string,'action':string,'params':{},'context':obj},('action',))
     add('ui.result','Read queued/succeeded/failed UI action status',{'id':string},('id',))
     add('ui.release','Release a terminal UI receipt; pending actions remain retained',{'id':string},('id',))
+    add('ui.cancel','Cancel an owned UI receipt; already dispatched effects require inspection',{'id':string},('id',))
     add('model.complete','Managed model boundary with messages, tools, multimodal parts, usage and optional newline-delimited stream events',{'model':string,'protocol':{**uint,'maximum':3},'reasoning_effort':string,'max_output_tokens':uint,'messages':{'type':'array','minItems':1,'maxItems':4096,'items':obj},'tools':{'type':'array','maxItems':256,'items':obj},'extra_body':obj,'stream':string},('messages',))
     add('tool.call','Execute a tool through a recovered session and its live permission scope; a tool-level failure is a successful SDK result with success:false',{'project':string,'session':string,'tool':string,'arguments':obj},('tool',))
     add('session.compact','Compact the immutable invocation session; original history remains available')

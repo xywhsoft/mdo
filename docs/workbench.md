@@ -4,6 +4,9 @@
 `sdk.panel/resource/browser` 或 `sdk.call`。接口描述、C 便捷函数与 JS 包装由
 `tools/workbench_contracts.py` 同源生成，`sdk.describe` 返回参数契约。
 
+Browser Use 通用宿主增强现已进入主线；平台状态、扩展边界与标准构建约定见
+[浏览器宿主能力](browser-host.md)。本文的基础用法仍适用，新增命令以服务发现为准。
+
 ## 界面与面板实例
 
 窗口右上角侧栏图标切换展开／隐藏，保留已打开的标签及内容；关闭最后一个标签后
@@ -117,7 +120,8 @@ C 原生模块应在自己的 Stop/Unregister 生命周期显式注销贡献。
 
 Windows 使用独立 WebView2 内容环境，浏览数据位于主界面 profile 的 `-content`
 目录，复用系统运行时。内容页没有宿主绑定，普通导航限制 HTTP(S)。
-`target=_blank` 目前导航到当前内容视图。主文档桥接核验原始 document 与消息来源。
+弹出窗口经过原生归属确认再绑定为独立实例，不凭网页消息创建宿主权限。
+主文档桥接核验原始 document 与消息来源。
 
 Android 使用独立内容 WebView，通过只交给可信主文档的 WebMessagePort 控制，
 不向 iframe 或内容页注入 Java 对象。Android 同进程 WebView 共享平台 Cookie 存储，

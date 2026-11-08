@@ -323,6 +323,12 @@ bool MdoUpdateInit(void)
     if (!g_MdoUpdate.Lock) return false;
     snprintf(g_MdoUpdate.Status.State,sizeof(g_MdoUpdate.Status.State),"disabled");
     snprintf(g_MdoUpdate.Status.Edition,sizeof(g_MdoUpdate.Status.Edition),"%s",MdoEdition());
+#if defined(MDO_BROWSER_USE_DEVELOPMENT) && MDO_BROWSER_USE_DEVELOPMENT
+    /* Preview archives are not official releases and must not install or be
+     * blocked by that channel. Keep its existing cached policy untouched. */
+    snprintf(g_MdoUpdate.Status.State,sizeof(g_MdoUpdate.Status.State),"development");
+    return true;
+#endif
     xfile ResultFile = MdoHomeOpenRead("data/update/install-result.json");
     if (ResultFile) {
         char Text[2048]; size_t Bytes = 0; uint64 Length = 0;

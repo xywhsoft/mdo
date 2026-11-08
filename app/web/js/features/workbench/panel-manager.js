@@ -1,5 +1,12 @@
 import { setUiText as writeUiText, setUiAttribute as writeUiAttribute, t as uiText, uiMessage } from "../../i18n.js";
 
+import { createBrowserPopups } from "./popup-manager.js";
+import { panelActivationRequested } from "./panel-activation.js";
+import { createBrowserViewLifetime } from "./browser-ownership.js";
+import { ensureNativeBrowser } from "./native-view.js";
+import { createFrameDriver } from "./frame-driver.js";
+import { createDocumentDriver } from "./document-driver.js";
+import { executeBrowserAutomation } from "./automation-dispatch.js";
 import { normalizeLayout, reorderPanel, safeBrowserUrl, validateImageFrame } from "./model.js";
 import { createNativeBrowserBridge } from "./native-browser.js";
 import { mountBrowserView } from "./browser-view.js";
@@ -33,7 +40,16 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
   const displayTarget = isRemoteTarget() ? targetState().selected.id : "local";
   const bound = row => api.bind({ ...row.context, extension: row.owner });
   const title = row => row.title || definitions.get(row.type)?.title || row.type;
-  const fail = (root, error, retry) => { root.replaceChildren(make("p", "wb-error", error.message || String(error)), button(uiMessage("resource.retryLoad", {}, "重新读取"), retry)); };
+  const fail = (root, error, retry, closeMissing) => {
+    if (closeMissing && error.status === 404 && ["resource_missing", "browser_missing"].includes(error.code)) {
+      root.replaceChildren(make("h2", "", "页面已结束"),
+        make("p", "wb-error", "原页面已经关闭或被移除，无法恢复。关闭此标签页后，可从“＋”打开新页面；不会自动重新打开原网页。"),
+        button("关闭标签页", closeMissing));
+      return;
+    }
+    root.replaceChildren(make("p", "wb-error", error.message || String(error)), button("重新读取", retry));
+  };
+
   const save = async () => {
     if (!ready || saving || stopped) return;
     saving = true;
@@ -56,14 +72,35 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     if (layout.secondary === layout.active || !entries.has(layout.secondary)) layout.secondary = "";
     if (!layout.order.length) layout.open = false;
   };
-  const close = async id => {
-    const row = entries.get(id); if (!row) return;
+  const close = async (id, current = () => true) => {
+    const row = entries.get(id); if (!row || stopped || !current()) return;
     if (mounts.get(id)?.dirty?.() && !confirm(uiMessage("ui.panelManager.thisPanelHasUnsavedChangesCloseAnyway", {}, "此面板有未保存修改，仍要关闭吗？"))) return;
-    await bound(row).call("panel.close", { id }); disposeMount(id); entries.delete(id); selectRemaining();
+    if (entries.get(id) !== row || !current()) return;
+    try { await bound(row).call("panel.close", { id }); } catch (error) { if (error.status !== 404) throw error; }
+    if (stopped || !current() || entries.get(id) !== row) return;
+    disposeMount(id); entries.delete(id); selectRemaining();
     remember(); render();
   };
+  // A decision can arrive while the workbench covers the entire conversation.
+  // Suspend presentation only: native resources and the saved tab layout stay.
+  let decisionInspection = false;
+  const decisionPending = () => Boolean(shell.querySelector(".composer-region")?.hasAttribute("data-decision-pending"));
+  const workbenchCoversConversation = () => layout.maximized || innerWidth <= 1100;
+  const workbenchVisible = () => !stopped && layout.open &&
+    !(decisionPending() && workbenchCoversConversation() && !decisionInspection);
+  const revealConversation = () => {
+    decisionInspection = false;
+    if (stopped || !layout.open || !decisionPending() || !workbenchCoversConversation()) return false;
+    render();
+    return true;
+  };
   const reveal = id => { if (!entries.has(id)) return; layout.active = id; if (layout.secondary === id) layout.secondary = ""; layout.open = true; remember(); render(); };
-  const update = async (id, patch) => { const row = entries.get(id); const saved = await bound(row).call("panel.update", { id, revision: row.revision, ...patch }); entries.set(id, saved); remember(); render(); return saved; };
+  const update = async (id, patch, current = () => true) => {
+    const row = entries.get(id); if (!row || stopped || !current()) return;
+    const saved = await bound(row).call("panel.update", { id, revision: row.revision, ...patch });
+    if (stopped || !current() || entries.get(id) !== row) return;
+    entries.set(id, saved); remember(); render(); return saved;
+  };
   const handle = id => Object.freeze({ id, reveal: () => reveal(id), close: () => close(id), update: patch => update(id, patch) });
   let fileRecordChanges = Promise.resolve();
   fileEvents.addEventListener("changed", event => {
@@ -96,15 +133,36 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
   });
   const rect = node => { const r = node.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height), scale: window.devicePixelRatio || 1 }; };
   const browserViews = new Map();
+  const popupManager = createBrowserPopups({ bridge,api,views:browserViews,clientId,
+    alive:()=>!stopped&&displayTarget===(isRemoteTarget()?targetState().selected.id:"local"),
+    open:(browser,sdk,reveal,current)=>open("mdo.browser",{key:browser.id,title:browser.title||"新窗口",resource:{id:browser.id},reveal},sdk,undefined,current),
+    closePanels:async (browser,current)=>{for(const [id,row] of [...entries]){if(!current())return;if(row.resource?.id===browser&&entries.get(id)===row)await close(id,()=>current()&&entries.get(id)===row);}},
+    onError:error=>toast(error.message,"error") });
+  const nativePopup = event => { void popupManager.reconcile(event.detail?.browser); };
+  window.addEventListener("mdo-browser-popup",nativePopup);
   async function browserView(root, row, signal, mount) {
+    const sameTarget = () => displayTarget === (isRemoteTarget() ? targetState().selected.id : "local");
+    const preferred = () => layout.active === row.id || layout.secondary === row.id && mounts.get(layout.active)?.browserId !== row.resource.id;
+    const lifetime = createBrowserViewLifetime({ row, signal, mount, mounts, entries, views: browserViews, close,
+      alive: () => !stopped && sameTarget(), cleanupAlive: sameTarget,
+      reconcile: id => popupManager.reconcile(id) });
+    if (!lifetime.current()) return;
     const view = await mountBrowserView(root, { row, sdk: bound(row), signal, mount, bridge, clientId,
-      shown: () => !root.hidden && layout.open && !document.hidden && navigation.get().view !== "settings",
-      updateTitle: title => update(row.id, { title }), openExternal: target => layoutApi.call("system.open", { target }), addContext,
-      onEnd: async id => { browserViews.delete(id); await close(row.id); } });
-    if (!signal.aborted) browserViews.set(view.id, { execute: view.execute, row });
+      alive: lifetime.current,
+      canHide: lifetime.canHide,
+      onDispose: lifetime.release,
+      onBind: view => (preferred() || !browserViews.has(view.id)) && lifetime.bind(view),
+      onRetired: () => { if (preferred() && lifetime.canRemount()) remount(row.id); },
+      shown: () => preferred() && !root.hidden && workbenchVisible() && !document.hidden && navigation.get().view !== "settings",
+      updateTitle: title => update(row.id, { title }, lifetime.current), openExternal: target => layoutApi.call("system.open", { target }), addContext,
+      onEnd: lifetime.end });
+    // A task can publish its dispatcher while this pane awaits native startup.
+    // Keep that dispatcher; restart only the preferred, still-scoped UI mount
+    // so an early retirement cannot leave an empty pane without callbacks.
+    if (!lifetime.register(view) && preferred() && lifetime.canRemount()) remount(row.id);
   }
   async function mount(row) {
-    const root = make("section", "wb-view"); root.setAttribute("role", "tabpanel"); root.tabIndex = 0; root.hidden = !layout.open || (row.id !== layout.active && row.id !== layout.secondary); content.append(root);
+    const root = make("section", "wb-view"); root.setAttribute("role", "tabpanel"); root.tabIndex = 0; root.hidden = !workbenchVisible() || (row.id !== layout.active && row.id !== layout.secondary); content.append(root);
     const abort = new AbortController(), value = { root, abort, revision: row.revision, resourceRevision: 0, events: new EventTarget() }; mounts.set(row.id, value);
     value.resizeObserver = new ResizeObserver(() => value.events.dispatchEvent(new CustomEvent("resize", { detail: rect(root) }))); value.resizeObserver.observe(root);
     try {
@@ -222,7 +280,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
         const text = selected && root.contains(selection.anchorNode) && root.contains(selection.focusNode) ? selected : typeof data === "string" ? data : JSON.stringify(data);
         addContext({ title: title(row), content: text, source: row.resource?.id || row.id, context: row.context });
       }));
-    } catch (error) { value.status = { status:"error", message:String(error.message || error).slice(0,512) }; if (!abort.signal.aborted) fail(root, error, () => remount(row.id)); }
+    } catch (error) { value.status = { status:"error", message:String(error.message || error).slice(0,512) }; if (!abort.signal.aborted) fail(root, error, () => remount(row.id), () => close(row.id, () => !abort.signal.aborted && mounts.get(row.id) === value && entries.get(row.id) === row)); }
     finally {
       if (!abort.signal.aborted) {
         value.status ||= { status:"ready" };
@@ -233,11 +291,13 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
   const remount = id => { disposeMount(id); const row = entries.get(id); if (row) { void mount(row).then(render); } };
   function render() {
     if (stopped) return;
-    shell.dataset.workbench = layout.open ? "open" : "closed"; shell.toggleAttribute("data-workbench-maximized", layout.maximized && layout.open);
+    if (!decisionPending()) decisionInspection = false;
+    const open = workbenchVisible();
+    shell.dataset.workbench = open ? "open" : "closed"; shell.toggleAttribute("data-workbench-maximized", layout.maximized && open);
     const sidebar = Number.parseFloat(shell.style.getPropertyValue("--sidebar-column")) || 0;
-    shell.style.setProperty("--workbench-width", `${Math.min(layout.width, Math.max(320, innerWidth - sidebar - 360))}px`); dock.hidden = !layout.open;
-    writeUiAttribute(opener, "title", layout.open ? uiMessage("ui.panelManager.hideRightSidebar", {}, "隐藏右侧栏") : uiMessage("ui.panelManager.showRightSidebar", {}, "展开右侧栏"));
-    writeUiAttribute(opener, "aria-label", opener.title); opener.setAttribute("aria-expanded", String(layout.open));
+    shell.style.setProperty("--workbench-width", `${Math.min(layout.width, Math.max(320, innerWidth - sidebar - 360))}px`); dock.hidden = !open;
+    writeUiAttribute(opener, "title", open ? uiMessage("ui.panelManager.hideRightSidebar", {}, "隐藏右侧栏") : uiMessage("ui.panelManager.showRightSidebar", {}, "展开右侧栏"));
+    writeUiAttribute(opener, "aria-label", opener.title); opener.setAttribute("aria-expanded", String(open));
     tabs.replaceChildren();
     for (const id of layout.order) {
       const row = entries.get(id); if (!row) continue;
@@ -254,7 +314,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       }; tabs.append(tab);
     }
     for (const [id, mounted] of mounts) {
-      const visible = layout.open && !document.hidden && (id === layout.active || id === layout.secondary); mounted.root.hidden = !visible;
+      const visible = open && !document.hidden && (id === layout.active || id === layout.secondary); mounted.root.hidden = !visible;
       mounted.visible?.(visible);
       if (visible && entries.get(id)?.type === "mdo.new-tab") mounted.refresh?.();
       if (mounted.lastVisible !== visible) {
@@ -286,20 +346,22 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
   const resizeWindow = () => render(); window.addEventListener("resize", resizeWindow);
   const sidebarResize = new ResizeObserver(resizeWindow); const sidebarNode = shell.querySelector(".sidebar"); if (sidebarNode) sidebarResize.observe(sidebarNode);
   let overlayFrame = 0;
-  const overlays = new MutationObserver(() => {
+  const overlays = new MutationObserver(records => {
+    if (records.some(record => record.attributeName === "data-decision-pending")) render();
     if (!browserViews.size || overlayFrame || stopped) return;
-    overlayFrame = requestAnimationFrame(() => { overlayFrame = 0; for (const mounted of mounts.values()) mounted.visible?.(layout.open && !document.hidden && !mounted.root.hidden); });
+    overlayFrame = requestAnimationFrame(() => { overlayFrame = 0; for (const mounted of mounts.values()) mounted.visible?.(workbenchVisible() && !document.hidden && !mounted.root.hidden); });
   });
-  overlays.observe(document.body, { subtree:true, childList:true, attributes:true, attributeFilter:["open","hidden","aria-expanded","data-settings-open"] });
+  overlays.observe(document.body, { subtree:true, childList:true, attributes:true, attributeFilter:["open","hidden","aria-expanded","data-settings-open","data-decision-pending"] });
   document.addEventListener("visibilitychange", resizeWindow);
   const beforeUnload = event => { if (bridge.busy() || [...mounts.values()].some(mounted => mounted.dirty?.())) { event.preventDefault(); event.returnValue = ""; } };
   window.addEventListener("beforeunload", beforeUnload);
-  async function open(type, params = {}, scopedApi = api, definition) {
-    if (stopped) throw new Error(uiText("ui.panelManager.workspaceExited", {}, "工作区已退出"));
+  async function open(type, params = {}, scopedApi = api, definition, current = () => true) {
+    const check = () => { if (stopped) throw new Error(uiText("ui.panelManager.workspaceExited", {}, "工作区已退出")); if (!current()) throw new DOMException("原标签页或任务已改变", "AbortError"); };
+    check();
     if (definition) definitions.set(type, definition);
     const client = scopedApi.bind({});
     if (type === "mdo.editor" && params.params?.path) {
-      const scope = await client.call("sdk.context"); if (stopped) throw new Error(uiText("ui.panelManager.workspaceExited", {}, "工作区已退出"));
+      const scope = await client.call("sdk.context"); check();
       const same = (a, b) => (a || "") === (b || "");
       const existing = [...entries.values()].find(row => row.type === type && filePathKey(row.params?.path) === filePathKey(params.params.path) && row.owner === scope.extension && ["project", "session", "run"].every(key => same(row.context[key], scope[key])));
       if (existing) {
@@ -324,6 +386,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       }
     }
     const row = await client.call("panel.open", { ...params, type, client: clientId });
+    check();
     entries.set(row.id, row); if (!layout.order.includes(row.id)) layout.order.push(row.id);
     if (params.reveal !== "background" || !layout.active) reveal(row.id); else { remember(); render(); }
     return handle(row.id);
@@ -331,6 +394,8 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
   async function newTab() { return open("mdo.new-tab", { title: uiText("ui.startView.newTab", {}, "新标签页") }); }
   async function toggleWorkbench() {
     await ensure();
+    if (layout.open && !workbenchVisible()) { decisionInspection = true; render(); return; }
+    decisionInspection = false;
     if (!layout.open && !layout.order.length) return newTab();
     layout.open = !layout.open; remember(); render();
   }
@@ -414,7 +479,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       for (const row of rows) {
         const previous = entries.get(row.id); entries.set(row.id, row);
         if (!layout.order.includes(row.id)) layout.order.push(row.id);
-        if (!previous && row.reveal === "activate") { layout.active = row.id; layout.open = true; }
+        if (panelActivationRequested(row, previous)) { layout.active = row.id; layout.open = true; }
         if (previous && previous.revision !== row.revision && !mounts.get(row.id)?.dirty?.()) disposeMount(row.id);
         const mounted = mounts.get(row.id);
         if (mounted?.resourceRevision && !mounted.root.hidden && row.resource?.id) {
@@ -428,9 +493,10 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
         catch (error) {
           if (error.status !== 404) continue;
           await bridge.call("close", { browser: id }).catch(() => {}); browserViews.delete(id);
-          for (const [panelId, panel] of entries) if (panel.type === "mdo.browser" && panel.resource?.id === id) remount(panelId);
+          for (const [panelId, panel] of [...entries]) if (definitions.get(panel.type)?.renderer === "browser" && panel.resource?.id === id) await close(panelId);
         }
       }
+      await popupManager.scan();
       selectRemaining();
       render();
     } catch { /* Existing panels remain visible during a transient disconnect. */ }
@@ -468,7 +534,7 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
     }
   };
   window.addEventListener("mdo-browser-shortcut", nativeShortcut);
-  return Object.freeze({ ensure, open: async (...args) => { await ensure(); return open(...args); },
+  return Object.freeze({ ensure, revealConversation, open: async (...args) => { await ensure(); return open(...args); },
     openFile: async (...args) => { await ensure(); return openFile(...args); }, newTab: async () => { await ensure(); return newTab(); },
     register(id, descriptor) { discovered.delete(id); definitions.set(id, descriptor);
       // Restored rows can mount before asynchronous plugin activation. Replace
@@ -495,14 +561,69 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       await ensure();
       if (action.action === "workbench.reveal") { await sync(); reveal(action.params.id); return { id: action.params.id }; }
       const { command, id, ...params } = action.params;
+      let createdNavigationRef=null;
+// Inserted into the existing workbench executor. Actions run in the visible
+// native viewport, with its ordinary toolbar and user takeover affordance.
+if(['observe','act','navigate_to','wait_for','dialog','chooser','capture','upload','download','save_download'].includes(command)&&!browserViews.has(id)){
+  const caller=api.bind(action.context||{}),browser=await caller.call('browser.get',{id});
+  if(isRemoteTarget()&&browser.url&&['localhost','127.0.0.1','[::1]'].includes(new URL(browser.url).hostname))throw new Error('目标设备的本地网址需要预览服务映射');
+  try{const created=await ensureNativeBrowser({bridge,sdk:caller,browser,clientId,requireDownloads:true,requireAutomation:true,
+    alive:()=>!stopped&&displayTarget===(isRemoteTarget()?targetState().selected.id:'local'),bounds:{x:0,y:0,width:1024,height:768,scale:1}});
+    if(created?.created===true&&created.initial_navigation_pending===true)createdNavigationRef=created.navigation_ref;
+  }
+  catch(error){
+    if(error.code==='unsupported_capability')return{ok:false,action:action.id,error:{code:error.code,message:error.message,capability_reason:error.capability_reason,effect_may_have_occurred:false}};
+    if(error.code==='native_create_failed')return{ok:false,action:action.id,error:{code:error.code,message:error.message,creation_reason:error.creation_reason,
+      native_create:error.native_create,effect_may_have_occurred:error.effect_may_have_occurred===true}};
+    throw error;
+  }
+  browserViews.set(id,{row:browser,execute:(operation,parameters={})=>bridge.call(operation,{browser:id,...parameters})});
+}
+if (command === "act" || command === "navigate_to" || command === "capture" || command === "upload" && ["set","clear"].includes(params.action)) {
+  const caller = api.bind(action.context || {});
+  const panel = await caller.call("panel.open", { type: "mdo.browser", client: clientId,
+    key: id, resource: { id }, reveal: "activate" });
+  await sync(); reveal(panel.id);
+  const deadline = performance.now() + Math.min(10000, params.timeout_ms || 10000);
+  let ready = false, phase = "waiting_for_panel_mount";
+  while (!stopped && performance.now() < deadline) {
+    const current = browserViews.get(id);
+    if (current?.row.id === panel.id) {
+      const state = await current.execute("state");
+      const mounted = mounts.get(panel.id);
+      phase = `visible=${Boolean(state.visible)},document_hidden=${document.hidden},active_matches=${layout.active===panel.id},root_hidden=${mounted?.root.hidden},mount_status=${mounted?.status?.status},mount_error=${mounted?.status?.message||""},viewport=${state.controller_bounds?.width}x${state.controller_bounds?.height},renderer_failed=${Boolean(state.process_failed)}`;
+      // A page-network error intentionally hides the native surface behind its
+      // error card. Explicit navigation must be able to replace that page; it
+      // sends no pointer input and its normal dispatcher guards still apply.
+      let navigationReady = false;
+      if(command==='navigate_to'&&typeof state.error==='string'&&state.error&&state.automation===true&&
+         !state.process_failed&&!state.manual&&!state.creating&&!state.close_requested&&!state.closed_by_page&&!state.dialog_open&&!state.popup_open&&
+         !document.hidden&&layout.open&&layout.active===panel.id&&mounted?.root.isConnected===true&&mounted.root.hidden===false&&
+         mounted.status?.status==='error'&&mounted.status.message===state.error){
+        const surface=mounted.root.querySelector('.wb-browser-surface')?.getBoundingClientRect(),bounds=state.controller_bounds;
+        const unobstructed=![...document.querySelectorAll('dialog[open], [role=menu]:not([hidden])')].some(node=>node.getClientRects().length);
+        navigationReady=unobstructed&&[surface?.width,surface?.height,bounds?.width,bounds?.height].every(number=>Number.isFinite(number)&&number>0);
+      }
+      if (state.visible===true||navigationReady) { ready = true; break; }
+    }
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  if (!ready) throw Error(`The browser action viewport could not be shown (${phase})`);
+}
       if (command === "capabilities") return bridge.available() ? bridge.call("capabilities") : { native: false, embedded: false, snapshot: false, screenshot: false, input: false };
       let view = browserViews.get(id);
       if (!view) {
         const client = api.bind(action.context || {}), browser = await client.call("browser.get", { id });
         if (isRemoteTarget() && browser.url && ["localhost","127.0.0.1","[::1]"].includes(new URL(browser.url).hostname)) throw new Error(uiText("ui.panelManager.localUrlsOnTheTargetDeviceNeedPreviewService", {}, "目标设备的本地网址需要预览服务映射"));
-        await bridge.call("create", { browser: id, url: browser.url || "about:blank", visible: false, bounds: { x:0,y:0,width:1024,height:768,scale:1 } });
+        await ensureNativeBrowser({bridge,sdk:client,browser,clientId,alive:()=>!stopped&&displayTarget===(isRemoteTarget()?targetState().selected.id:"local"),bounds:{x:0,y:0,width:1024,height:768,scale:1}});
         view = { row: browser, execute: (operation, parameters = {}) => bridge.call(operation, { browser:id, ...parameters }) }; browserViews.set(id, view);
       }
+      const routedCommand=["observe","act","navigate_to","wait_for","capture","upload"].includes(command);
+      const frameState=routedCommand?await view.execute("state"):null;
+      const executePage=(operation,parameters)=>view.execute(operation,parameters);
+      const pageDriver=frameState?.frame_automation===true?createFrameDriver({execute:executePage,...(frameState.platform==="android-webview"?{nativeCapture:{navigation:frameState.navigation},nativeFileInputs:true}:{})}):frameState?.isolated_world?.adapter==="android-main-document-v1"?createDocumentDriver({execute:executePage}):null;
+      const automation = await executeBrowserAutomation({ command,params,view,action,api:api.bind(action.context || {}),browser:id,pageDriver,initialNavigation:createdNavigationRef,alive:()=>!stopped&&displayTarget===(isRemoteTarget()?targetState().selected.id:"local") });
+      if (automation.handled) return automation.result;
       if (command === "wait") {
         const deadline = Date.now() + Math.min(60000, Math.max(1, params.timeout_ms || 20000));
         let lastReceipt = 0;
@@ -523,6 +644,6 @@ export function createPanelManager({ shell, api, layoutApi = api, navigation, cl
       }
       return view.execute(command, { ...params, agent: true });
     },
-    destroy() { stopped = true; menu.dispose(); clearTimeout(syncTimer); clearTimeout(saveTimer); sidebarResize.disconnect(); overlays.disconnect(); cancelAnimationFrame(overlayFrame); for (const id of [...mounts.keys()]) disposeMount(id); bridge.dispose(); window.removeEventListener("mdo-browser-shortcut",nativeShortcut); window.removeEventListener("resize", resizeWindow); window.removeEventListener("beforeunload", beforeUnload); document.removeEventListener("visibilitychange", resizeWindow); document.removeEventListener("keydown", shortcut); opener.remove(); dock.remove(); },
+    destroy() { stopped = true; popupManager.dispose(); window.removeEventListener("mdo-browser-popup",nativePopup); menu.dispose(); clearTimeout(syncTimer); clearTimeout(saveTimer); sidebarResize.disconnect(); overlays.disconnect(); cancelAnimationFrame(overlayFrame); for (const id of [...mounts.keys()]) disposeMount(id); bridge.dispose(); window.removeEventListener("mdo-browser-shortcut",nativeShortcut); window.removeEventListener("resize", resizeWindow); window.removeEventListener("beforeunload", beforeUnload); document.removeEventListener("visibilitychange", resizeWindow); document.removeEventListener("keydown", shortcut); opener.remove(); dock.remove(); },
   });
 }

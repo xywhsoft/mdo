@@ -22,7 +22,8 @@ export function browserLocation(value) {
 }
 export function browserPhase(state) {
   if (state.error) return "error";
-  if (!state.url || state.url === "about:blank") return "empty";
+  if (state.initial_navigation_pending) return "loading";
+  if (!state.url || state.url === "about:blank" && !state.opener) return "empty";
   return state.loading ? "loading" : "ready";
 }
 export function reorderPanel(ids, source, before) {

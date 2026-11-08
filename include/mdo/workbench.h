@@ -36,6 +36,24 @@ static inline mdo_result mdoChangesDiff(const mdo_sdk_context_v1* C,const xvalue
 {return mdoCall(C,"changes.diff",P,R,E);}
 static inline mdo_result mdoFilesDirectory(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
 {return mdoCall(C,"files.directory",P,R,E);}
+static inline mdo_result mdoFilesTree(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.tree",P,R,E);}
+static inline mdo_result mdoFilesDigest(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.digest",P,R,E);}
+static inline mdo_result mdoFilesPublish(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.publish",P,R,E);}
+static inline mdo_result mdoFilesReceiveStart(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.receive.start",P,R,E);}
+static inline mdo_result mdoFilesReceivePublish(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.receive.publish",P,R,E);}
+static inline mdo_result mdoFilesReceiveReconcile(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.receive.reconcile",P,R,E);}
+static inline mdo_result mdoFilesReceiveGet(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.receive.get",P,R,E);}
+static inline mdo_result mdoFilesReceiveList(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.receive.list",P,R,E);}
+static inline mdo_result mdoFilesReceiveRelease(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"files.receive.release",P,R,E);}
 static inline mdo_result mdoFilesSearch(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
 {return mdoCall(C,"files.search",P,R,E);}
 static inline mdo_result mdoFilesCreate(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
@@ -108,6 +126,16 @@ static inline mdo_result mdoBrowserCapabilities(const mdo_sdk_context_v1* C,cons
 {return mdoCall(C,"browser.capabilities",P,R,E);}
 static inline mdo_result mdoBrowserCreate(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
 {return mdoCall(C,"browser.create",P,R,E);}
+static inline mdo_result mdoBrowserPopupAdmit(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"browser.popup.admit",P,R,E);}
+static inline mdo_result mdoBrowserPopupSettle(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"browser.popup.settle",P,R,E);}
+static inline mdo_result mdoBrowserWorkspaceLookup(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"browser.workspace.lookup",P,R,E);}
+static inline mdo_result mdoBrowserWorkspaceAdopt(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"browser.workspace.adopt",P,R,E);}
+static inline mdo_result mdoBrowserWorkspacePrepare(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"browser.workspace.prepare",P,R,E);}
 static inline mdo_result mdoBrowserUpdate(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)
 {return mdoCall(C,"browser.update",P,R,E);}
 static inline mdo_result mdoBrowserCommand(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,mdo_error_v1* E)

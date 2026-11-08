@@ -180,6 +180,8 @@ typedef struct MdoAgentNativeContext {
 } MdoAgentNativeContext;
 typedef bool (*MdoAgentNativeDriveFn)(void*,const MdoAgentNativeContext*,xwork_error*);
 bool MdoAgentSessionDriveNative(MdoAgentSession*,MdoAgentNativeDriveFn,void*,xwork_error*);
+/* SDK UI lifecycle only: record one observed failed call after its driver drains. */
+bool MdoAgentSessionRecordToolFailure(MdoAgentSession*,const xwork_event*,xwork_error*);
 bool MdoAgentSessionLastSequence(MdoAgentSession* Session,
     uint64* LastSequence, xwork_error* Error);
 /* Close a cancelled model turn without repeating it. Requires an exact ledger

@@ -2,6 +2,7 @@ import { t as uiErrorText, t as uiText } from "../i18n.js";
 
 // The outer connector is deliberately separate from the selected target API.
 // It accesses only this installation's account and device connection metadata.
+import { connectorJobError } from "./connector-error.js";
 const endpoints = new Set(["/account", "/account/login", "/account/refresh", "/account/logout", "/account/cancel", "/account/callback",
   "/connector/state", "/connector/devices", "/connector/ticket"]);
 let nonce = null;
@@ -50,7 +51,7 @@ export async function connectorRequest(path, body, { signal } = {}) {
 }
 export async function connectorJob(body, { signal } = {}) {
   const queued = await connectorRequest("/connector/devices", body, { signal });
-  const id = queued.job?.id, until = Date.now() + 20000;
+  const id = queued.job?.id, until = Date.now() + 40000;
   if (!/^[0-9a-f]{32}$/.test(id || "")) throw new Error(uiErrorText("error.detail.invalidConnectorJob", {}, "Invalid connector job"));
   while (Date.now() < until) {
     if (signal?.aborted) throw new DOMException("Connection cancelled", "AbortError");
@@ -59,8 +60,7 @@ export async function connectorJob(body, { signal } = {}) {
     if (state.job?.id !== id) throw new Error(uiErrorText("error.detail.deviceConnectionOperationChanged", {}, "Device connection operation changed"));
     if (state.job.state === "done") return state;
     if (state.job.state === "failed") {
-      const error = new Error(uiText("ui.connector.deviceOperationFailedCheckSignInDeviceStatusAnd", {}, "无法完成设备操作，请检查登录、设备状态和服务连接"));
-      error.code = state.error; error.status = state.status; throw error;
+      throw connectorJobError(state, body?.action);
     }
   }
   throw new Error(uiErrorText("error.detail.deviceConnectionDeadlineExceeded", {}, "Device connection deadline exceeded"));

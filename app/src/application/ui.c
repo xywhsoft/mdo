@@ -1,9 +1,11 @@
 #include "internal.h"
+#include "../api/browser_use_ui_wakeup.h"
 #include "../../include/mdo/time.h"
 typedef struct SdkClient {char* Id;xvalue* Scope;uint64 Expires;} SdkClient;
 typedef struct SdkUiAction {char Id[37];char* Client;xvalue* Value;uint64 Expires,Deadline;xcancel* Cancel;bool Terminal;} SdkUiAction;
 static struct {xmutex* Lock;SdkClient Clients[32];SdkUiAction Actions[128];} SdkUi;
-static const cstr SdkUiMethods[]={"client.hello","client.poll","client.ack","ui.clients","ui.invoke","ui.result","ui.release"};
+static const cstr SdkUiMethods[]={"client.hello","client.poll","client.ack","ui.clients","ui.invoke","ui.result","ui.release","ui.cancel"};
+#include "browser_use_cancel.inc.c"
 bool MdoApplicationUiInit(void){SdkUi.Lock=xrtMutexCreate();return SdkUi.Lock!=NULL;}
 static void SdkUiActionFree(SdkUiAction* A){xrtFree(A->Client);xrtValueRelease(A->Value);if(A->Cancel)xrtCancelDestroy(A->Cancel);memset(A,0,sizeof(*A));}
 void MdoApplicationUiUnit(void){if(!SdkUi.Lock)return;for(size_t i=0;i<32;i++){xrtFree(SdkUi.Clients[i].Id);xrtValueRelease(SdkUi.Clients[i].Scope);}for(size_t i=0;i<128;i++)SdkUiActionFree(&SdkUi.Actions[i]);xrtMutexDestroy(SdkUi.Lock);memset(&SdkUi,0,sizeof(SdkUi));}
@@ -15,7 +17,7 @@ bool MdoApplicationUiCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* 
     xrtMutexLock(SdkUi.Lock);SdkClient* Client=NULL;SdkUiAction* Action=NULL;
     for(size_t i=0;i<32;i++)if(ClientId&&SdkUi.Clients[i].Id&&!strcmp(ClientId,SdkUi.Clients[i].Id))Client=&SdkUi.Clients[i];
     for(size_t i=0;i<128;i++){SdkUiAction* A=&SdkUi.Actions[i];if(A->Id[0]&&MdoDeadlineExpired(A->Expires))SdkUiActionFree(A);if(A->Id[0]&&!A->Terminal&&((A->Cancel&&xrtCancelRequested(A->Cancel))||(A->Deadline&&MdoDeadlineExpired(A->Deadline)))){A->Terminal=true;SdkPut(A->Value,"state","cancelled");SdkPut(A->Value,"error","The originating call was cancelled or its deadline expired before UI completion");}if(Id&&!strcmp(Id,A->Id))Action=A;}
-    bool Ok=true;
+    bool Ok=true,Wake=false;
     if(!strcmp(Method,"ui.clients")){
         *R=xrtValueArray();for(size_t i=0;i<32;i++)if(SdkUi.Clients[i].Id&&!MdoDeadlineExpired(SdkUi.Clients[i].Expires)){xvalue* V=xrtValueObject();SdkPut(V,"id",SdkUi.Clients[i].Id);xrtValueObjectSetNew(V,XRT_STR_LITERAL("context"),xrtValueClone(SdkUi.Clients[i].Scope));xrtValueArrayAppendNew(*R,V);}
     }else if(!strcmp(Method,"client.hello")){
@@ -39,10 +41,13 @@ bool MdoApplicationUiCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* 
         SdkPut(Action->Value,"client",ClientId);SdkPut(Action->Value,"id",Action->Id);SdkPut(Action->Value,"action",Type);SdkPut(Action->Value,"state","pending");
         xrtValueObjectSetNew(Action->Value,XRT_STR_LITERAL("params"),Params?xrtValueClone(Params):xrtValueObject());
         xvalue* Scope=SdkGet(P,"context")?xrtValueClone(SdkGet(P,"context")):xrtValueObject();
-        SdkPut(Scope,"extension",C->ExtensionId);
-        if(!SdkGet(Scope,"project")&&C->ProjectId&&C->ProjectId[0])SdkPut(Scope,"project",C->ProjectId);
-        if(!SdkGet(Scope,"session")&&C->SessionId&&C->SessionId[0])SdkPut(Scope,"session",C->SessionId);
-        xrtValueObjectSetNew(Action->Value,XRT_STR_LITERAL("context"),Scope);*R=xrtValueClone(Action->Value);
+        SdkPut(Scope,"extension",C->ExtensionId);SdkPut(Scope,"device",C->DeviceId);
+        SdkPut(Scope,"project",C->ProjectId&&C->ProjectId[0]?C->ProjectId:"default");
+        SdkPut(Scope,"session",C->SessionId);SdkPut(Scope,"run",C->RunId);
+        SdkPut(Scope,"workspace",C->Workspace);SdkPut(Scope,"namespace",C->Namespace);SdkPut(Scope,"member",C->MemberId);
+        xrtValueObjectSetNew(Action->Value,XRT_STR_LITERAL("context"),Scope);*R=xrtValueClone(Action->Value);Wake=true;
+    }else if(!strcmp(Method,"ui.cancel")){
+        Ok=BuUiCancel(C,Action,R,E);
     }else if(!strcmp(Method,"ui.release")){
         if(!Action){*R=xrtValueObject();goto done;}
         if(!Action->Terminal){Ok=MdoApplicationError(E,"sdk_ui_pending","A pending UI action cannot be released; cancel its originating operation or wait for completion","ui",409,false);goto done;}
@@ -61,5 +66,5 @@ bool MdoApplicationUiCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* 
                 bool Success=false;xrtValueGetBool(SdkGet(P,"success"),&Success);SdkPut(Action->Value,"state",Success?"succeeded":"failed");if(SdkField(P,"error"))SdkPut(Action->Value,"error",SdkField(P,"error"));Action->Terminal=true;}
             *R=xrtValueClone(Action->Value);}
     }
-done:xrtMutexUnlock(SdkUi.Lock);return Ok;
+done:xrtMutexUnlock(SdkUi.Lock);if(Ok&&Wake)MdoApiLiveUiNotify();return Ok;
 }

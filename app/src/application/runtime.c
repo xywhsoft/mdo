@@ -43,6 +43,15 @@ static const struct {cstr Id,Description;} SdkRuntimeMethods[]={
     {"files.resolve","Resolve a file workbench path"},{"files.stat","Read file workbench metadata"},
     {"files.create","Exclusively create a new empty file without replacing an entry"},
     {"files.inspect","Inspect at most 64 paths with individual metadata or errors"},
+    {"files.tree","Read a complete bounded directory manifest with stable identities and SHA-256"},
+    {"files.digest","Hash a bounded regular file and return its stable revision and SHA-256"},
+    {"files.publish","Publish verified staging bytes as a new hard link under the original task root; retain source"},
+    {"files.receive.start","Receive a scoped byte stream into bounded verified task staging"},
+    {"files.receive.publish","Publish owned staging with a durable destination intent"},
+    {"files.receive.reconcile","Inspect an interrupted publication without replaying file effects"},
+    {"files.receive.get","Inspect an owned staged receiver receipt"},
+    {"files.receive.list","List owned retained staging receipts"},
+    {"files.receive.release","Discard one inactive, identity-verified staging file"},
     {"files.read","Read a bounded file workbench byte range"},{"files.write","Save with file revision checks"},
     {"files.mkdir","Create a file workbench directory"},{"files.move","Move a file workbench entry"},{"files.remove","Remove a file workbench entry"},
     {"changes.list","Read structured Git comparison files and statistics"},
@@ -156,6 +165,11 @@ static xvalue* SdkFileInfo(const xfileinfo* I){
     char Revision[160];snprintf(Revision,sizeof(Revision),"f-%llu-%llu-%llu-%lld",(unsigned long long)I->Device,
         (unsigned long long)I->Identity,(unsigned long long)I->Size,(long long)I->Modified);SdkPut(R,"revision",Revision);return R;
 }
+#include "browser_use_files_digest.inc.c"
+#include "browser_use_files_tree.inc.c"
+#include "browser_use_files_publish.inc.c"
+#include "browser_use_files_receive.inc.c"
+#include "browser_use_files_receive_publish.inc.c"
 static bool SdkFileCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
     bool Vfs=!strncmp(Method,"vfs.",4),Storage=!strncmp(Method,"storage.",8);char* Path=NULL;
     if(Vfs){cstr Name=SdkField(P,"path");Path=Name?xrtStrDup(Name):NULL;if(!Path||strncmp(Path,"/app/",5))goto invalid;}
@@ -163,6 +177,7 @@ static bool SdkFileCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,
     if(!Path)return false;
     cstr Action=strrchr(Method,'.')+1;bool Ok=false,Created=false;
     cstr Revision=SdkField(P,"revision");
+    if(!Vfs&&SdkGet(P,"revision")&&!strcmp(Action,"read")){bool Read=BuFileRead(C,P,Path,R,E);xrtFree(Path);return Read;}
     if(Revision&&(!strcmp(Action,"write")||!strcmp(Action,"append")||!strcmp(Action,"remove")||!strcmp(Action,"move")||!strcmp(Action,"copy"))){
         xfileinfo Current={0};xvalue* Metadata=xrtPathStat(Path,false,&Current)?SdkFileInfo(&Current):NULL;
         bool Match=Metadata&&!strcmp(Revision,SdkField(Metadata,"revision"));xrtValueRelease(Metadata);
@@ -247,6 +262,13 @@ bool MdoApplicationRuntimeCall(const mdo_sdk_context_v1* C,cstr Method,const xva
     if(!strcmp(Method,"markdown.parse"))return SdkMarkdownParse(C,P,R,E);
     if(!strncmp(Method,"extension.",10))return SdkExtensionCall(C,Method,P,R,E);
     if(!strncmp(Method,"fs.",3)||!strncmp(Method,"vfs.",4)||!strncmp(Method,"storage.",8))return SdkFileCall(C,Method,P,R,E);
+    if(!strcmp(Method,"files.tree"))return BuFileTree(C,P,R,E);
+    if(!strcmp(Method,"files.digest"))return BuFileDigest(C,P,R,E);
+    if(!strcmp(Method,"files.publish"))return BuFilePublish(C,P,R,E);
+    if(!strcmp(Method,"files.receive.start"))return BuFileReceive(C,P,R,E);
+    if(!strcmp(Method,"files.receive.publish"))return BuReceivePublish(C,P,R,E);
+    if(!strcmp(Method,"files.receive.reconcile"))return BuReceiveReconcile(C,P,R,E);
+    if(!strncmp(Method,"files.receive.",14))return BuReceiveControl(C,Method,P,R,E);
     if(!strncmp(Method,"files.",6))return SdkFilesCall(C,Method,P,R,E);
     if(!strncmp(Method,"changes.",8))return SdkChangesCall(C,Method,P,R,E);
     if(!strcmp(Method,"process.run"))return SdkProcessCall(C,P,R,E);

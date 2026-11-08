@@ -135,7 +135,7 @@ export function createLiveConnection({
       else if (healthy && event.type === "events") {
         if (event.selection === selection && event.project_id === selected.projectId &&
             event.session_id === selected.sessionId) publish(event);
-      } else if (healthy && event.type === "changed") publish(event);
+      } else if (healthy && (event.type === "changed" || event.type === "ui_pending")) publish(event);
     };
     current.onerror = () => fail(current);
     current.onclose = () => fail(current);

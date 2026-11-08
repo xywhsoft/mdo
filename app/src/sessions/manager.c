@@ -719,7 +719,7 @@ MdoApprovalScope* MdoSessionPermissionScopeAcquire(const char* ProjectId,const c
         if(Count>=64)goto done;
         B=xrtCalloc(1,sizeof(*B));if(!B)goto done;size_t Index=MdoSessionsActiveFind(ProjectId,SessionId);
         B->Scope=Index==SIZE_MAX?MdoApprovalScopeCreate():MdoApprovalScopeRef(g_MdoSessions.Active[Index].PermissionScope);
-        if(!B->Scope||!MdoApprovalScopeInitialize(B->Scope,!strcmp(Info.PermissionProfile,"full-access"))){MdoApprovalScopeRelease(B->Scope);xrtFree(B);goto done;}
+        if(!B->Scope||!MdoApprovalScopeBind(B->Scope,Info.ProjectId,Info.Id)||!MdoApprovalScopeInitialize(B->Scope,!strcmp(Info.PermissionProfile,"full-access"))){MdoApprovalScopeRelease(B->Scope);xrtFree(B);goto done;}
         snprintf(B->Project,sizeof(B->Project),"%s",ProjectId);snprintf(B->Session,sizeof(B->Session),"%s",SessionId);B->Next=g_MdoSessions.BorrowedScopes;g_MdoSessions.BorrowedScopes=B;
     }
     Scope=MdoApprovalScopeRef(B->Scope);if(Scope)B->Holders++;
@@ -750,6 +750,11 @@ static bool MdoSessionsActiveAdd(const char* ProjectId,
     MdoSessionBorrowedScope* Borrowed=MdoSessionsBorrowedFind(ProjectId,SessionId);
     Active->PermissionScope = Borrowed?MdoApprovalScopeRef(Borrowed->Scope):MdoApprovalScopeCreate();
     if ( Active->PermissionScope == NULL ) return false;
+    if ( !MdoApprovalScopeBind(Active->PermissionScope, ProjectId, SessionId) ) {
+        MdoApprovalScopeRelease(Active->PermissionScope);
+        Active->PermissionScope = NULL;
+        return false;
+    }
     ++g_MdoSessions.ActiveCount;
     snprintf(Active->ProjectId, sizeof(Active->ProjectId), "%s", ProjectId);
     snprintf(Active->SessionId, sizeof(Active->SessionId), "%s", SessionId);

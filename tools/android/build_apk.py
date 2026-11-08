@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 import zipfile
@@ -16,8 +17,21 @@ from xml.sax.saxutils import escape
 ROOT = Path(os.environ["MDO_ANDROID_XSERVER_ROOT"])
 from runtime_bundle import add_runtime
 from share_overlay import MANIFEST as SHARE_MANIFEST, apply as overlay_sharing
-from browser_overlay import apply as overlay_browser
+from browser_overlay import manifest as browser_manifest, apply as overlay_browser
 MDO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def prepare_java_sources(overlay: Path) -> list[Path]:
+    """Use the same source integration for APK builds and compiler regression."""
+    shutil.copytree(ROOT / "android/src", overlay)
+    overlay_sharing(overlay)
+    overlay_browser(overlay)
+    overlay_package_installer(overlay / "org/xserver/android/PackageInstall.java")
+    service = overlay / "org/xserver/android/XsService.java"
+    text = service.read_text().replace("PackageInstall.initialize(getApplicationContext());", "MdoRuntime.initialize(getApplicationContext());\n            PackageInstall.initialize(getApplicationContext());")
+    service.write_text(text)
+    shutil.copy2(MDO_ROOT / "tools/android/MdoRuntime.java", service.with_name("MdoRuntime.java"))
+    return sorted(overlay.rglob("*.java"))
 
 
 def run(command: list[str]) -> None:
@@ -147,6 +161,7 @@ def build(sdk: Path, java: Path, library: Path, pack: Path, output: Path,
   <service android:name="org.xserver.android.XsService" android:exported="false" android:foregroundServiceType="specialUse">
    <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started local C agent host with asynchronous tools and an on-device HTTP frontend; stopped explicitly from its notification." />
   </service>
+  {browser_manifest(package)}
  </application>
 </manifest>'''
     with tempfile.TemporaryDirectory(prefix="xs-apk-", dir=output.parent) as raw:
@@ -162,16 +177,7 @@ def build(sdk: Path, java: Path, library: Path, pack: Path, output: Path,
         xml.write_text(manifest, encoding="utf-8")
         classes = directory / "classes"; classes.mkdir()
         overlay = directory / "java"
-        import shutil
-        shutil.copytree(ROOT / "android/src", overlay)
-        overlay_sharing(overlay)
-        overlay_browser(overlay)
-        overlay_package_installer(overlay / "org/xserver/android/PackageInstall.java")
-        service = overlay / "org/xserver/android/XsService.java"
-        text = service.read_text().replace("PackageInstall.initialize(getApplicationContext());", "MdoRuntime.initialize(getApplicationContext());\n            PackageInstall.initialize(getApplicationContext());")
-        service.write_text(text)
-        shutil.copy2(MDO_ROOT / "tools/android/MdoRuntime.java", service.with_name("MdoRuntime.java"))
-        sources = sorted(overlay.rglob("*.java"))
+        sources = prepare_java_sources(overlay)
         run([str(java / "bin" / ("javac" + suffix)), "-encoding", "UTF-8", "-source", "8", "-target", "8",
              "-classpath", str(android), "-d", str(classes), *map(str, sources)])
         jar = directory / "classes.jar"

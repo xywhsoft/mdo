@@ -12,7 +12,7 @@
 typedef struct SdkJob {
     char Id[37],Hash[65];
     char WriteToken[64];
-    char *Extension,*Project,*Session,*Run,*Workspace,*Method,*Namespace,*MemberId;
+    char *Extension,*Project,*Session,*Run,*Workspace,*Method,*Namespace,*MemberId,*Device;
     xvalue *Params,*Info,*Result;
     char* Json;
     size_t ResultSize;
@@ -26,6 +26,8 @@ typedef struct SdkJob {
 } SdkJob;
 static struct {xmutex* Lock;SdkJob Jobs[SDK_JOBS];bool Stopping;} SdkJobs;
 static const cstr SdkJobMethods[]={"operation.start","operation.get","operation.list","operation.wait","operation.cancel","operation.result","operation.release"};
+#include "browser_use_operation_scope.inc.c"
+#include "browser_use_operation_snapshot.inc.c"
 static bool SdkRandomId(cstr Prefix,char Id[37]){
     unsigned char B[16];static const char Hex[]="0123456789abcdef";
     if(!xrtSecureRandom(B,sizeof(B)))return false;
@@ -71,18 +73,20 @@ static void SdkJobPath(cstr Id,char P[128]){snprintf(P,128,"data/application/ope
 static bool SdkJobSave(SdkJob* J){
     char P[128];SdkJobPath(J->Id,P);char* Text=SdkJson(J->Info);bool Ok=Text&&MdoHomeAtomicWrite(P,Text,strlen(Text),false);xrtFree(Text);return Ok;
 }
+static xvalue* SdkJobReceipt(cstr Id,bool* Missing);
+#include "browser_use_operation_recovery.inc.c"
 static xvalue* SdkJobReceipt(cstr Id,bool* Missing){
     char P[128];SdkJobPath(Id,P);char* Text=MdoExtensionRead(P,true,65536,Missing);xvalue* V=SdkParse(Text);xrtFree(Text);
     if(V&&SdkField(V,"id")&&!strcmp(SdkField(V,"id"),Id)&&SdkField(V,"request_hash")){
         bool Terminal=false;xrtValueGetBool(SdkGet(V,"terminal"),&Terminal);
-        if(!Terminal){SdkPut(V,"state","interrupted");xrtValueObjectSetNew(V,XRT_STR_LITERAL("terminal"),xrtValueBool(true));}
+        if(!Terminal&&!BuInterruptedReceipt(V)){xrtValueRelease(V);return NULL;}
         xrtValueObjectSetNew(V,XRT_STR_LITERAL("result_available"),xrtValueBool(false));return V;
     }
     xrtValueRelease(V);return NULL;
 }
 static void SdkJobDispose(SdkJob* J){
     if(J->Thread){xrtThreadWait(J->Thread);xrtThreadDestroy(J->Thread);}
-    xrtFree(J->Extension);xrtFree(J->Project);xrtFree(J->Session);xrtFree(J->Run);xrtFree(J->Workspace);xrtFree(J->Method);
+    xrtFree(J->Device);xrtFree(J->Extension);xrtFree(J->Project);xrtFree(J->Session);xrtFree(J->Run);xrtFree(J->Workspace);xrtFree(J->Method);
     xrtFree(J->Namespace);xrtFree(J->MemberId);
     xrtValueRelease(J->Params);xrtValueRelease(J->Info);xrtValueRelease(J->Result);
     if(J->Json)xrtSecureZero(J->Json,J->ResultSize);
@@ -91,7 +95,7 @@ static void SdkJobDispose(SdkJob* J){
 static int32 SdkJobRun(void* User){
     SdkJob* J=User;MdoApplicationInvocation I={0};I.Cancel=J->Cancel;I.Catalog=J->Modules;snprintf(I.WriteToken,sizeof(I.WriteToken),"%s",J->WriteToken);
     mdo_sdk_context_v1 C;MdoApplicationContext(&C,&I,J->Extension,J->Id,J->Project,J->Session,J->Run,J->Workspace,J->Deadline);
-    C.Namespace=J->Namespace;C.MemberId=J->MemberId;
+    C.Namespace=J->Namespace;C.MemberId=J->MemberId;C.DeviceId=J->Device;
     C.Origin=J->Origin;
     mdo_error_v1 E={0};xvalue* Result=NULL;mdo_result Code=MdoApplicationCall(&C,J->Method,J->Params,&Result,&E);
     char* Json=Result?SdkJson(Result):NULL;size_t Size=Json?strlen(Json):0;
@@ -134,7 +138,7 @@ bool MdoApplicationJobsCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     if(!SdkJobs.Lock)return MdoApplicationError(E,"sdk_unavailable","Operation service unavailable","operation",503,false);
     cstr Id=SdkField(P,"id");char Generated[37];bool Start=!strcmp(Method,"operation.start");
     if(!strcmp(Method,"operation.list")){
-        *R=xrtValueArray();xrtMutexLock(SdkJobs.Lock);for(size_t i=0;i<SDK_JOBS;i++)if(SdkJobs.Jobs[i].Id[0])xrtValueArrayAppendNew(*R,xrtValueClone(SdkJobs.Jobs[i].Info));xrtMutexUnlock(SdkJobs.Lock);return true;
+        *R=xrtValueArray();xrtMutexLock(SdkJobs.Lock);for(size_t i=0;i<SDK_JOBS;i++)if(SdkJobs.Jobs[i].Id[0]&&!SdkJobs.Jobs[i].Disposing&&BuOperationScope(C,SdkJobs.Jobs[i].Info))xrtValueArrayAppendNew(*R,BuOperationSnapshot(&SdkJobs.Jobs[i]));xrtMutexUnlock(SdkJobs.Lock);return true;
     }
     if(Start&&!Id){if(!SdkRandomId("sdk-",Generated))return false;Id=Generated;}
     if(!SdkOperationId(Id))return MdoApplicationError(E,"sdk_arguments_invalid","An sdk- operation identity with 32 hexadecimal digits is required","operation",400,false);
@@ -142,7 +146,7 @@ bool MdoApplicationJobsCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     if(Start){
         if(!SdkIdValid(Target)||!strncmp(Target,"operation.",10))return MdoApplicationError(E,"sdk_arguments_invalid","Supply a non-operation service method","operation",400,false);
         xvalue* Admission=xrtValueObject();SdkPut(Admission,"method",Target);SdkPut(Admission,"extension",C->ExtensionId);SdkPut(Admission,"project",C->ProjectId);SdkPut(Admission,"session",C->SessionId);SdkPut(Admission,"run",C->RunId);SdkPut(Admission,"workspace",C->Workspace);
-        SdkPut(Admission,"namespace",C->Namespace);SdkPut(Admission,"member",C->MemberId);
+        SdkPut(Admission,"device",C->DeviceId);SdkPut(Admission,"namespace",C->Namespace);SdkPut(Admission,"member",C->MemberId);
         SdkPutUInt(Admission,"origin",mdoCallOrigin(C));
         const xvalue* Params=SdkGet(P,"params");xrtValueObjectSetNew(Admission,XRT_STR_LITERAL("params"),Params&&xrtValueType(Params)!=XVALUE_NULL?xrtValueClone(Params):xrtValueObject());
         xvalue* Canonical=SdkCanonicalValue(Admission,0);char* Text=Canonical?SdkJson(Canonical):NULL;xrtValueRelease(Canonical);xrtValueRelease(Admission);
@@ -153,11 +157,12 @@ bool MdoApplicationJobsCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
     uint64 End=MdoDeadlineAfterUs(Wait*1000);
     for(;;){
         xrtMutexLock(SdkJobs.Lock);SdkJob* J=SdkJobFind(Id);
+        if(J&&!J->Disposing&&!BuOperationScope(C,J->Info)){xrtMutexUnlock(SdkJobs.Lock);return MdoApplicationError(E,"context_mismatch","Operation belongs to another task or lacks a verifiable scope","operation",409,false);}
         if(J&&J->Disposing){xrtMutexUnlock(SdkJobs.Lock);return MdoApplicationError(E,"sdk_operation_releasing","Operation is being released","operation",409,false);}
         if(J&&Start&&strcmp(Hash,J->Hash)){xrtMutexUnlock(SdkJobs.Lock);return MdoApplicationError(E,"sdk_identity_conflict","Operation identity already has a different request","operation",409,false);}
         if(!J){
             bool Missing=false;xvalue* Receipt=SdkJobReceipt(Id,&Missing);
-            if(Receipt){bool Match=!Start||!strcmp(Hash,SdkField(Receipt,"request_hash"));xrtMutexUnlock(SdkJobs.Lock);if(!Match){xrtValueRelease(Receipt);return MdoApplicationError(E,"sdk_identity_conflict","Persisted identity belongs to another request","operation",409,false);}if(!strcmp(Method,"operation.result")){xrtValueRelease(Receipt);return MdoApplicationError(E,"sdk_result_expired","Result was released or belongs to a previous process; the admission receipt remains","operation",410,false);}*R=Receipt;return true;}
+            if(Receipt){if(!BuOperationScope(C,Receipt)){xrtValueRelease(Receipt);xrtMutexUnlock(SdkJobs.Lock);return MdoApplicationError(E,"context_mismatch","Persisted operation belongs to another task or lacks a verifiable scope","operation",409,false);}bool Match=!Start||!strcmp(Hash,SdkField(Receipt,"request_hash"));xrtMutexUnlock(SdkJobs.Lock);if(!Match){xrtValueRelease(Receipt);return MdoApplicationError(E,"sdk_identity_conflict","Persisted identity belongs to another request","operation",409,false);}if(!strcmp(Method,"operation.result")&&SdkField(Receipt,"state")&&!strcmp(SdkField(Receipt,"state"),"interrupted")){xrtValueRelease(Receipt);return MdoApplicationError(E,"sdk_operation_interrupted",BuInterruptedMessage,"operation_recovery",409,true);}if(!strcmp(Method,"operation.result")){xrtValueRelease(Receipt);return MdoApplicationError(E,"sdk_result_expired","Result was released or belongs to a previous process; the admission receipt remains","operation",410,false);}*R=Receipt;return true;}
             if(!Missing||!Start){xrtMutexUnlock(SdkJobs.Lock);return MdoApplicationError(E,Missing?"sdk_operation_missing":"sdk_receipt_unreadable",Missing?"Operation is not retained":"Cannot read the admission receipt; inspect before repeating work","operation",Missing?404:409,!Missing);}
             if(SdkJobs.Stopping){xrtMutexUnlock(SdkJobs.Lock);return MdoApplicationError(E,"sdk_stopping","Application is stopping","operation",503,false);}
             size_t Active=0;for(size_t i=0;i<SDK_JOBS;i++){if(SdkJobs.Jobs[i].Id[0]&&!SdkJobs.Jobs[i].Terminal)Active++;if(!SdkJobs.Jobs[i].Id[0]&&!J)J=&SdkJobs.Jobs[i];}
@@ -166,7 +171,7 @@ bool MdoApplicationJobsCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
             if(!SdkJobProject(C,Target,&Lease,E)){xrtMutexUnlock(SdkJobs.Lock);return false;}
             snprintf(J->Id,sizeof(J->Id),"%s",Id);snprintf(J->Hash,sizeof(J->Hash),"%s",Hash);
             J->Lease=Lease;
-            J->Extension=xrtStrDup(C->ExtensionId);J->Project=xrtStrDup(C->ProjectId);J->Session=xrtStrDup(C->SessionId);J->Run=xrtStrDup(C->RunId);J->Workspace=xrtStrDup(C->Workspace);J->Method=xrtStrDup(Target);
+            J->Device=xrtStrDup(C->DeviceId);J->Extension=xrtStrDup(C->ExtensionId);J->Project=xrtStrDup(C->ProjectId);J->Session=xrtStrDup(C->SessionId);J->Run=xrtStrDup(C->RunId);J->Workspace=xrtStrDup(C->Workspace);J->Method=xrtStrDup(Target);
             J->Namespace=xrtStrDup(C->Namespace?C->Namespace:"");J->MemberId=xrtStrDup(C->MemberId?C->MemberId:"");
             J->Origin=mdoCallOrigin(C);
             MdoApplicationInvocation* Caller=C->Opaque;
@@ -174,7 +179,8 @@ bool MdoApplicationJobsCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
             if(Caller)snprintf(J->WriteToken,sizeof(J->WriteToken),"%s",Caller->WriteToken);
             SdkPut(J->Info,"id",Id);SdkPut(J->Info,"request_hash",Hash);SdkPut(J->Info,"method",Target);SdkPut(J->Info,"extension",C->ExtensionId);SdkPut(J->Info,"state","running");SdkPutUInt(J->Info,"started_us",MdoMonotonicUs());
             xrtValueObjectSetNew(J->Info,XRT_STR_LITERAL("terminal"),xrtValueBool(false));
-            bool Ok=J->Extension&&J->Project&&J->Session&&J->Run&&J->Workspace&&J->Method&&J->Namespace&&J->MemberId&&J->Params&&J->Cancel&&J->Info&&SdkJobSave(J);
+            BuOperationStamp(J->Info,C);
+            bool Ok=J->Device&&J->Extension&&J->Project&&J->Session&&J->Run&&J->Workspace&&J->Method&&J->Namespace&&J->MemberId&&J->Params&&J->Cancel&&J->Info&&SdkJobSave(J);
             if(Ok)J->Thread=xrtThreadCreate(SdkJobRun,J,0);
             if(!Ok||!J->Thread){MdoProjectLeaseRelease(J->Lease);J->Lease=NULL;J->Terminal=true;SdkPut(J->Info,"state","not_started");xrtValueObjectSetNew(J->Info,XRT_STR_LITERAL("terminal"),xrtValueBool(true));(void)SdkJobSave(J);xrtMutexUnlock(SdkJobs.Lock);return MdoApplicationError(E,"sdk_operation_admission_failed","Operation was not started; inspect its receipt","operation",500,false);}
         }
@@ -192,7 +198,7 @@ bool MdoApplicationJobsCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue
                 if(Range){size_t Size=J->ResultSize-(size_t)Offset;if(Size>Limit)Size=(size_t)Limit;char* B64=SdkBase64(J->Json?J->Json+Offset:"",Size);SdkPut(*R,"base64",B64);xrtFree(B64);SdkPutUInt(*R,"next",Offset+Size);}}
             xrtMutexUnlock(SdkJobs.Lock);return true;
         }
-        bool Terminal=J->Terminal;*R=xrtValueClone(J->Info);xrtMutexUnlock(SdkJobs.Lock);
+        bool Terminal=J->Terminal;*R=BuOperationSnapshot(J);xrtMutexUnlock(SdkJobs.Lock);
         if(strcmp(Method,"operation.wait")||Terminal||!Wait||MdoDeadlineExpired(End))return *R!=NULL;
         xrtValueRelease(*R);*R=NULL;if(SdkCancelled(C))return MdoApplicationError(E,"sdk_cancelled","Operation wait cancelled; the operation retains its own cancellation handle","operation",499,false);xrtSleep(10);
     }

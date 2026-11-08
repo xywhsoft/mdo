@@ -31,6 +31,32 @@ def contracts(add):
     file_path={'path':s,'space':{'type':'string','enum':['workspace','native','home','application']}}
     add('files.directory','Read one directory page; revision detects changed pagination',
         {**file_path,'offset':u,'limit':{'type':'integer','minimum':1,'maximum':1024},'revision':s,'hidden':b},('path',))
+    tree_metadata={'type':'object','properties':{'path':s,'revision':s,'type':u,'size':u,'device':u,'identity':u,
+        'modified':{'type':'integer'},'changed':{'type':'integer'},'sha256':{'type':'string','pattern':'^[0-9a-f]{64}$'}},
+        'required':['path','revision','type','size','device','identity','modified'],'additionalProperties':False}
+    tree_revision={'type':'string','pattern':'^t1-[0-9a-f]{64}$','minLength':67,'maxLength':67}
+    add('files.tree','Read a complete bounded directory manifest with file hashes, anchored identities and no omitted links or partial results',
+        {**file_path,'path':{'type':'string','minLength':1,'maxLength':4096},'revision':tree_revision,
+         'max_files':{'type':'integer','minimum':1,'maximum':128},'max_directories':{'type':'integer','minimum':0,'maximum':128},
+         'max_depth':{'type':'integer','minimum':0,'maximum':16},'max_bytes':{'type':'integer','minimum':1,'maximum':67108864},
+         'max_file_bytes':{'type':'integer','minimum':1,'maximum':33554432}},('path',),
+        output={'type':'object','properties':{'format':{'type':'string','enum':['mdo.file-tree.v1']},'revision':tree_revision,
+            'root':tree_metadata,'files':{'type':'array','maxItems':128,'items':{**tree_metadata,'required':[*tree_metadata['required'],'sha256']}},
+            'directories':{'type':'array','maxItems':128,'items':tree_metadata},
+            'file_count':u,'directory_count':u,'total_bytes':u},
+            'required':['format','revision','root','files','directories','file_count','directory_count','total_bytes'],'additionalProperties':False})
+    add('files.digest','Hash one stable regular file; complete SHA-256 with a bounded read and optional revision precondition',
+        {**file_path,'revision':s,'max_bytes':{'type':'integer','minimum':1,'maximum':67108864}},('path',))
+    add('files.publish','Publish verified staging bytes as a new hard link in the frozen workspace; no overwrite, source retained',
+        {'path':s,'source':s,'source_revision':s,'root_snapshot':s,'size':{'type':'integer','minimum':0,'maximum':67108864},'sha256':s},('path','source','source_revision','root_snapshot','size','sha256'))
+    add('files.receive.start','Receive an explicit EOF stream through operation.start; bounded verified staging in the frozen workspace',
+        {'handle':s,'root_snapshot':s,'destination':s,'size':{'type':'integer','minimum':0,'maximum':67108864},'sha256':s,
+         'timeout_ms':{'type':'integer','minimum':100,'maximum':600000},'idle_timeout_ms':{'type':'integer','minimum':100,'maximum':60000}},('handle','root_snapshot','size','sha256'))
+    add('files.receive.publish','Publish a ready receiver once through operation.start; persist destination and original publication identity',{'id':s,'path':s},('id','path'))
+    add('files.receive.reconcile','Explicitly verify existing target or staging bytes through operation.start; never create a destination',identity,('id',))
+    add('files.receive.get','Read an owned receiver receipt; no stream or file bytes',identity,('id',))
+    add('files.receive.list','List retained receivers only in the original task/workspace',output={'type':'array'})
+    add('files.receive.release','Discard only the identity-verified inactive staging entry; preserve unknown/replaced files',identity,('id',))
     add('files.search','Bounded recursive filename search; reports incomplete results and never follows directory links',
         {**file_path,'query':s,'hidden':b,'limit':{'type':'integer','minimum':1,'maximum':200}},('path','query'))
     add('files.create','Exclusively create an empty file. Existing entries, including links, are never replaced.',file_path,('path',))
@@ -63,11 +89,18 @@ def contracts(add):
         {**revision,'title':s,'kind':s,'value':{}},('revision','title','kind','value'))
     add('resource.remove','Remove an owned resource with a revision precondition',revision,('id','revision'))
     add('browser.capabilities','Ask an explicit client for its real browser backend features',{'client':s},('client',))
-    add('browser.create','Create an owned browser session; attaching it to a panel starts its native view',{'client':s,'key':s,'url':s,'title':s},('client',))
+    add('browser.create','Create an owned browser session; attaching it to a panel starts its native view',{'client':s,'key':s,'url':s,'title':s,'download_policy':{'type':'string','enum':['intercept','native']}},('client',))
+    add('browser.popup.admit','Admit one native popup under its exact opener; pending native tickets are ephemeral',{'opener':s,'client':s,'popup':s,'url':s},('opener','client','popup'))
+    add('browser.popup.settle','Acknowledge native adoption without recreating a released popup',{'id':s,'client':s,'popup':s},('id','client','popup'))
+    add('browser.workspace.lookup','Read the original persisted task directory; optional default preparation review is read-only and never creates a directory',{**identity,'prepare_default':b},('id',))
+    add('browser.workspace.adopt','Explicitly fill an empty legacy workspace after reviewing task, browser and physical-root revisions',
+        {**revision,'workspace':s,'root_snapshot':s,'session_revision':{'type':'integer','minimum':1},'confirmed':b},('id','revision','workspace','root_snapshot','session_revision','confirmed'))
+    add('browser.workspace.prepare','Explicitly prepare and pin only an unbound original task canonical default directory after read-only review',
+        {**revision,'workspace':s,'root_snapshot':s,'session_revision':{'type':'integer','minimum':1},'root_exists':b,'confirmed':b},('id','revision','workspace','session_revision','root_exists','confirmed'))
     add('browser.update','Persist the confirmed browser location with a revision precondition',{**revision,'url':s,'title':s},('id','revision'))
     add('browser.command','Queue one browser action for its bound UI. Read browser.result before repeating an uncertain effect.',
-        {'id':s,'command':{'type':'string','enum':['navigate','back','forward','reload','stop','state','wait','snapshot','screenshot','click','type','scroll','evaluate','takeover','release']},
-         'url':s,'selector':s,'text':s,'script':s,'x':{'type':'integer'},'y':{'type':'integer'},'timeout_ms':{'type':'integer','minimum':1,'maximum':60000},'control_token':s},('id','command'))
+        {'id':s,'command':{'type':'string','enum':['navigate','back','forward','reload','stop','state','wait','snapshot','observe','act','navigate_to','wait_for','dialog','chooser','upload','download','save_download','capture','screenshot','click','type','scroll','evaluate','takeover','release']},
+         'url':s,'selector':s,'text':s,'script':s,'x':{'type':'integer'},'y':{'type':'integer'},'timeout_ms':{'type':'integer','minimum':1,'maximum':60000},'control_token':s,'mode':{'type':'string','enum':['readable','interactive','viewport','full_page','element','options']},'limit':{'type':'integer','minimum':1,'maximum':400},'max_bytes':{'type':'integer','minimum':256,'maximum':262144},'dialog':s,'chooser':s,'download':s,'path':s,'root_snapshot':s,'transfer_timeout_ms':{'type':'integer','minimum':1000,'maximum':600000},'download_max_bytes':{'type':'integer','minimum':1,'maximum':67108864},'ticket':s,'confirmed':{'type':'boolean'},'files':{'type':'array','maxItems':16,'items':{'type':'object'}},'accept':{'type':'boolean'},'format':s,'max_width':{'type':'integer'},'max_height':{'type':'integer'},'op':s,'action':s,'until':s,'document':s,'target':{'type':'object'},'destination':{'type':'object'},'choices':{'type':'array','maxItems':32,'items':{'type':'object'}},'offset':{'type':'integer','minimum':0,'maximum':256},'key':s,'checked':{'type':'boolean'},'dx':{'type':'integer'},'dy':{'type':'integer'}},('id','command'))
 
 def generate(root):
     """Convenience APIs remain mechanically identical to the wire directory."""

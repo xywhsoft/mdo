@@ -38,7 +38,7 @@ export function createApplicationClient(context = () => ({}), transport = api) {
 export function createLocalApplicationClient(context = () => ({})) {
   const read = async response => {
     const envelope = await response.json();
-    if (!response.ok || !envelope.ok) throw Object.assign(new Error(envelope.error?.message || uiText("ui.application.localApplicationServiceUnavailable", {}, "本机应用服务不可用")), { code: envelope.error?.code, status: response.status });
+    if (!response.ok || !envelope.ok) throw Object.assign(new Error(envelope.error?.message || uiText("ui.application.localApplicationServiceUnavailable", {}, "本机应用服务不可用")), { code: envelope.error?.code, status: response.status, requestId: envelope.request_id || "", details: envelope.error?.details ?? null });
     return envelope;
   };
   return createApplicationClient(context, {
@@ -77,7 +77,9 @@ export async function applyApplicationAction(action, execute, storage, key) {
   // Keep screenshots and large snapshots out of the durable intent journal.
   // The server retains the actual ACK; after a page crash, report an explicit
   // ephemeral result instead of repeating the action to recreate its bytes.
-  const journalAck = JSON.stringify(ack).length > 16384
+  const privateBrowserResult = typeof action.action === "string" &&
+    (action.action.startsWith("browseruse.") || action.action === "workbench.browser");
+  const journalAck = privateBrowserResult || JSON.stringify(ack).length > 16384
     ? { success: ack.success, result: { ephemeral: true, message: "Read the server receipt; this result is not stored in the page journal" } } : ack;
   records[action.id] = { state: "done", ack: journalAck };
   storage.setItem(key, JSON.stringify(records));

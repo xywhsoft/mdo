@@ -48,7 +48,7 @@
     "xllm": {
       "version": "3.2.0",
       "source_commit": "a01b4a13f0c1b82e4a428236800230671bcbd6aa",
-      "production_tree_sha256": "c6432b4cf9cb001bf4ce23553ba45244c5b0fd5852e66bb37fbdd393371cfc32"
+      "production_tree_sha256": "dcffd71c39a57fc561227cb6dc08f5390fc9bce3436ef489eec467f4a7690dad"
     },
     "xllm-session": {
       "version": "3.0.0-dev",
@@ -75,9 +75,79 @@
   },
   "sdk_overlay": {
     "path": "tools/dependencies/xwork-mcp.patch",
-    "sha256": "a58a1e59cdc630ad69b3172af9d550fb9db7bf9b656f2212f738effb629397a9",
+    "sha256": "2b7a81a70b820db822144154b91adf79b22af2bf74f1c019679f5865e49643db",
     "base_commit": "e9a3551a5a533de34e2ca4291a8def71612fbf35",
-    "purpose": "Native host compatibility and mechanical agent-library export from pinned XRT mainline; no independent agent-library fork",
-    "xrt_single_header_sha256": "f99fe10ea60b5cb48217be91bc786620b683aae8a7af1b582329c210aa9da83f"
+    "purpose": "Pinned XRT agent exports, native browser automation, lifecycle/transfer guards and model media compatibility",
+    "xrt_single_header_sha256": "f99fe10ea60b5cb48217be91bc786620b683aae8a7af1b582329c210aa9da83f",
+    "native_sources": {
+      "src/webview/xs_browser.inc.hpp": {
+        "path": "tools/native/xs_browser.inc.hpp",
+        "sha256": "86f36928fc3f952ebf2b8ff10000db5c4376709cb6d30832fb8590a10d7fafbe"
+      },
+      "src/webview/xs_browser_automation.inc.hpp": {
+        "path": "tools/native/xs_browser_automation.inc.hpp",
+        "sha256": "561b0c1fd9f56f2452ca0ab6ceb87fef195d480f5c488e9f2b739f10858011e1"
+      },
+      "src/webview/xs_browser_capture.inc.hpp": {
+        "path": "tools/native/xs_browser_capture.inc.hpp",
+        "sha256": "0c124651185e2cbe01603ebc3c622645560e823b78fc8511fc1e8260313da7a4"
+      },
+      "src/webview/xs_browser_chooser.inc.hpp": {
+        "path": "tools/native/xs_browser_chooser.inc.hpp",
+        "sha256": "9fbf809bdba16be4977981b5bfe817fb53d50e62612702e65f6404977a3b0901"
+      },
+      "src/webview/xs_browser_download.inc.hpp": {
+        "path": "tools/native/xs_browser_download.inc.hpp",
+        "sha256": "65b69f86f846b1b64690e8122063627215b1c5cf794e780b1ec07104cd41a25d"
+      },
+      "src/webview/xs_browser_drag.inc.hpp": {
+        "path": "tools/native/xs_browser_drag.inc.hpp",
+        "sha256": "b9ff7d5b01e594472923fa1c0baef7cfbeb8a631389c95e1dc93f7b6f8a44292"
+      },
+      "src/webview/xs_browser_frames.inc.hpp": {
+        "path": "tools/native/xs_browser_frames.inc.hpp",
+        "sha256": "8efec273bb75b1c7e578fabcdb082eadd547e33e4f03fa07ec31833e02dd6ebb"
+      },
+      "src/webview/xs_browser_navigation.inc.hpp": {
+        "path": "tools/native/xs_browser_navigation.inc.hpp",
+        "sha256": "b2e80051b20690c96dae4dab42ef5d13d89413a8d410819fd017437e926ca062"
+      },
+      "src/webview/xs_browser_popups.inc.hpp": {
+        "path": "tools/native/xs_browser_popups.inc.hpp",
+        "sha256": "febbdbea9f1ef55a026ccd9105e2d55d1481c12e3ffaeebc30381c73c220471d"
+      },
+      "src/webview/xs_browser_upload.inc.hpp": {
+        "path": "tools/native/xs_browser_upload.inc.hpp",
+        "sha256": "bf5612482cc690f7b7fa0e2f11dda1c35e69b7b5de0df7be337ea6fb7c7205b8"
+      },
+      "src/webview/xs_browser_upload_assign.inc.hpp": {
+        "path": "tools/native/xs_browser_upload_assign.inc.hpp",
+        "sha256": "2ce653a7c15d371ed5d897616e5843255cf80b5bc17c2daffa58d3fbc0c66cea"
+      },
+      "src/webview/xs_browser_worlds.inc.hpp": {
+        "path": "tools/native/xs_browser_worlds.inc.hpp",
+        "sha256": "1a9741681d11e519ecf0e9c20b2ddb64dffbfaff3f880223e20aecefec81ccb7"
+      },
+      "android/native/MdoBrowserCdpJni.inc.c": {
+        "path": "tools/native/android/MdoBrowserCdpJni.inc.c",
+        "sha256": "fbf7bfc02b0fd8d737fb82bef86859c0e285170420b504473863cfb7c0ae6e35"
+      },
+      "android/native/MdoBrowserCdpSocket.c": {
+        "path": "tools/native/android/MdoBrowserCdpSocket.c",
+        "sha256": "8c6032221f1f5505d068139dc98615c0e7853c2f7745fd36e1162f3b496f22f0"
+      },
+      "android/native/MdoBrowserCdpSocket.h": {
+        "path": "tools/native/android/MdoBrowserCdpSocket.h",
+        "sha256": "0f2e5003d22c2f80e30923ba98e428e67ad8066ac47f5f5237ac67b8c67bde7f"
+      },
+      "android/native/MdoBrowserCdpWebSocket.c": {
+        "path": "tools/native/android/MdoBrowserCdpWebSocket.c",
+        "sha256": "f0f55cd408e70959ea015a925c07407584b5917e35f293a78c21359b562bb850"
+      },
+      "android/native/MdoBrowserCdpWebSocket.h": {
+        "path": "tools/native/android/MdoBrowserCdpWebSocket.h",
+        "sha256": "1f6e9aa7ca8fd2b6df0c42f0a72a6a4b5a60683df9bbfd083e4a95ed595c954b"
+      }
+    }
   }
 }

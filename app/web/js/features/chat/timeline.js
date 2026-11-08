@@ -14,6 +14,7 @@ import { artifactPreviewNode } from "./artifact-preview.js";
 
 import { labelImageName } from "./image-names.js";
 import { toolCallSummary, toolSectionNode } from "./tool-content.js";
+import { interruptedToolNotice } from "./tool-recovery.js";
 import { conversationGroups, conversationProcessSummary } from "./conversation-history.js";
 import { insertConversationNotices } from "./conversation-notices.js";
 import { createHistoryWindow } from "./history-window.js";
@@ -362,6 +363,8 @@ export function eventsToTimeline(events, historyLost = false,
           time: event.time,
           meta: event.tool_call_id || "",
         });
+        const interrupted=interruptedToolNotice(event);
+        if(interrupted)Object.assign(item,{state:"failed",text:interrupted,outputText:interrupted,recoveryState:"interrupted"});
         if (event.tool_call_id)
           tools.set(`${runKey}:${epoch}:${event.tool_call_id}`, item);
         if (durableKey) resumableTools.set(durableKey, item);
@@ -372,6 +375,7 @@ export function eventsToTimeline(events, historyLost = false,
         const tool = event.tool_call_id
           ? tools.get(`${runKey}:${epoch}:${event.tool_call_id}`) : null;
         if (tool) {
+          delete tool.recoveryState;
           tool.outputText = event.text || (event.success
             ? t("timeline.executionDone", {}, "执行完成")
             : t("timeline.executionFailed", {}, "执行失败"));

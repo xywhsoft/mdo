@@ -14,6 +14,8 @@
 /* Release returned tickets with MdoAccountSecretValueRelease. */
 xvalue* MdoRemoteServiceCall(cstr Path, cstr Method, const xvalue* Body,
     const MdoAccountLease* Lease, uint16* Status);
+xvalue* MdoRemoteServiceCallDetailed(cstr Path, cstr Method, const xvalue* Body,
+    const MdoAccountLease* Lease, uint16* Status, MdoAccountTransport* Transport);
 MdoRemoteSocket* MdoRemoteServiceConnect(MdoRemoteNet* Net,
     const xvalue* Ticket, const MdoAccountLease* Lease, uint16* Status);
 

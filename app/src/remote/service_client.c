@@ -4,6 +4,11 @@
 xvalue* MdoRemoteServiceCall(cstr Path, cstr Method, const xvalue* Body,
     const MdoAccountLease* Lease, uint16* Status)
 {
+    return MdoRemoteServiceCallDetailed(Path,Method,Body,Lease,Status,NULL);
+}
+xvalue* MdoRemoteServiceCallDetailed(cstr Path, cstr Method, const xvalue* Body,
+    const MdoAccountLease* Lease, uint16* Status, MdoAccountTransport* Transport)
+{
     if (Status) *Status = 0u;
     if (!Path || !Method) return NULL;
     bool allowed = !strcmp(Path,"/api/v1/devices") && !strcmp(Method,"GET") && !Body;
@@ -11,7 +16,7 @@ xvalue* MdoRemoteServiceCall(cstr Path, cstr Method, const xvalue* Body,
         !strcmp(Path,"/api/v1/devices/register") || !strcmp(Path,"/api/v1/devices/revoke") ||
         !strcmp(Path,"/api/v1/devices/remove") || !strcmp(Path,"/api/v1/devices/ticket");
     if (!allowed) return NULL;
-    xvalue* value = MdoAccountServiceJson(Path,Method,Body,Lease,Status);
+    xvalue* value = MdoAccountServiceJsonDetailed(Path,Method,Body,Lease,Status,Transport);
     if (Lease && xrtCancelRequested(Lease->Cancel)) {
         MdoAccountSecretValueRelease(value); if (Status) *Status = 0u; return NULL;
     }

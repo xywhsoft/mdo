@@ -6,6 +6,8 @@ import { toast } from "../../utils/dom.js";
 import { createPanelManager } from "../workbench/panel-manager.js";
 import { openLayer } from "../../components/layers.js";
 import { createPluginLoader } from "./plugin-loader.js";
+import { liveConnection } from "../../api/live.js";
+import { createUiPollPump } from "./ui-poll-pump.js";
 import { createConversationContributions } from "./conversation-contributions.js";
 import { createAgentLifecycle } from "./agent-lifecycle.js";
 import { registerSettingsPage } from "../settings/settings-page-registry.js";
@@ -23,7 +25,7 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
   const panels = new Map(), menus = new Map(), renderers = new Map(), actions = new Map(), openDialogs = new Map(), disposers = [];
   const shell = document.querySelector("#app-shell");
   const workbench = shell ? createPanelManager({ shell, api, layoutApi: isRemoteTarget() ? localApi : api, navigation, clientId, addContext, renderers }) : null;
-  let stopped = false, timer = null, registered = false, registeredScope = "";
+  let stopped = false, registered = false, registeredScope = "";
   const agentLifecycle = createAgentLifecycle(error => toast(error.message, "error"));
   const agentRefreshers = new Set(); let selectedAgentContext = null;
   const selectAgent = context => {
@@ -236,8 +238,14 @@ export function createApplicationUi({ navigation, executeActions, canCall = () =
         await api.call("client.ack", { client: clientId, id: action.id, ...ack });
       }
     } catch { registered = false; }
-    finally { if (!stopped) timer = setTimeout(poll, document.hidden ? 10000 : 1500); }
   };
-  void poll();
-  return Object.freeze({ sdk, selectAgent, beforeSelectAgent: (id, signal) => agentLifecycle.beforeSelect(id, signal), canLeave: () => workbench?.canLeave() ?? true, destroy() { if (stopped) return; stopped = true; clearTimeout(timer); clearInterval(leaseTimer); workbench?.destroy(); for (const dispose of disposers.reverse()) { try { Promise.resolve(dispose()).catch(() => {}); } catch { /* Finish other cleanup. */ } } } });
+  const pump = createUiPollPump({ poll, delay: () => document.hidden ? 10000 : 1500 });
+  const stopHints = liveConnection.subscribe(event => {
+    if (event.type === "ui_pending" || (event.type === "status" && event.connected)) pump.wake();
+  });
+  document.addEventListener("visibilitychange", pump.wake);
+  window.addEventListener("focus", pump.wake);
+  pump.wake();
+
+  return Object.freeze({ sdk, revealConversation: () => workbench?.revealConversation() ?? false, selectAgent, beforeSelectAgent: (id, signal) => agentLifecycle.beforeSelect(id, signal), canLeave: () => workbench?.canLeave() ?? true, destroy() { if (stopped) return; stopped = true; pump.stop(); stopHints(); document.removeEventListener("visibilitychange", pump.wake); window.removeEventListener("focus", pump.wake); clearInterval(leaseTimer); workbench?.destroy(); for (const dispose of disposers.reverse()) { try { Promise.resolve(dispose()).catch(() => {}); } catch { /* Finish other cleanup. */ } } } });
 }

@@ -208,6 +208,8 @@ void MdoApprovalScopeRelease(MdoApprovalScope* Scope)
         xrtFree(Scope);
     }
 }
+#include "browser_use_approval_scope.inc.c"
+
 bool MdoApprovalScopeInitialize(MdoApprovalScope* Scope, bool FullAccess)
 {
     if ( !Scope || !g_MdoApprovals.Lock || !xrtMutexLock(g_MdoApprovals.Lock) ) return false;
@@ -260,6 +262,10 @@ xwork_permission_decision MdoApprovalOnPermission(void* UserData,
         goto unlock;
     }
     if ( !MdoApprovalCapture(&Captured, Request) ) goto unlock;
+    if ( Scope != NULL ) {
+        memcpy(Captured.ProjectId, Scope->ProjectId, sizeof(Captured.ProjectId));
+        memcpy(Captured.SessionId, Scope->SessionId, sizeof(Captured.SessionId));
+    }
     Index = MdoApprovalFreeLocked();
     if ( Index == SIZE_MAX ) goto unlock;
     Entry = &g_MdoApprovals.Entries[Index];

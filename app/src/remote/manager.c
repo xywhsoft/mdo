@@ -5,6 +5,7 @@
 #include "../../include/mdo/remote.h"
 #include "../../include/mdo/version.h"
 #include "service_client.h"
+#include "browser_use_job_diagnostic.inc.c"
 #include "bridge.h"
 #include "lan.h"
 #include "direct_rudp.inc.c"
@@ -39,7 +40,9 @@ typedef struct MdoRemoteManager {
     cstr JobState;
     cstr Stage;
     cstr Error;
-    uint16 Status;
+    uint16 Status, JobStatus;
+    cstr JobError;
+    MdoAccountTransport JobTransport;
     bool Stopping, Busy, Started;
 } MdoRemoteManager;
 
@@ -185,6 +188,8 @@ bool MdoRemoteRequest(MdoRemoteAction Action, cstr Argument)
         strcpy(g_MdoRemote.Pending.Argument,Argument ? Argument : "");
         strcpy(g_MdoRemote.JobId,g_MdoRemote.Pending.Id);
         g_MdoRemote.JobState = "queued";
+        g_MdoRemote.JobError = ""; g_MdoRemote.JobStatus = 0u;
+        memset(&g_MdoRemote.JobTransport,0,sizeof(g_MdoRemote.JobTransport));
         g_MdoRemote.Error = ""; g_MdoRemote.Status = 0u;
         if (Action == MDO_REMOTE_DISABLE) {
             xrtCancelRequest(g_MdoRemote.ServiceCancel);
@@ -217,7 +222,10 @@ xvalue* MdoRemoteSnapshot(void)
         MdoAccountSetUInt(value,"status",g_MdoRemote.Status) &&
         MdoAccountSetUInt(value,"revision",g_MdoRemote.Revision) &&
         MdoAccountSetString(job,"id",g_MdoRemote.JobId) &&
-        MdoAccountSetString(job,"state",g_MdoRemote.JobState);
+        MdoAccountSetString(job,"state",g_MdoRemote.JobState) &&
+        MdoAccountSetString(job,"error",g_MdoRemote.JobError) &&
+        MdoAccountSetUInt(job,"status",g_MdoRemote.JobStatus) &&
+        xrtValueObjectSetNew(job,XRT_STR_LITERAL("transport"),MdoRemoteJobDiagnostic(&g_MdoRemote.JobTransport));
     if (ok) ok = xrtValueObjectSetNew(value,XRT_STR_LITERAL("job"),job);
     else xrtValueRelease(job);
     xvalue* devices = signed_in && account.MemberId == g_MdoRemote.DevicesMember && g_MdoRemote.Devices ?
@@ -261,6 +269,7 @@ static void MdoRemoteRunJob(const MdoRemoteJob* Job, xcancel* Cancel)
 {
     MdoAccountLease lease = {0}; MdoRemoteIdentity identity = {0};
     uint16 status = 0u; cstr error = "remote_login_required";
+    MdoAccountTransport transport = {0}; transport.Phase = "account";
     xvalue *body = NULL, *result = NULL;
     bool ok = Job->Action == MDO_REMOTE_DISABLE ? MdoAccountAcquireService(Cancel,&lease) :
         MdoAccountAcquireServiceWait(Cancel,20000u,&lease);
@@ -273,7 +282,7 @@ static void MdoRemoteRunJob(const MdoRemoteJob* Job, xcancel* Cancel)
     }
     error = "remote_service_unavailable";
     if (Job->Action == MDO_REMOTE_LIST) {
-        result = MdoRemoteServiceCall("/api/v1/devices","GET",NULL,&lease,&status);
+        result = MdoRemoteServiceCallDetailed("/api/v1/devices","GET",NULL,&lease,&status,&transport);
         ok = status == 200u && result && xrtValueType(xrtValueObjectGet(result,XRT_STR_LITERAL("devices"))) == XVALUE_ARRAY;
     } else if (Job->Action == MDO_REMOTE_ENABLE) {
         xrtMutexLock(g_MdoRemote.Lock);
@@ -284,7 +293,7 @@ static void MdoRemoteRunJob(const MdoRemoteJob* Job, xcancel* Cancel)
         }
         body = MdoRemoteRegisterBody(&identity,Job->Argument);
         if (!body) { ok = false; goto done; }
-        result = MdoRemoteServiceCall("/api/v1/devices/register","POST",body,&lease,&status);
+        result = MdoRemoteServiceCallDetailed("/api/v1/devices/register","POST",body,&lease,&status,&transport);
         cstr id = MdoAccountText(result,"device_id",32u);
         ok = result && id && !strcmp(id,identity.Id) && (status == 200u || status == 201u);
     } else {
@@ -304,7 +313,7 @@ static void MdoRemoteRunJob(const MdoRemoteJob* Job, xcancel* Cancel)
                 MdoAccountSetString(body,"mode",Job->Action == MDO_REMOTE_VIEW ? "view" : "control");
         }
         if (!ok) goto done;
-        result = MdoRemoteServiceCall(path,"POST",body,&lease,&status);
+        result = MdoRemoteServiceCallDetailed(path,"POST",body,&lease,&status,&transport);
         ok = status == 200u && (Job->Action < MDO_REMOTE_CONTROL || result);
     }
 done:
@@ -336,12 +345,15 @@ done:
             MdoRemoteOffLocked("disabled","");
         }
         g_MdoRemote.JobState = ok ? "done" : "failed";
+        g_MdoRemote.JobError = ok ? "" : error; g_MdoRemote.JobStatus = status;
+        g_MdoRemote.JobTransport = transport;
         if (!(ok && Job->Action == MDO_REMOTE_DISABLE &&
             !strcmp(g_MdoRemote.Error,"remote_storage_failed"))) g_MdoRemote.Error = ok ? "" : error;
         g_MdoRemote.Status = status;
         MdoRemoteChangedLocked();
     } else if (g_MdoRemote.Serial == Job->Serial && !g_MdoRemote.Stopping) {
         g_MdoRemote.JobState = "failed"; g_MdoRemote.Error = "remote_account_changed";
+        g_MdoRemote.JobError = "remote_account_changed"; g_MdoRemote.JobStatus = 0u;
         MdoRemoteChangedLocked();
     }
     xrtMutexUnlock(g_MdoRemote.Lock);
@@ -367,6 +379,7 @@ static int32 MdoRemoteServiceWorker(void* Data)
             xrtMutexLock(g_MdoRemote.Lock);
             if (g_MdoRemote.Serial == job.Serial) {
                 g_MdoRemote.JobState = "failed"; g_MdoRemote.Error = "remote_resources_unavailable";
+                g_MdoRemote.JobError = "remote_resources_unavailable"; g_MdoRemote.JobStatus = 0u;
             }
             xrtMutexUnlock(g_MdoRemote.Lock);
         }
