@@ -42,10 +42,10 @@ class Model(BaseHTTPRequestHandler):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);g=p.add_mutually_exclusive_group(required=True)
-    g.add_argument('--host',type=Path);g.add_argument('--packed',type=Path);p.add_argument('--record',type=Path);p.add_argument('--case',action='append');a=p.parse_args()
+    g.add_argument('--host',type=Path);g.add_argument('--packed',type=Path);p.add_argument('--record',type=Path);p.add_argument('--case',action='append');p.add_argument('--work-root',type=Path,default=ROOT/'.build');a=p.parse_args()
     server=ThreadingHTTPServer(('127.0.0.1',0),Model);threading.Thread(target=server.serve_forever,daemon=True).start();records=[]
     try:
-      with tempfile.TemporaryDirectory(dir=ROOT/'.build',prefix='compaction-governance-') as raw:
+      with tempfile.TemporaryDirectory(dir=a.work_root,prefix='compaction-governance-') as raw:
         base=Path(raw);home=base/'home';workspace=base/'workspace';workspace.mkdir();port=free_port()
         config=base/'xs.json' if a.packed else ROOT/'app'/('.context-qa-'+uuid.uuid4().hex+'.json')
         config.write_text(json.dumps({'engine':{'workers':2},'services':[{'enabled':True,'class':'http','name':'context-qa','ip':'127.0.0.1','port':port,'host_default':{'enabled':True,'name':'mdo','path':'web','devlang':'c','devfile':'generated/mdo_unity.c'}}]}),encoding='utf-8')
