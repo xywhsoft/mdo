@@ -96,7 +96,7 @@ const reasons = {
 export function promptContributionDetails(source) {
   const list = element("div", { className: "agent-plugin-prompt-details" });
   for (const item of source.items || []) list.append(element("details", {}, [
-    element("summary", { text: `${item.alias || item.plugin} · ${item.title || item.id} · ${reasons[item.reason] || item.reason || ""}${item.override ? " · Agent 已改写" : ""}` }),
+    element("summary", { text: `${item.alias || item.plugin} · ${item.title || item.id} · ${t(`ui.pluginPrompts.reason.${item.reason}`, {}, reasons[item.reason] || item.reason || "")}${item.override ? " · " + t("ui.pluginPrompts.overridden", {}, "Agent 已改写") : ""}` }),
     element("p", { text: `${item.key} · ${item.version} · ${item.bytes} B` }),
     element("code", { text: `${item.revision} / ${item.effective_hash || item.hash}` }),
     element("pre", { className: "store-source", text: item.text }),
