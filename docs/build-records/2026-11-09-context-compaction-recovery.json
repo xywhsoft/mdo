@@ -1,0 +1,91 @@
+{
+  "date": "2026-11-09",
+  "version": "0.9.5",
+  "published": false,
+  "online_service_changed": false,
+  "live_model_calls": 0,
+  "fixes": [
+    "Context/413/GLM1261 rejection returns to native context governance; committed tools are not replayed.",
+    "Summary request input budget includes framing and correction; rejected input is strictly reduced at safe pair-complete boundaries.",
+    "Structured text and attachment references survive compaction without binary payloads.",
+    "Anthropic cached input is included once; pre-fix checkpoint usage anchors are invalidated by profile identity.",
+    "Summary retry/wait notices share the existing native progress sink and cancellation path."
+  ],
+  "extra_regressions": [
+    "Authoritative usage pressure can compact below the lexical keep-recent target.",
+    "Retry count one allows two rejected attempts, not three; successful stages reset their failure streak.",
+    "New summary budget API is exported to the TCC SDK."
+  ],
+  "checks": [
+    {
+      "name": "usage",
+      "passed": true,
+      "seconds": 0.19
+    },
+    {
+      "name": "governance-native",
+      "passed": true,
+      "seconds": 25.51
+    },
+    {
+      "name": "governance-packed",
+      "passed": true,
+      "seconds": 27.7
+    },
+    {
+      "name": "manual-compact",
+      "passed": true,
+      "seconds": 14.8
+    },
+    {
+      "name": "compaction-persistence",
+      "passed": true,
+      "seconds": 11.73
+    },
+    {
+      "name": "compaction-failure",
+      "passed": true,
+      "seconds": 16.47
+    },
+    {
+      "name": "model-retry",
+      "passed": true,
+      "seconds": 12.98
+    },
+    {
+      "name": "model-retry-progress",
+      "passed": true,
+      "seconds": 2.77
+    },
+    {
+      "name": "model-errors",
+      "passed": true,
+      "seconds": 2.3
+    }
+  ],
+  "frontend_tests": {
+    "passed": 17,
+    "failed": 0
+  },
+  "android_native_compile": {
+    "passed": true,
+    "device_tested": false,
+    "sha256": "7afd399d4cbe83b93152939ec65b7fd6365da1647ac6db6d766d7ad0f10fe40e"
+  },
+  "linux_runtime_tested": false,
+  "sources": {
+    "mdo_base": "29f9ba85b9f74dacd9ea7b36058eeeee4db826cb",
+    "xrt_agent_source": "e3c3ecb30f8570f138cf5a9d429ccf0e602215d0",
+    "native_core": "f49b186de53221d67babe29591fc71e2e0672e13",
+    "sdk_overlay_sha256": "ffc291267cf7ce1f03c8ad6f460deeb6863c721964943e852050c06e0630bcbf",
+    "application_source_sha256": "a5e30c16e06b3c144d7632ee6fca015adc5d422005ee52878f051a7c0bf50154",
+    "mdo_fix_commit": "a74ae80ad46dd816e8de00ac440bd24df9969025"
+  },
+  "artifact": {
+    "path": ".build/context-audit-20261109/mdo.exe",
+    "bytes": 7722335,
+    "sha256": "87d57db416fceff8c01151a04fe0a5b2fb2d958f7634f46bc48f2eaf7a212f9d"
+  },
+  "evidence_directory": ".build/context-audit-20261109",
+  "preserved_preexisting_config_sha256": "418005fc8373174e2ab08d2ef95a6edb61106034133fb4b6610a78f0dd4f12b1"
+}
