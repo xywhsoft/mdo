@@ -50,6 +50,7 @@ static bool MdoPromptValid(const xvalue* P,char* Error,size_t Capacity){
     int64 Priority=100;if(MdoPromptGet(P,"priority")&&(!MdoExtensionNumber(P,"priority",&Priority)||Priority<0||Priority>10000))goto failed;
     return true;
 failed:
-    if(Error&&Capacity)snprintf(Error,Capacity,"%s",Why);return false;
+    if(Error&&Capacity)snprintf(Error,Capacity,"%s",Why);
+    return false;
 }
 #endif

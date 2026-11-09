@@ -18,7 +18,8 @@ static bool WbPopupUrl(cstr Url){
 }
 static xvalue* WbPopupRecord(const xvalue* Row){
     xvalue* Out=xrtValueClone(Row);const xvalue* Runtime=SdkGet(Workbench.Runtime,SdkField(Row,"id"));
-    if(Runtime)xrtValueObjectSet(Out,XRT_STR_LITERAL("runtime"),Runtime);return Out;
+    if(Runtime)xrtValueObjectSet(Out,XRT_STR_LITERAL("runtime"),Runtime);
+    return Out;
 }
 static bool WbPopupCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
     cstr Request=SdkField(P,"popup"),Client=SdkField(P,"client"),Opener=SdkField(P,"opener"),Id=SdkField(P,"id"),Url=SdkField(P,"url");

@@ -52,7 +52,8 @@ static bool BuTreeFileHash(const mdo_sdk_context_v1* C,BuTree* T,BuTreeFile* F,m
         Total+=Read;if(!xrtSha256Update(&Sha,T->Buffer,Read))return false;
     }
     if(Total!=F->Info.Size)return BuTreeConflict(E);
-    if(!xrtSha256Final(&Sha,Digest))return false;BuTreeHex(Digest,F->Hash);return true;
+    if(!xrtSha256Final(&Sha,Digest))return false;
+    BuTreeHex(Digest,F->Hash);return true;
 }
 static bool BuTreeUnique(const BuTree* T,unsigned Parent,cstr Name){
     for(unsigned I=1;I<T->DirectoryCount;I++)if(T->Directories[I].Parent==Parent&&!strcmp(T->Directories[I].Name,Name))return false;
@@ -190,7 +191,8 @@ static bool BuFileTree(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,md
     }
     char* Native=NULL;if(!BuFileSnapshotPath(Path,&Native,E)){xrtFree(Path);return false;}if(Native){xrtFree(Path);Path=Native;}
     BuTree* T=xrtCalloc(1,sizeof(*T));xvalue* Result=NULL;bool Ok=false;xfileinfo Named={0},Opened={0};
-    if(!T)goto done;T->MaxFiles=(unsigned)Files;T->MaxDirectories=(unsigned)Directories;T->MaxDepth=(unsigned)Depth;T->MaxBytes=Bytes;T->MaxFileBytes=FileBytes;
+    if(!T)goto done;
+    T->MaxFiles=(unsigned)Files;T->MaxDirectories=(unsigned)Directories;T->MaxDepth=(unsigned)Depth;T->MaxBytes=Bytes;T->MaxFileBytes=FileBytes;
     if(!BuFileContinue(C,E))goto done;
     if(!xrtPathStat(Path,false,&Named)){SdkNativeFailure(E,"file_tree");goto done;}
     if(Named.Type!=XFILE_TYPE_DIRECTORY){MdoApplicationError(E,"sdk_tree_type","Tree snapshots require a real directory, not a file or link","file_tree",422,false);goto done;}
@@ -209,7 +211,8 @@ done:
         xrtSecureZero(T->Buffer,sizeof(T->Buffer));xrtFree(T);
     }
     xrtFree(Path);if(Ok){*R=Result;return true;}xrtValueRelease(Result);
-    if(!E||!E->Code[0])MdoApplicationError(E,"sdk_tree_failed","Cannot produce the complete bounded directory manifest","file_tree",503,false);return false;
+    if(!E||!E->Code[0])MdoApplicationError(E,"sdk_tree_failed","Cannot produce the complete bounded directory manifest","file_tree",503,false);
+    return false;
 invalid_revision:
     return MdoApplicationError(E,"sdk_arguments_invalid","Tree revision must be t1- followed by 64 lowercase hexadecimal digits","file_tree",422,false);
 }

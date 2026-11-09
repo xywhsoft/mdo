@@ -2049,7 +2049,8 @@ static MdoModuleCatalog* MdoModulesBuildCandidate(uint64 Generation,MdoModuleDia
         /* A retiring frontend may publish its replacement when the last view
          * reader leaves. Never publish a candidate built from that old view. */
         char Hash[65];bool Same=MdoModulesPromptSourcesHash(Hash)&&!strcmp(Hash,Result->PromptSourcesHash);
-        if(Same)return Result;MdoModuleCatalogRelease(Result);
+        if(Same)return Result;
+        MdoModuleCatalogRelease(Result);
     }
     MdoModulesDiagnosticAdd(Diagnostics,MDO_MODULE_DIAGNOSTIC_PUBLISH,NULL,NULL,"Plugin instructions changed during catalog preparation; retry the update");return NULL;
 }

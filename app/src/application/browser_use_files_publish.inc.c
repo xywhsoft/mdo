@@ -5,7 +5,8 @@ static bool BuPublishNumber(const char** Cursor,uint64* Value){
     const char* P=*Cursor;uint64 N=0;if(*P<'0'||*P>'9')return false;
     if(*P=='0'&&P[1]>='0'&&P[1]<='9')return false;
     while(*P>='0'&&*P<='9'){uint64 Digit=(uint64)(*P-'0');
-        if(N>(UINT64_MAX-Digit)/10)return false;N=N*10+Digit;P++;}
+        if(N>(UINT64_MAX-Digit)/10)return false;
+        N=N*10+Digit;P++;}
     *Cursor=P;*Value=N;return true;
 }
 static bool BuPublishRootMatches(cstr Revision,const xfileinfo* Root){

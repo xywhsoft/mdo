@@ -67,9 +67,11 @@ static bool BuReceiveVerify(const mdo_sdk_context_v1* C,xroot Root,const xvalue*
     Bytes=xrtMalloc(65536);if(!Bytes)goto done;
     xsha256 Sha;uint8 Digest[32];char Hex[65];xrtSha256Init(&Sha);
     for(;;){
-        if(!BuFileContinue(C,E))goto done;size_t N=0;
+        if(!BuFileContinue(C,E))goto done;
+        size_t N=0;
         if(!xrtRead(File,Bytes,65536,&N)){SdkNativeFailure(E,"file_receive_review");goto done;}
-        if(!N)break;if(N>Size-Total){MdoApplicationError(E,"sdk_file_receive_conflict","The retained file grew during inspection","file_receive_review",412,false);goto done;}
+        if(!N)break;
+        if(N>Size-Total){MdoApplicationError(E,"sdk_file_receive_conflict","The retained file grew during inspection","file_receive_review",412,false);goto done;}
         Total+=N;if(!xrtSha256Update(&Sha,Bytes,N))goto done;
     }
     if(!xrtFileStat(File,&After)||!xrtRootStat(Root,Name,false,&Current)){SdkNativeFailure(E,"file_receive_review");goto done;}

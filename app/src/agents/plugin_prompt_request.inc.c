@@ -4,7 +4,8 @@ typedef struct MdoAgentPluginMessage {char* Text;xllm_role Role;bool Added;} Mdo
  * or removes it owns that request; never reconstruct it by parsing prose. */
 static bool MdoAgentsPluginMessageWrite(xllm_request* Request,size_t Replace,cstr Text,xllm_role Role){
     xllm_request Copy;if(!MdoAgentsRequestCopy(Request,&Copy)){xllmRequestUnit(&Copy);return false;}
-    for(size_t I=0;I<Copy.iMessageCount;I++)xllmMessageUnit(&Copy.pMessages[I]);Copy.iMessageCount=0;
+    for(size_t I=0;I<Copy.iMessageCount;I++)xllmMessageUnit(&Copy.pMessages[I]);
+    Copy.iMessageCount=0;
     bool Added=false,Ok=true;
     for(size_t I=0;Ok&&I<Request->iMessageCount;I++){
         bool Insert=Replace!=SIZE_MAX?I==Replace:(!Added&&Request->pMessages[I].eRole!=XLLM_ROLE_SYSTEM);

@@ -106,7 +106,8 @@ static bool MdoAgentsPluginSource(MdoAgentOwner* Owner,MdoAgentInstance* Instanc
     /* This source renders whole fragments; the generic byte truncator is not
      * used. Its content is immutable in the pinned registry, selection is not. */
     xvalue* Options=Spec&&xrtValueType(Spec)==XVALUE_OBJECT?xrtValueClone(Spec):xrtValueObject();
-    if(!Options)return false;xrtValueObjectRemove(Options,XRT_STR_LITERAL("max_bytes"));
+    if(!Options)return false;
+    xrtValueObjectRemove(Options,XRT_STR_LITERAL("max_bytes"));
     bool Ok=MdoAgentsPlanSource(Plan,"plugins.instructions",xrtStrDup(""),Options,1300,MdoAgentsSourceEnabled(Spec,true),"plugins.instructions",Error);xrtValueRelease(Options);
     xvalue* Group=Ok?MdoAgentsPluginGroup(Plan):NULL; xvalue* Items=Registry?xrtValueClone(Registry):xrtValueArray();
     xvalue* Scope=xrtValueObject();

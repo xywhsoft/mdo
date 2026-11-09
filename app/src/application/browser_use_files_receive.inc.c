@@ -20,11 +20,13 @@ static void BuReceivePaths(cstr Id,char Ledger[128],char Source[64]){
     snprintf(Source,64,".mdo-receive-%s.part",Id+4);
 }
 static bool BuReceiveActive(cstr Id){
-    for(size_t I=0;I<BU_RECEIVE_LIMIT;I++)if(!strcmp(Id,BuReceivers.Active[I]))return true;return false;
+    for(size_t I=0;I<BU_RECEIVE_LIMIT;I++)if(!strcmp(Id,BuReceivers.Active[I]))return true;
+    return false;
 }
 static bool BuReceiveHash(cstr Hash){
     if(!Hash||strlen(Hash)!=64)return false;
-    for(size_t I=0;I<64;I++)if(!((Hash[I]>='0'&&Hash[I]<='9')||(Hash[I]>='a'&&Hash[I]<='f')))return false;return true;
+    for(size_t I=0;I<64;I++)if(!((Hash[I]>='0'&&Hash[I]<='9')||(Hash[I]>='a'&&Hash[I]<='f')))return false;
+    return true;
 }
 static bool BuReceiveRetained(cstr State){return State&&(!strcmp(State,"ready")||!strcmp(State,"publishing")||!strcmp(State,"published"));}
 static bool BuReceiveSave(const xvalue* Row){
@@ -104,19 +106,22 @@ static xvalue* BuReceiveInventory(bool Reap,mdo_error_v1* E){
         bool Active=BuReceiveActive(Id),Ready=BuReceiveRetained(SdkField(Row,"state"));
         if(Reap&&!Active&&!Ready){
             xroot Root=xrtRootOpen(SdkField(Row,"workspace"));bool Removed=Root&&BuReceiveDrop(Root,Row);
-            if(Root)xrtRootClose(Root);if(Removed){xrtValueRelease(Row);continue;}
+            if(Root)xrtRootClose(Root);
+            if(Removed){xrtValueRelease(Row);continue;}
         }
         if(!xrtValueArrayAppendNew(Items,Row))goto invalid;
     }
     if(Next==XDIR_NEXT_ERROR)goto invalid;
     if(!xrtDirClose(Directory)){Directory=NULL;goto invalid;}return Items;
 invalid:
-    if(Directory)xrtDirClose(Directory);xrtValueRelease(Items);
+    if(Directory)xrtDirClose(Directory);
+    xrtValueRelease(Items);
     MdoApplicationError(E,"sdk_file_receive_inventory","Cannot verify the bounded receiver inventory; unknown entries were preserved","file_receive",409,false);return NULL;
 }
 static bool BuReceiveScope(const mdo_sdk_context_v1* C,const xvalue* Row,mdo_error_v1* E){
     if(!BuStreamScopeMatches(C,SdkGet(Row,"scope"))||!C->Workspace||strcmp(C->Workspace,SdkField(Row,"workspace")))
-        return MdoApplicationError(E,"context_mismatch","File receiver belongs to another task or original workspace","file_receive",409,false);return true;
+        return MdoApplicationError(E,"context_mismatch","File receiver belongs to another task or original workspace","file_receive",409,false);
+    return true;
 }
 static xvalue* BuReceiveInfo(const xvalue* Row){
     xvalue* Info=xrtValueClone(Row);if(!Info)return NULL;
@@ -175,7 +180,8 @@ static bool BuFileReceive(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R
         MdoApplicationError(E,"sdk_workspace_conflict","Workspace changed since selection; no receiver was created","file_receive",412,false);goto done;
     }
     Query=xrtValueObject();if(!Query||!SdkPut(Query,"handle",Handle)||!SdkPutUInt(Query,"limit",16384))goto done;
-    if(MdoApplicationCall(C,"stream.stat",Query,&Reply,E)!=MDO_RESULT_OK)goto done;xrtValueRelease(Reply);Reply=NULL;
+    if(MdoApplicationCall(C,"stream.stat",Query,&Reply,E)!=MDO_RESULT_OK)goto done;
+    xrtValueRelease(Reply);Reply=NULL;
     Row=xrtValueObject();xvalue* Scope=BuStreamScopeCapture(C);
     bool Built=Row&&Scope&&xrtValueObjectSet(Row,XRT_STR_LITERAL("scope"),Scope)&&SdkPutUInt(Row,"version",1)&&
         SdkPut(Row,"id",Id)&&SdkPut(Row,"workspace",C->Workspace)&&SdkPut(Row,"root_snapshot",RootSnapshot)&&
@@ -216,7 +222,8 @@ static bool BuFileReceive(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R
         size_t CountBytes=0;uint64 Reported=0;bool Eof=false;cstr Encoded=SdkField(Reply,"base64");
         if(!SdkUInt(SdkGet(Reply,"bytes"),&Reported)||Reported>16384||!xrtValueGetBool(SdkGet(Reply,"eof"),&Eof)||
            (!Reported&&!Eof)||!Encoded||strlen(Encoded)>21848||!xrtBase64Decode(Encoded,strlen(Encoded),NULL,0,&CountBytes,NULL)||CountBytes!=Reported){
-            if(!E->Code[0])MdoApplicationError(E,"sdk_file_receive_stream","Stream returned an invalid bounded byte receipt","file_receive",409,false);goto done;
+            if(!E->Code[0])MdoApplicationError(E,"sdk_file_receive_stream","Stream returned an invalid bounded byte receipt","file_receive",409,false);
+            goto done;
         }
         Buffered=CountBytes;Bytes=xrtMalloc(CountBytes+1);if(!Bytes)goto done;
         if(!xrtBase64Decode(Encoded,strlen(Encoded),Bytes,CountBytes,&CountBytes,NULL)){SdkNativeFailure(E,"file_receive");goto done;}
