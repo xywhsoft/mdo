@@ -68,6 +68,7 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     const xvalue* EffectiveNotifications;
     const xvalue* EffectivePower;
     const xvalue* EffectiveAgent;
+    const xvalue* EffectiveRecoveryRetries;
     const xvalue* EffectiveWorkspace;
     xvalue* Data = xrtValueObject();
     xvalue* Patches = xrtValueObject();
@@ -111,6 +112,8 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
         xrtValueObjectGet(EffectiveSettings, XRT_STR_LITERAL("power")) : NULL;
     EffectiveAgent = EffectiveSettings != NULL ?
         xrtValueObjectGet(EffectiveSettings, XRT_STR_LITERAL("agent")) : NULL;
+    EffectiveRecoveryRetries = EffectiveAgent != NULL ?
+        xrtValueObjectGet(EffectiveAgent, XRT_STR_LITERAL("recovery_retries")) : NULL;
     EffectiveWorkspace = EffectiveSettings != NULL ?
         xrtValueObjectGet(EffectiveSettings,
             XRT_STR_LITERAL("workspace")) : NULL;
@@ -181,6 +184,12 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
         MdoApiValueSetBool(AgentValue, "schedules",
             Service.Agent.SchedulesEnabled) &&
         MdoApiValueSetUInt(AgentValue, "max_turns", Service.Agent.MaxTurns) &&
+        /* Keep zero and read from this revision-checked effective snapshot.
+         * Older defaults may omit the optional field; only then use 10. */
+        (EffectiveRecoveryRetries != NULL ?
+            xrtValueObjectSet(AgentValue, XRT_STR_LITERAL("recovery_retries"),
+                EffectiveRecoveryRetries) :
+            MdoApiValueSetUInt(AgentValue, "recovery_retries", 10u)) &&
         MdoApiValueSetUInt(AgentValue, "max_parallel_tools",
             Service.Agent.MaxParallelTools) &&
         MdoApiValueSetUInt(AgentValue, "max_parallel_subagents",
