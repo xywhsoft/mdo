@@ -38,17 +38,24 @@ xvalue* MdoAgentDefinitionInspect(cstr Id,cstr Text,bool Main,cstr Workspace,
     if(!Ok){xrtValueRelease(Plan);if(Error && Error->eCode==XWORK_ERROR_NONE)MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"role definition is unavailable");return NULL;}
     return Plan;
 }
+static bool MdoAgentsInspectDetail(xvalue* Item,cstr Key,const xvalue* Value,size_t* Budget){
+    size_t Bytes=0;char* Json=xrtJsonStringify(Value,false,&Bytes);if(!Json)return false;
+    bool Ok;
+    if(Bytes>*Budget)Ok=xrtValueObjectSetNew(Item,XRT_STR_LITERAL("details_truncated"),xrtValueBool(true));
+    else{Ok=xrtValueObjectSetNew(Item,xrtStrView(Key),xrtJsonParse(xrtStrViewN(Json,Bytes)));if(Ok)*Budget-=Bytes;}
+    xrtFree(Json);return Ok;
+}
 xvalue* MdoAgentSessionInspect(MdoAgentSession* Session,xwork_error* Error)
 {
     if(!Session || !Session->Owner){MdoAgentsError(Error,XWORK_ERROR_INVALID_ARGUMENT,"an owned Agent session is required");return NULL;}
     MdoAgentOwner* Owner=Session->Owner;xvalue* Data=xrtValueObject();xvalue* Children=xrtValueArray();
-    bool Ok=Data && Children;xrtMutexLock(Owner->InstanceLock);
+    bool Ok=Data && Children;size_t DetailBudget=2u*1024u*1024u;xrtMutexLock(Owner->InstanceLock);
     for(MdoAgentInstance* I=Owner->Instances;Ok && I;I=I->Next){
         xvalue* Item=xrtValueObject();
         Ok=Item && MdoAgentsPlanPut(Item,"agent_id",I->Definition.Id) &&
             xrtValueObjectSetNew(Item,XRT_STR_LITERAL("model_calls"),xrtValueUInt(I->ModelCalls));
-        if(Ok&&I->Agent!=Session->Agent&&I->Plan)Ok=xrtValueObjectSetNew(Item,XRT_STR_LITERAL("context"),MdoAgentConfigClone(I->Plan));
-        if(Ok&&I->Agent!=Session->Agent&&I->RequestPreview)Ok=xrtValueObjectSetNew(Item,XRT_STR_LITERAL("request"),MdoAgentConfigClone(I->RequestPreview));
+        if(Ok&&I->Agent!=Session->Agent&&I->Plan)Ok=MdoAgentsInspectDetail(Item,"context",I->Plan,&DetailBudget);
+        if(Ok&&I->Agent!=Session->Agent&&I->RequestPreview)Ok=MdoAgentsInspectDetail(Item,"request",I->RequestPreview,&DetailBudget);
         if(Ok && I->Agent==Session->Agent){
             if(I->Plan)Ok=xrtValueObjectSetNew(Data,XRT_STR_LITERAL("context"),MdoAgentConfigClone(I->Plan));
             if(Ok && I->RequestPreview)Ok=xrtValueObjectSetNew(Data,XRT_STR_LITERAL("request"),MdoAgentConfigClone(I->RequestPreview));

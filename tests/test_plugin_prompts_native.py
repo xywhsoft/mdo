@@ -16,7 +16,7 @@ static void QaPromptRoles(xvalue* R,MdoModuleCatalog* C,MdoModuleGeneration* G,c
  xwork_error E;xworkErrorInit(&E);xwork_agent_config Config;xworkAgentConfigInit(&Config);Config.sWorkspaceRoot=Workspace;Config.sModel="offline";Config.OnModelComplete=QaPromptModel;Config.bRegisterBuiltinTools=false;Config.bAutoSaveSession=false;Config.bAllowArtifactWrites=false;
  xllm_session_config SC;xllmSessionConfigInit(&SC);xllm_session* S1=xllmSessionCreate(&SC,NULL),*S2=xllmSessionCreate(&SC,NULL);
  Config.pSession=S1;xwork_agent* Parent=xworkAgentCreate(&Config,&E);Config.pSession=S2;xwork_agent* Child=xworkAgentCreate(&Config,&E);
- xwork_tool_definition D={0};D.sName="qa_tool";D.sDescription="QA tool";D.sParametersJson="{}";D.uEffects=XWORK_TOOL_EFFECT_READ;D.OnExecute=QaPromptTool;
+ xwork_tool_definition D={0};D.sName="qa_tool";D.sDescription="QA tool";D.sParametersJson="{}";D.uEffects=XWORK_TOOL_EFFECT_READ;D.OnExecute=QaPromptTool;D.sSource="mdo.modules";
  bool Ready=Parent&&Child&&xworkAgentRegisterTool(Child,&D,&E);QaPromptCheck(R,"actual_child_catalog",Ready);
  if(!Ready){SdkPut(R,"role_error",E.sMessage);if(Parent)xworkAgentDestroy(Parent);if(Child)xworkAgentDestroy(Child);if(S1)xllmSessionDestroy(S1);if(S2)xllmSessionDestroy(S2);return;}
  MdoModuleToolBinding Tool={0};Tool.Owner=G;Tool.Id="qa_tool";MdoModuleToolBinding* Tools[]={&Tool};C->Tools=Tools;C->ToolCount=1;
@@ -26,8 +26,13 @@ static void QaPromptRoles(xvalue* R,MdoModuleCatalog* C,MdoModuleGeneration* G,c
  QaPromptCheck(R,"static_preview_is_candidate",Group&&!strcmp(SdkField(Group,"resolution"),"candidate")&&!SdkField(Group,"text")[0]);xrtValueRelease(I.Plan);
  N.pAgent=Parent;I.Plan=QaPromptPlan(&O,&I,&N,&E);Group=MdoAgentsPluginGroup(I.Plan);
  QaPromptCheck(R,"parent_does_not_advertise_child_tools",Group&&!SdkField(Group,"text")[0]);xrtValueRelease(I.Plan);
+ D.sSource="application";bool Spoof=xworkAgentRegisterTool(Parent,&D,&E);I.Plan=QaPromptPlan(&O,&I,&N,&E);Group=MdoAgentsPluginGroup(I.Plan);
+ QaPromptCheck(R,"same_named_foreign_tool_does_not_match",Spoof&&Group&&!SdkField(Group,"text")[0]);xrtValueRelease(I.Plan);
  N.pAgent=Child;I.Plan=QaPromptPlan(&O,&I,&N,&E);Group=MdoAgentsPluginGroup(I.Plan);
  QaPromptCheck(R,"child_independent_capability_selection",Group&&strstr(SdkField(Group,"text"),"NATIVE-GUIDE")&&!strstr(SdkField(Group,"text"),"MANIFEST-GUIDE"));
+ xvalue* NativeRow=(xvalue*)xrtValueArrayGet(C->Prompts,1),*Both=xrtValueClone(SdkGet(NativeRow,"targets")),*Primary=SdkParse("[\"primary\"]");xrtValueObjectSet(NativeRow,XRT_STR_LITERAL("targets"),Primary);xrtValueRelease(Primary);
+ bool Targeted=MdoAgentsPluginSelect(&O,&I,&N,NULL,Group,&E);QaPromptCheck(R,"primary_only_fragment_excluded_from_child",Targeted&&!SdkField(Group,"text")[0]);
+ O.RootAgent=Child;Targeted=MdoAgentsPluginSelect(&O,&I,&N,NULL,Group,&E);QaPromptCheck(R,"target_uses_actual_role_identity",Targeted&&strstr(SdkField(Group,"text"),"NATIVE-GUIDE"));O.RootAgent=Parent;xrtValueObjectSet(NativeRow,XRT_STR_LITERAL("targets"),Both);xrtValueRelease(Both);MdoAgentsPluginSelect(&O,&I,&N,NULL,Group,&E);
  char* Base=MdoAgentsContextRenderBase(I.Plan,"system",&E);QaPromptCheck(R,"ledger_base_excludes_contributions",Base&&!Base[0]);xrtFree(Base);
  xllm_request Q;QaPromptRequest(&Q);N.pRequest=&Q;MdoAgentPluginMessage B={0};
  bool Prepared=MdoAgentsPluginRequest(&O,&I,&N,&B,false,&E);size_t Before=Q.iMessageCount;
@@ -39,6 +44,8 @@ static void QaPromptRoles(xvalue* R,MdoModuleCatalog* C,MdoModuleGeneration* G,c
  Q.iToolCount=1;xllmRequestUnit(&Q);QaPromptRequest(&Q);memset(&B,0,sizeof(B));
  Prepared=MdoAgentsPluginRequest(&O,&I,&N,&B,false,&E);Final=Prepared&&MdoAgentsPluginRequest(&O,&I,&N,&B,true,&E);
  QaPromptCheck(R,"retries_do_not_accumulate",Final&&Q.iMessageCount==3);xrtFree(B.Text);xllmRequestUnit(&Q);
+ QaPromptRequest(&Q);Q.eToolChoice=XLLM_TOOL_CHOICE_NONE;memset(&B,0,sizeof(B));Prepared=MdoAgentsPluginRequest(&O,&I,&N,&B,false,&E);Final=Prepared&&MdoAgentsPluginRequest(&O,&I,&N,&B,true,&E);
+ QaPromptCheck(R,"tool_choice_none_omits_tool_guidance",Final&&Q.iMessageCount==2);xrtFree(B.Text);xllmRequestUnit(&Q);
  QaPromptRequest(&Q);memset(&B,0,sizeof(B));Prepared=MdoAgentsPluginRequest(&O,&I,&N,&B,false,&E);
  if(Prepared){xllmMessageUnit(&Q.pMessages[1]);xllmMessageInit(&Q.pMessages[1],XLLM_ROLE_SYSTEM);xllmMessageSetContent(&Q.pMessages[1],"MANUAL-REQUEST");}
  Final=Prepared&&MdoAgentsPluginRequest(&O,&I,&N,&B,true,&E);Group=MdoAgentsPluginGroup(I.Plan);

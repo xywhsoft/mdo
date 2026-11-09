@@ -13,8 +13,8 @@ static mdo_result MdoModulesRegistrarAddPrompt(void* U,const mdo_prompt_contribu
         SdkPut(P,"title",D->Title?D->Title:D->Id)&&SdkPut(P,"activation",D->Activation==MDO_PROMPT_EXPLICIT?"explicit":"with-tools")&&SdkPutUInt(P,"priority",D->Priority);
     if(Ok&&(D->Targets&MDO_PROMPT_PRIMARY))Ok=xrtValueArrayAppendNew(Targets,xrtValueString(XRT_STR_LITERAL("primary")));
     if(Ok&&(D->Targets&MDO_PROMPT_SUBAGENT))Ok=xrtValueArrayAppendNew(Targets,xrtValueString(XRT_STR_LITERAL("subagent")));
-    for(size_t I=0;Ok&&I<D->AnyToolCount;I++)Ok=D->AnyTools[I]&&xrtValueArrayAppendNew(Any,xrtValueString(xrtStrView(D->AnyTools[I])));
-    for(size_t I=0;Ok&&I<D->AllToolCount;I++)Ok=D->AllTools[I]&&xrtValueArrayAppendNew(All,xrtValueString(xrtStrView(D->AllTools[I])));
+    for(size_t I=0;Ok&&I<D->AnyToolCount;I++)Ok=D->AnyTools[I]&&strlen(D->AnyTools[I])<=128&&xrtValueArrayAppendNew(Any,xrtValueString(xrtStrView(D->AnyTools[I])));
+    for(size_t I=0;Ok&&I<D->AllToolCount;I++)Ok=D->AllTools[I]&&strlen(D->AllTools[I])<=128&&xrtValueArrayAppendNew(All,xrtValueString(xrtStrView(D->AllTools[I])));
     Ok=Ok&&xrtValueObjectSet(When,XRT_STR_LITERAL("any_tools"),Any)&&xrtValueObjectSet(When,XRT_STR_LITERAL("all_tools"),All)&&
         xrtValueObjectSet(P,XRT_STR_LITERAL("when"),When)&&xrtValueObjectSet(P,XRT_STR_LITERAL("targets"),Targets)&&MdoPromptValid(P,Error,Cap);
     size_t Bytes=D->Text?strlen(D->Text):0;

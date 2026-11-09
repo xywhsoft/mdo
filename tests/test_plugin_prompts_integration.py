@@ -23,6 +23,7 @@ const mdo_module_v1* mdoModuleEntry(void){return &M;}
 '''
 CONTRACT=r'''
 static unsigned QaCalls,QaParentCalls,QaChildCalls;static bool QaEveryRequest=true,QaToolRun,QaDelegated,QaDelegatedViews=true;static char QaDelegateOutput[2048];
+static MdoAgentSession* QaInspectSession;static bool QaChildDetails;
 static void QaCheck(xvalue* R,cstr Key,bool Ok){xrtValueObjectSetNew(R,xrtStrView(Key),xrtValueBool(Ok));}
 static xllm_result QaComplete(void* U,const xllm_request* Q,const xllm_stream_callbacks* S,xllm_response** Out,xllm_error* E){
  (void)U;(void)S;(void)E;++QaCalls;unsigned Native=0,Manifest=0;bool Child=false;
@@ -30,6 +31,11 @@ static xllm_result QaComplete(void* U,const xllm_request* Q,const xllm_stream_ca
  bool Tool=QaCalls==1;
  if(QaDelegated){if(Child)++QaChildCalls;else ++QaParentCalls;QaDelegatedViews=QaDelegatedViews&&(Child?(Native==1&&Manifest==1):(Native==0&&Manifest==0));Tool=!Child&&QaParentCalls==1;}
  else QaEveryRequest=QaEveryRequest&&Native==1&&Manifest==1;
+ if(QaDelegated&&Child&&QaInspectSession){
+  xwork_error IE={0};xvalue* Inspect=MdoAgentSessionInspect(QaInspectSession,&IE);const xvalue* Instances=SdkGet(Inspect,"instances");
+  for(size_t J=0;J<xrtValueCount(Instances);J++){const xvalue* Item=xrtValueArrayGet(Instances,J);cstr Id=SdkField(Item,"agent_id");if(Id&&!strcmp(Id,"subagent.qa-child")){xvalue* G=MdoAgentsPluginGroup((xvalue*)SdkGet(Item,"context"));QaChildDetails=G&&strstr(SdkField(G,"text"),"NATIVE-INTEGRATION-GUIDE")&&SdkGet(Item,"request");}}
+  xrtValueRelease(Inspect);
+ }
  xllm_response* R=calloc(1,sizeof(*R));if(!R)return XLLM_RESULT_ERROR;R->sContent=strdup(Tool?"":"offline integration complete");R->sModel=strdup("fixture");R->sFinishReason=strdup(Tool?"tool_calls":"stop");R->uHttpStatus=200;
  if(Tool){R->eFinish=XLLM_FINISH_TOOL_CALLS;R->iToolCallCount=1;R->pToolCalls=calloc(1,sizeof(*R->pToolCalls));R->pToolCalls[0].sId=strdup(QaDelegated?"qa-delegate":"qa-call");R->pToolCalls[0].sName=strdup(QaDelegated?"agent":"qa_tool");R->pToolCalls[0].sArgumentsJson=strdup(QaDelegated?"{\"name\":\"subagent.qa-child\",\"prompt\":\"Complete the independent child task\"}":"{}");}
  else R->eFinish=XLLM_FINISH_STOP;
@@ -54,14 +60,17 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
   xvalue* Inspect=MdoAgentSessionInspect(Session,&E);QaCheck(R,"runtime_inspector_has_delivery",Inspect&&strstr(SdkField(MdoAgentsPluginGroup((xvalue*)SdkGet(Inspect,"context")),"delivery"),"request_message"));xrtValueRelease(Inspect);
   MdoAgentRunDestroy(Run);xworkRunResultUnit(&Result);MdoAgentSessionRelease(Session);
  }
- QaDelegated=true;O.AgentId="agent.coordinator";O.ProductSessionId="qa-plugin-delegation";Session=MdoAgentSessionCreateWithRuntime(Runtime,&O,&E);
+ QaDelegated=true;O.AgentId="agent.coordinator";O.ProductSessionId="qa-plugin-delegation";Session=MdoAgentSessionCreateWithRuntime(Runtime,&O,&E);QaInspectSession=Session;
  bool DelegatedOk=false;
  if(Session){MdoAgentRunOptions RO;MdoAgentRunOptionsInit(&RO);RO.Prompt="Delegate the independent task.";MdoAgentRun* Run=MdoAgentRunCreate(Session,&RO,&E);xwork_run_result Result={0};bool Started=Run&&MdoAgentRunStart(Run,&E);xwork_result Code=Started?MdoAgentRunWait(Run,MdoDeadlineAfterUs(10000000),&Result,&E):XWORK_RESULT_ERROR;
   DelegatedOk=Code==XWORK_RESULT_OK&&QaParentCalls==2&&QaChildCalls==1;
   if(!DelegatedOk){SdkPut(R,"delegation_error",E.sMessage);SdkPut(R,"delegation_output",QaDelegateOutput);SdkPutUInt(R,"parent_calls",QaParentCalls);SdkPutUInt(R,"child_calls",QaChildCalls);}
+  QaCheck(R,"child_runtime_prompt_details_available",QaChildDetails);QaInspectSession=NULL;
   MdoAgentRunDestroy(Run);xworkRunResultUnit(&Result);MdoAgentSessionRelease(Session);
  }
  QaCheck(R,"real_coordinator_child_run",DelegatedOk);QaCheck(R,"only_child_receives_browser_capability_guides",DelegatedOk&&QaDelegatedViews);
+ size_t InspectBudget=1;xvalue* Detail=xrtValueObject(),*Large=SdkParse("{\"text\":\"bounded inspection fixture\"}");
+ QaCheck(R,"inspection_budget_is_explicit",MdoAgentsInspectDetail(Detail,"context",Large,&InspectBudget)&&MdoExtOpBool(Detail,"details_truncated",false)&&!SdkGet(Detail,"context"));xrtValueRelease(Detail);xrtValueRelease(Large);
  /* A headless prompt-only plugin is effective without any frontend instance. */
  bool Disabled=MdoExtensionsSetEnabled("plugins","passive",false,Why)&&MdoApplicationPluginsReload(Why,sizeof(Why));MdoModuleCatalog* Current=MdoModuleCatalogSnapshot();
  QaCheck(R,"headless_disable_refreshes_new_catalog",Disabled&&xrtValueCount(MdoModuleCatalogPromptContributions(Current))==2);

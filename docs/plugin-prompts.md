@@ -78,3 +78,27 @@ SubAgent 按自己的工具、配置和预算决定采用。贡献不授予工�
 插件。返回 `generation` 与 `items`，内容与正在使用的目录快照一致。
 C 的 Agent 回调可直接在 ContextPlan 中选择贡献；前端修改角色配置和查看
 预览，不承担每轮生成提示词的职责。无需打开插件前端也能在后台运行。
+
+C 注册示例（从插件的 Register 回调调用）：
+
+```c
+static const char* Tools[] = {"my_tool"};
+mdo_prompt_contribution_v1 Prompt = {
+    .Size = sizeof(Prompt), .AbiVersion = MDO_MODULE_ABI_VERSION,
+    .Id = "usage", .Text = "Use my_tool for the supported task; check its result.",
+    .Targets = MDO_PROMPT_PRIMARY | MDO_PROMPT_SUBAGENT,
+    .Activation = MDO_PROMPT_WITH_TOOLS,
+    .AnyTools = Tools, .AnyToolCount = 1, .Priority = 100
+};
+if (Registrar->Size < offsetof(mdo_registrar_v1, AddPromptContribution) +
+        sizeof(Registrar->AddPromptContribution) || !Registrar->AddPromptContribution)
+    return MDO_RESULT_ERROR; /* Report the host upgrade requirement in Error. */
+return Registrar->AddPromptContribution(Registrar->Context, &Prompt, Error, Capacity);
+```
+
+角色来源支持 `enabled`、`role`、`include`、`exclude`、`max_bytes`。宿主固定
+其请求消息位置：系统说明在基础系统上下文后，用户角色说明在普通用户输入前。
+CONTEXT 回调可调整片段的 `enabled` 和 `priority`；仍受工具与预算筛选。
+SubAgent 运行检查详情合计最多 2 MiB，超出时明确返回 `details_truncated`，
+避免长任务的检查响应无限增长。检查器展示仍在运行的子任务；子实例释放后
+不额外保留整份提示词和请求历史。

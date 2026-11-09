@@ -10,6 +10,8 @@ static int MdoAgentsPluginCompare(const void* A,const void* B){
     return X!=Y?(X<Y?-1:1):strcmp(MdoAgentConfigText(L,"key"),MdoAgentConfigText(R,"key"));
 }
 static bool MdoAgentsPluginTool(MdoAgentOwner* Owner,xwork_tool_catalog* Catalog,const xllm_request* Request,cstr Plugin,cstr Name){
+    if(Request&&(Request->eToolChoice==XLLM_TOOL_CHOICE_NONE||
+       (Request->eToolChoice==XLLM_TOOL_CHOICE_NAMED&&Request->sNamedTool&&strcmp(Request->sNamedTool,Name))))return false;
     bool Own=false;
     for(size_t I=0;I<MdoModuleCatalogToolCount(Owner->Modules);I++){
         MdoModuleToolInfo T={0};T.Size=sizeof(T);
@@ -18,7 +20,7 @@ static bool MdoAgentsPluginTool(MdoAgentOwner* Owner,xwork_tool_catalog* Catalog
     if(!Own||!Catalog)return false;
     bool Available=false;
     for(size_t I=0;I<xworkToolCatalogCount(Catalog);I++){
-        xwork_tool_info T={0};if(xworkToolCatalogToolAt(Catalog,I,&T)&&!strcmp(T.sName,Name)){Available=true;break;}
+        xwork_tool_info T={0};if(xworkToolCatalogToolAt(Catalog,I,&T)&&!strcmp(T.sName,Name)&&T.sSource&&!strcmp(T.sSource,"mdo.modules")){Available=true;break;}
     }
     if(!Available)return false;
     if(!Request)return true;
@@ -27,6 +29,7 @@ static bool MdoAgentsPluginTool(MdoAgentOwner* Owner,xwork_tool_catalog* Catalog
 }
 static bool MdoAgentsPluginCanonicalize(MdoAgentOwner* Owner,xvalue* Group){
     const xvalue* Registry=MdoModuleCatalogPromptContributions(Owner->Modules),*Controls=MdoAgentConfigGet(Group,"items");
+    if(xrtValueCount(Controls)>32u*MDO_PLUGIN_PROMPT_COUNT)return false;
     xvalue* Items=xrtValueArray();bool Ok=Items!=NULL;
     for(size_t I=0;Ok&&I<xrtValueCount(Registry);I++){
         const xvalue* Original=xrtValueArrayGet(Registry,I),*Control=NULL;cstr Key=MdoAgentConfigText(Original,"key");
@@ -50,6 +53,7 @@ static bool MdoAgentsPluginCanonicalize(MdoAgentOwner* Owner,xvalue* Group){
 static bool MdoAgentsPluginSelect(MdoAgentOwner* Owner,MdoAgentInstance* Instance,xwork_agent_extension_context* Native,
     const xllm_request* Request,xvalue* Group,xwork_error* Error){
     const xvalue* Spec=MdoAgentsSourceSpec(Instance->Configuration,"plugins.instructions");
+    if(xrtValueCount(MdoAgentConfigGet(Group,"items"))>32u*MDO_PLUGIN_PROMPT_COUNT){MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"too many role plugin prompt controls");return false;}
     if(!MdoAgentsPluginCanonicalize(Owner,Group))return false;
     xvalue* Items=(xvalue*)MdoAgentConfigGet(Group,"items");size_t Count=xrtValueCount(Items);
     if(Count>32u*MDO_PLUGIN_PROMPT_COUNT){MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"too many plugin prompt contributions");return false;}
@@ -70,7 +74,7 @@ static bool MdoAgentsPluginSelect(MdoAgentOwner* Owner,MdoAgentInstance* Instanc
         bool Explicit=MdoAgentConfigGet(Spec,"include")&&Include;
         if(!MdoAgentConfigBool(Group,"enabled",true))Why="source_disabled";
         else if(!MdoAgentConfigBool(Row,"enabled",true))Why="agent_disabled";
-        else if(!Targets)Why="role_target";
+        else if(Runtime&&!Targets)Why="role_target";
         else if(!Include||Exclude)Why="role_selection";
         else if(Activation&&!strcmp(Activation,"explicit")&&!Explicit)Why="explicit_selection_required";
         else if(!Runtime)Why="runtime_pending";
