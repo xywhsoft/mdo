@@ -482,8 +482,11 @@ class Probe(UploadProbe):
         assert value["ok"] and any("Persisted summary" in m["content"] for m in value["messages"]), value
         value = self.replay(dump(with_journal([{**compact_record, "summary": "Missing required sections"}])))
         assert not value["ok"] and value["code"] == 6, value
-        value = self.replay(dump(with_journal([record("truncate", from_sequence=1, to_sequence=2, reason="overflow_l2")])))
+        # The first real L2 truncation starts at the snapshot's zero floor.
+        value = self.replay(dump(with_journal([record("truncate", from_sequence=populated["tail_floor"], to_sequence=2, reason="overflow_l2")])))
         assert value["ok"] and value["rendered"] and not any(m["content"] == "Answer" for m in value["messages"]), value
+        value = self.replay(dump(with_journal([record("truncate", from_sequence=1, to_sequence=2, reason="overflow_l2")])))
+        assert not value["ok"] and value["code"] == 6, value
 
         journal_samples = [
             record("begin_turn", turn=2),
@@ -545,7 +548,7 @@ class Probe(UploadProbe):
                          ("path", {}), ("after_sequence", -1), ("after_sequence", 2**64-1)):
             bad_journal("journal ledger " + key,
                         lambda r, k=key, v=bad: r.update({k: v}), "ledger")
-        for key, bad in (("from_sequence", 0), ("to_sequence", 1), ("reason", {})):
+        for key, bad in (("from_sequence", -1), ("to_sequence", 1), ("reason", {})):
             bad_journal("journal truncate " + key,
                         lambda r, k=key, v=bad: r.update({k: v}), "truncate")
         for operation, key, bad in (("rewind", "through_sequence", 3),

@@ -416,7 +416,7 @@ static bool MdoBackupModelJournalRecord(const MdoBackupOwnedFile* File, const xv
              !MdoBackupView(Root, "path", &Text) || Text.Size == 0u ||
              !MdoBackupModelUInt(Root, "after_sequence", &A, true) || A == UINT64_MAX ) goto invalid;
     } else if ( Payload == Truncate ) {
-        if ( !MdoBackupUInt(Root, "from_sequence", &A) || A == 0u ||
+        if ( !MdoBackupUInt(Root, "from_sequence", &A) ||
              !MdoBackupUInt(Root, "to_sequence", &B) || B <= A || B == UINT64_MAX ||
              !MdoBackupModelText(Root, "reason", true, false) ) goto invalid;
     } else {
