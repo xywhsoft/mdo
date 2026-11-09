@@ -45,6 +45,10 @@
 .agent-tool-picker > small { display: block; color: var(--muted); line-height: 1.6; margin: 8px 0; }
 .agent-tool-picker > input { width: 100%; margin-bottom: 8px; }
 .agent-tool-list { max-height: 250px; overflow: auto; }
+.agent-plugin-prompts { border: 1px solid var(--border); border-radius: 8px; padding: 12px; min-width: 0; }
+.agent-plugin-prompts > select { max-width: 100%; }
+.agent-plugin-prompts small, .agent-plugin-prompt-details code { color: var(--muted); overflow-wrap: anywhere; }
+.agent-plugin-prompt-details details { padding: 8px 0; }
 .agent-tool-option { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 7px 0; cursor: pointer; }
 .agent-tool-option code { overflow-wrap: anywhere; min-width: 0; }
 .agent-tool-option small { color: var(--muted); margin-left: auto; font-size: 10px; }

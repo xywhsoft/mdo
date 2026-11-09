@@ -109,6 +109,7 @@ bool MdoModuleManagerInit(xwork_runtime* pRuntime);
 void MdoModuleManagerUnit(void);
 void MdoModuleManagerStop(void);
 bool MdoModuleManagerReload(void);
+bool MdoModuleManagerRefreshPrompts(void);
 uint64 MdoModuleManagerGeneration(void);
 
 MdoModuleCatalog* MdoModuleCatalogSnapshot(void);

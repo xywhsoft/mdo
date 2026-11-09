@@ -17,6 +17,7 @@ import { newTool } from "./tool-template.js";
 import { newCommand } from "./command-template.js";
 import { createCommandWorkbench } from "./command-projects.js";
 import { newRole, roleAdvanced, parseRoleAdvanced, ROLE_ADVANCED_KEYS, openRolePlan, roleProgramTemplate } from "./agent-authoring.js";
+import { createPluginPromptPicker } from "./plugin-prompts.js";
 import { api } from "../../api/client.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
 
@@ -400,6 +401,8 @@ export function createExtensionPanels() {
       inputField(editing.form,"allow_background",uiMessage("ui.extensionPanels.allowBackgroundDelegation", {}, "允许后台委派"),values.allow_background !== false && values.allow_background !== "false",{type:"checkbox"});
       inputField(editing.form,"require_verification_after_write",uiMessage("ui.extensionPanels.requireValidationAfterChanges", {}, "修改后要求验证"),values.require_verification_after_write === true || values.require_verification_after_write === "true",{type:"checkbox"});
       inputField(editing.form,"role_options",uiMessage("ui.extensionPanels.advancedConfigurationJson", {}, "高级配置（JSON）"),JSON.stringify(roleAdvanced(source),null,2),{area:true,hint:uiMessage("ui.extensionPanels.contextSourceActivationFilteringOrderRolesTemplatesByteLimits", {}, "context：各来源的启停、筛选、顺序、角色、模板、字节上限及刷新；runtime：执行与模型额度；delegation：可委派角色及上下文；history：历史与图片策略；model_options：采样；mcp_servers、skills：能力选择。取消继承全部工具后不选择任何工具，表示禁用所有工具。")});
+      const roleEditor=editing,advanced=editing.form.querySelector('[name="role_options"]');
+      if(advanced){let picker;picker=createPluginPromptPicker({input:advanced,signal:editing.layer.signal,isCurrent:()=>editing===roleEditor&&editing.promptPicker===picker});editing.promptPicker=picker;editing.form.append(picker);}
     }
     if (kind === "commands") inputField(editing.form, "argument_hint", label("argumentHint", "参数提示（可选）"), values["argument-hint"] || "");
     inputField(editing.form, "prompt", label(kind === "agents" ? "agentInstructions" : "instructions", kind === "agents" ? "系统提示词（留空使用默认规则）" : "指令"), values.prompt || "", { area: true, required: required("prompt") });

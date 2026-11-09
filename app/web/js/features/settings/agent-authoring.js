@@ -4,6 +4,7 @@ import { api } from "../../api/client.js";
 import { openLayer } from "../../components/layers.js";
 import { element, errorMessage } from "../../utils/dom.js";
 import { promptFields, editPrompt } from "./extension-formats.js";
+import { promptContributionDetails } from "./plugin-prompts.js";
 
 export const ROLE_ADVANCED_KEYS = Object.freeze(["context", "runtime", "delegation", "history", "model_options", "mcp_servers", "skills"]);
 export function roleAdvanced(source) {
@@ -68,7 +69,8 @@ export async function openRolePlan({kind,id,content,owner}) {
     writeUiText(status, uiText("ui.agentAuthoring.configurationPreviewDoesNotRunCCallbacksOrCall", {}, "配置预览不运行 C 回调、不调用模型。C 回调后的实际请求可通过运行时检查接口查看。预览包含你的提示词与记忆，仅在当前设备显示。"));
     const sources=element("div",{className:"agent-plan-sources"});
     for(const source of [...data.sources].sort((a,b)=>a.order-b.order)){
-      const details=element("details",{},[element("summary",{text:`${source.enabled?uiText("resource.enable", {}, "启用"):uiText("resource.disable", {}, "停用")} · ${source.id} · ${source.role} · ${new TextEncoder().encode(source.text).length} B${source.truncated?uiText("ui.agentAuthoring.truncated", {}, " · 已裁剪"):""}`}),element("pre",{className:"store-source",text:source.text})]);sources.append(details);
+      const details=element("details",{},[element("summary",{text:`${source.enabled?uiText("resource.enable", {}, "启用"):uiText("resource.disable", {}, "停用")} · ${source.id} · ${source.role} · ${new TextEncoder().encode(source.text).length} B${source.truncated?uiText("ui.agentAuthoring.truncated", {}, " · 已裁剪"):""}`}),element("pre",{className:"store-source",text:source.text})]);
+      if(source.id==="plugins.instructions")details.append(promptContributionDetails(source));sources.append(details);
     }
     layer.body.append(sources,element("h3",{text:uiText("ui.agentAuthoring.systemPrompt", {}, "系统提示词")}),element("pre",{className:"store-source",text:data.system_prompt}),element("h3",{text:uiText("ui.agentAuthoring.userContext", {}, "用户上下文")}),element("pre",{className:"store-source",text:data.user_context}),element("details",{},[element("summary",{text:uiText("ui.agentAuthoring.fullConfigurationAndSources", {}, "完整配置与来源数据")}),element("pre",{className:"store-source",text:JSON.stringify(data,null,2)})]));
   } catch(error) { if(!layer.signal.aborted)writeUiText(status, errorMessage(error)); }

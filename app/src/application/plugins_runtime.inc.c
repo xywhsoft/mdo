@@ -93,7 +93,9 @@ static bool SdkPluginFrontendCall(cstr Method,const xvalue* P,xvalue** R,mdo_err
     }
     if(Ok){xrtValueRelease(SdkPlugins.Frontends);SdkPlugins.Frontends=Next;Next=NULL;Ok=SdkPluginReconcile();}
     if(Ok){*R=xrtValueObject();SdkPut(*R,"state",SdkPlugins.Pending?"pending":"ready");}
-    xrtValueRelease(Next);xrtMutexUnlock(SdkPlugins.Lock);return Ok;
+    xrtValueRelease(Next);xrtMutexUnlock(SdkPlugins.Lock);
+    if(Ok&&Leave&&!MdoModuleManagerRefreshPrompts())Ok=MdoApplicationError(E,"sdk_plugin_prompt_reload_failed","Frontend retired; prompt catalog refresh needs retry","plugin",409,false);
+    return Ok;
 }
 #include "../../include/mdo/diagnostics.h"
 bool MdoApplicationPluginWarnings(xvalue* Items){

@@ -142,6 +142,7 @@ struct MdoModuleCatalog {
     MdoModuleAgentBinding** Agents;
     size_t AgentCount;
     xvalue* Prompts;
+    char PromptSourcesHash[65];
 };
 
 typedef struct MdoModuleDiagnosticEntry {
@@ -2041,9 +2042,16 @@ failed:
 }
 
 static MdoModuleCatalog* MdoModulesBuildCandidate(uint64 Generation,MdoModuleDiagnostics* Diagnostics,bool* Recoverable){
-    MdoApplicationPluginViewBegin();
-    MdoModuleCatalog* Result=MdoModulesBuildCandidateBody(Generation,Diagnostics,Recoverable);
-    MdoApplicationPluginViewEnd();return Result;
+    for(unsigned Attempt=0;Attempt<2;Attempt++){
+        MdoApplicationPluginViewBegin();
+        MdoModuleCatalog* Result=MdoModulesBuildCandidateBody(Generation,Diagnostics,Recoverable);
+        MdoApplicationPluginViewEnd();if(!Result)return NULL;
+        /* A retiring frontend may publish its replacement when the last view
+         * reader leaves. Never publish a candidate built from that old view. */
+        char Hash[65];bool Same=MdoModulesPromptSourcesHash(Hash)&&!strcmp(Hash,Result->PromptSourcesHash);
+        if(Same)return Result;MdoModuleCatalogRelease(Result);
+    }
+    MdoModulesDiagnosticAdd(Diagnostics,MDO_MODULE_DIAGNOSTIC_PUBLISH,NULL,NULL,"Plugin instructions changed during catalog preparation; retry the update");return NULL;
 }
 
 static void MdoModulesPublishDiagnosticsLocked(

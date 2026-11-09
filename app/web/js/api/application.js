@@ -11,6 +11,7 @@ export function createApplicationClient(context = () => ({}), transport = api) {
     bind: scope => { const fixed = Object.freeze({ ...context(), ...scope }); return createApplicationClient(() => fixed, transport); },
     services: async options => (await transport.get("/application/services", options)).data,
     describe: (id, options) => call("sdk.describe", { id }, options),
+    promptContributions: (id, options) => call("plugin.prompts", id ? { id } : {}, options),
     events: (cursor = {}, options) => call("events.read", cursor, options),
     start: (method, params = {}, id, options) => call("operation.start", { method, params, ...(id ? { id } : {}) }, options),
     wait: (id, timeout_ms = 1000, options) => call("operation.wait", { id, timeout_ms }, options),

@@ -64,6 +64,11 @@ export function createPluginWorkbench(root) {
       const spec = full.manifest, credits = resourceCredits({ ...item, ...spec, external: true, store_managed: !editable(item) }, receipt(item));
       const description = element("div", {}, [node("p", spec?.description || uiMessage("ui.pluginWorkbench.legacyPluginFormat", {}, "旧格式插件")), credits.facts(), detailFacts([[uiMessage("task.meta.state", {}, "状态"), statusText[item.state] || item.state], [uiMessage("ui.pluginWorkbench.currentRevision", {}, "当前修订"), item.revision], [uiMessage("ui.pluginWorkbench.activeRevision", {}, "实际生效修订"), item.effective_revision || uiMessage("ui.pluginWorkbench.notEnabled", {}, "未启用")], [uiMessage("ui.pluginWorkbench.frontendEntry", {}, "前端入口"), spec?.entry?.frontend || full.frontend || uiMessage("settings.reasoningNone", {}, "无")], [uiMessage("ui.pluginWorkbench.nativeEntry", {}, "原生入口"), spec?.entry?.native || uiMessage("settings.reasoningNone", {}, "无")]])]);
       const files = node("div");
+      if(full.prompt_contributions?.length){
+        const prompts=element("details",{},[element("summary",{text:uiText("ui.pluginPrompts.title",{},"插件提示词")})]);
+        for(const prompt of full.prompt_contributions)prompts.append(element("p",{text:`${prompt.title||prompt.id} · ${prompt.activation||"with-tools"}`}),element("pre",{className:"store-source",text:prompt.text}));
+        description.append(prompts);
+      }
       for (const f of full.files || []) { const targets = spec?.overrides?.filter(r => r.source === f.path).map(r => r.target) || []; files.append(element("div", { className: "resource-actions" }, [button(f.path, () => inspectFile(full, f)), node("small", uiMessage("ui.filesView.value1BytesValue2", { value1: f.bytes.toLocaleString(currentLocale()), value2: targets.length ? ` → ${targets.join(" / ")}` : uiMessage("ui.pluginWorkbench.pluginPrivateFile", {}, " · 插件私有文件") }, "{value1} 字节{value2}"))])); }
       const relations = localDependencyPanel("plugins",full);
       browser.showDetail(id,detailTabs([{id:"description",label:uiMessage("backupImport.notice", {}, "说明"),content:description},{id:"files",label:uiMessage("ui.pluginWorkbench.filesAndEntries", {}, "文件与入口"),content:files},{id:"relations",label:uiMessage("ui.pluginWorkbench.dependenciesAndConflicts", {}, "依赖与冲突"),content:relations}]));

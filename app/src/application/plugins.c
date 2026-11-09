@@ -42,6 +42,7 @@ static bool SdkPluginMountDirectory(SdkPlugin* P,const xvalue* Summary){
   cstr Frontend=SdkField(SdkGet(Doc,"entry"),"frontend");char* Virtual=Frontend?xrtFormat("web/__mdo_plugins/%s/%s/%s",Id,Hash,Frontend):NULL;
   if(Frontend)Ok=Ok&&Virtual&&SdkPut(P->Manifest,"frontend",Virtual);
   xrtFree(Virtual);
+  char Current[65];Ok=Ok&&MdoExtensionsFingerprint("plugins",Id,Current,NULL,Error)&&!strcmp(Current,Hash);
  }
  if(!Ok){SdkPluginDrop(P);P->Manifest=xrtValueClone(Summary);snprintf(P->Error,sizeof(P->Error),"%.255s",Error[0]?Error:"Plugin recipe or directory is invalid");}
  xrtValueRelease(Meta);xrtValueRelease(Doc);xrtValueRelease(Files);return Ok;
@@ -139,6 +140,7 @@ bool MdoApplicationPluginsReload(char* Error,size_t Capacity){
  xvalue* Before=NULL;
  if(!MdoApplicationPluginsStoreBegin(&Before,Error,Capacity))return false;
  char Why[512]={0};xvalue* Rows=MdoExtensionsList("plugins",Why);bool Ok=Rows&&MdoApplicationPluginsStorePublish(Rows,Error,Capacity);xrtValueRelease(Rows);xrtValueRelease(Before);MdoApplicationPluginsStoreEnd();
+ if(Ok)Ok=MdoModuleManagerRefreshPrompts();
  if(!Ok&&Error&&Capacity&&!Error[0])snprintf(Error,Capacity,"%s",Why[0]?Why:"Plugin catalogue could not be refreshed");
  return Ok;
 }
@@ -173,7 +175,7 @@ bool MdoApplicationPluginsCall(const mdo_sdk_context_v1* C,cstr Method,const xva
   cstr Id=SdkField(P,"id");if(Id&&!MdoPluginIdentity(Id))return MdoApplicationError(E,"sdk_arguments_invalid","Choose a typed plugin identity","plugin",422,false);
   MdoApplicationInvocation* Invocation=C?C->Opaque:NULL;MdoModuleCatalog* Catalog=Invocation&&Invocation->Catalog?MdoModuleCatalogRef(Invocation->Catalog):MdoModuleCatalogSnapshot();
   xvalue* Items=xrtValueArray();const xvalue* Rows=MdoModuleCatalogPromptContributions(Catalog);bool Ok=Items!=NULL;
-  for(size_t I=0;Ok&&I<xrtValueCount(Rows);I++){const xvalue* Row=xrtValueArrayGet(Rows,I);if(!Id||!strcmp(Id,SdkField(Row,"plugin")))Ok=xrtValueArrayAppend(Items,Row);}
+  for(size_t I=0;Ok&&I<xrtValueCount(Rows);I++){const xvalue* Row=xrtValueArrayGet(Rows,I);if(!Id||!strcmp(Id,SdkField(Row,"plugin")))Ok=xrtValueArrayAppendNew(Items,xrtValueClone(Row));}
   *R=Ok?xrtValueObject():NULL;Ok=Ok&&*R&&SdkPutUInt(*R,"generation",MdoModuleCatalogGeneration(Catalog))&&xrtValueObjectSet(*R,XRT_STR_LITERAL("items"),Items);
   xrtValueRelease(Items);MdoModuleCatalogRelease(Catalog);return Ok;
  }
@@ -193,5 +195,6 @@ bool MdoApplicationPluginsCall(const mdo_sdk_context_v1* C,cstr Method,const xva
  if(Ok)Ok=SdkPluginConfigSave(Desired);
  if(Ok&&!MdoApplicationPluginsStorePublish(Desired,E->Message,sizeof(E->Message))){bool Restored=SdkPluginConfigSave(Before);Ok=MdoApplicationError(E,"sdk_plugin_publish_failed",Restored?"Previous activation retained":"Plugin activation needs recovery","plugin",500,!Restored);}
  MdoApplicationPluginsStoreEnd();xrtValueRelease(Before);xrtValueRelease(Desired);xrtValueRelease(Changes);xrtValueRelease(Plan);
+ if(Ok&&!MdoModuleManagerRefreshPrompts())Ok=MdoApplicationError(E,"sdk_plugin_prompt_reload_failed","Plugin selection was saved; prompt catalog refresh failed. Inspect module diagnostics and retry reload.","plugin",409,false);
  if(Ok){MdoApplicationEvent("plugin.changed",C,NULL);*R=SdkPluginList();}return Ok;
 }

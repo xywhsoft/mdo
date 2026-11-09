@@ -34,6 +34,7 @@ static bool MdoAgentsPluginCanonicalize(MdoAgentOwner* Owner,xvalue* Group){
             const xvalue* C=xrtValueArrayGet(Controls,J);cstr K=MdoAgentConfigText(C,"key");if(K&&!strcmp(Key,K)){Control=C;break;}
         }
         xvalue* Row=xrtValueClone(Original);bool Enabled=Control&&MdoAgentConfigBool(Control,"enabled",true);
+        uint64 Priority=100;if(Control&&MdoAgentConfigNumber(Control,"priority",100,10000,&Priority))Ok=Row&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("priority"),xrtValueUInt(Priority));
         cstr Text=MdoAgentConfigText(Control,"text"),Before=MdoAgentConfigText(Original,"text");
         if(Text&&strcmp(Text,Before)){
             char Hash[65];bool Valid=strlen(Text)<=MDO_PLUGIN_PROMPT_BYTES&&MdoExtensionHash(Text,Hash);

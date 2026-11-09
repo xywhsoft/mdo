@@ -209,9 +209,9 @@ static inline bool MdoAgentConfigValidate(const xvalue* Object, char* Error, siz
         if (xrtValueType(Spec) == XVALUE_BOOL) continue;
         if (xrtValueType(Spec) != XVALUE_OBJECT) { Failure = "context source must be a boolean or object"; goto failed; }
         if(!strcmp(Key.Data,"plugins.instructions")&&
-           (!MdoAgentConfigKeys(Spec,"|enabled||role||order||include||exclude||max_bytes|")||
+           (!MdoAgentConfigKeys(Spec,"|enabled||role||include||exclude||max_bytes|")||
             !MdoAgentConfigNumber(Spec,"max_bytes",0,16384u,&Number))){
-            Failure="plugin instructions accept selection, role, order and a budget up to 16 KiB; use custom sources for role text";goto failed;
+            Failure="plugin instructions accept selection, role and a budget up to 16 KiB; use custom sources for role text";goto failed;
         }
         if(!MdoAgentConfigKeys(Spec,"|enabled||required||role||refresh||max_bytes||order||include||exclude||file||text||template||append||origin|") ||
             !MdoAgentConfigBooleanValid(Spec,"enabled") || !MdoAgentConfigBooleanValid(Spec,"required")){

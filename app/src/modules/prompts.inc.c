@@ -5,7 +5,8 @@ static mdo_result MdoModulesRegistrarAddPrompt(void* U,const mdo_prompt_contribu
     if(!M||R->Failed||!M->PluginEntry||!D||D->Size<sizeof(*D)||D->AbiVersion!=MDO_MODULE_ABI_VERSION||
        !(D->Targets&3u)||(D->Targets&~3u)||D->Activation>MDO_PROMPT_EXPLICIT||D->Priority<0||D->Priority>10000||
        D->AnyToolCount>MDO_PLUGIN_PROMPT_TOOLS||D->AllToolCount>MDO_PLUGIN_PROMPT_TOOLS||
-       (D->AnyToolCount&&!D->AnyTools)||(D->AllToolCount&&!D->AllTools))
+       (D->AnyToolCount&&!D->AnyTools)||(D->AllToolCount&&!D->AllTools)||!D->Id||strlen(D->Id)>64||
+       !D->Text||strlen(D->Text)>MDO_PLUGIN_PROMPT_BYTES||(D->Title&&strlen(D->Title)>256))
         return MdoModulesApplicationReject(R,Error,Cap,"Prompt registration requires a plugin and a valid descriptor");
     xvalue* P=xrtValueObject(),*Targets=xrtValueArray(),*When=xrtValueObject(),*Any=xrtValueArray(),*All=xrtValueArray();
     bool Ok=P&&Targets&&When&&Any&&All&&SdkPut(P,"id",D->Id)&&SdkPut(P,"text",D->Text)&&
@@ -37,8 +38,13 @@ static bool MdoModulesPromptAppend(MdoModuleCatalog* C,const xvalue* P,cstr Owne
     }
     Ok=Ok&&xrtValueArrayAppend(C->Prompts,Row);xrtFree(Key);xrtValueRelease(Row);return Ok;
 }
+static bool MdoModulesPromptSourcesHash(char Hash[65]){
+    xvalue* Sources=MdoApplicationPluginPromptSources();char* Json=Sources?SdkJson(Sources):NULL;
+    bool Ok=Json&&MdoExtensionHash(Json,Hash);xrtFree(Json);xrtValueRelease(Sources);return Ok;
+}
 static bool MdoModulesCollectPrompts(MdoModuleCatalog* C){
     C->Prompts=xrtValueArray();xvalue* Plugins=MdoApplicationPluginPromptSources();bool Ok=C->Prompts&&Plugins;
+    char* Json=Ok?SdkJson(Plugins):NULL;Ok=Ok&&Json&&MdoExtensionHash(Json,C->PromptSourcesHash);xrtFree(Json);
     for(size_t I=0;Ok&&I<xrtValueCount(Plugins);I++){
         const xvalue* M=xrtValueArrayGet(Plugins,I),*Items=SdkGet(M,"prompts");
         cstr Owner=SdkField(M,"id"),Alias=SdkField(M,"alias");char Module[160];snprintf(Module,sizeof(Module),"plugin.%s",Alias);
@@ -60,3 +66,8 @@ static bool MdoModulesCollectPrompts(MdoModuleCatalog* C){
 }
 const xvalue* MdoModuleCatalogPromptContributions(const MdoModuleCatalog* C){return C?C->Prompts:NULL;}
 uint64 MdoModuleCatalogGeneration(const MdoModuleCatalog* C){return C?C->Generation:0;}
+bool MdoModuleManagerRefreshPrompts(void){
+    MdoModuleCatalog* C=MdoModuleCatalogSnapshot();if(!C)return true;
+    char Hash[65];bool Ok=MdoModulesPromptSourcesHash(Hash),Changed=Ok&&strcmp(Hash,C->PromptSourcesHash);
+    MdoModuleCatalogRelease(C);return Ok&&(!Changed||MdoModuleManagerReload());
+}
