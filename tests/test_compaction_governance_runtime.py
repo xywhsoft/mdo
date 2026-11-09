@@ -51,6 +51,7 @@ def main():
         config.write_text(json.dumps({'engine':{'workers':2},'services':[{'enabled':True,'class':'http','name':'context-qa','ip':'127.0.0.1','port':port,'host_default':{'enabled':True,'name':'mdo','path':'web','devlang':'c','devfile':'generated/mdo_unity.c'}}]}),encoding='utf-8')
         if a.packed:
             exe=base/'mdo.exe';shutil.copyfile(a.packed.resolve(),exe);command=[str(exe)];directory=base
+            if os.name!='nt':exe.chmod(0o700)
         else:command=[str(a.host.resolve()),str(config),'--','--home',str(home)];directory=ROOT/'app'
         with (base/'runtime.log').open('wb') as log:
           child=subprocess.Popen(command,cwd=directory,env=dict(os.environ,MDO_HOME=str(home),USE_WEBVIEW='0',MDO_CONTEXT_FIXTURE_KEY='fixture-only'),stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
