@@ -113,7 +113,7 @@ static inline bool MdoAgentConfigSourceKnown(cstr Id)
     static const char* Names[] = { "system", "skills.preload", "user_instructions",
         "reply_language", "environment", "external_tools", "skills.discovery",
         "knowledge", "memory.global", "memory.project", "file_access",
-        "project_rules", "mcp.instructions" };
+        "project_rules", "mcp.instructions", "plugins.instructions" };
     for (size_t i = 0; i < sizeof(Names)/sizeof(*Names); ++i)
         if (!strcmp(Id, Names[i])) return true;
     return !strncmp(Id, "custom.", 7u) && MdoExtensionAlias(Id + 7u);
@@ -208,6 +208,11 @@ static inline bool MdoAgentConfigValidate(const xvalue* Object, char* Error, siz
         }
         if (xrtValueType(Spec) == XVALUE_BOOL) continue;
         if (xrtValueType(Spec) != XVALUE_OBJECT) { Failure = "context source must be a boolean or object"; goto failed; }
+        if(!strcmp(Key.Data,"plugins.instructions")&&
+           (!MdoAgentConfigKeys(Spec,"|enabled||role||order||include||exclude||max_bytes|")||
+            !MdoAgentConfigNumber(Spec,"max_bytes",0,16384u,&Number))){
+            Failure="plugin instructions accept selection, role, order and a budget up to 16 KiB; use custom sources for role text";goto failed;
+        }
         if(!MdoAgentConfigKeys(Spec,"|enabled||required||role||refresh||max_bytes||order||include||exclude||file||text||template||append||origin|") ||
             !MdoAgentConfigBooleanValid(Spec,"enabled") || !MdoAgentConfigBooleanValid(Spec,"required")){
             Failure="unknown context option or invalid boolean";goto failed;

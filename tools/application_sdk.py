@@ -135,6 +135,7 @@ def native_contracts():
         if action=='write':fields.update(text=string,base64=string)
         add('stream.'+action,'Operate on a stream handle. A would-block failure accepts no bytes; close preserves buffered data until EOF.',fields,('handle',))
     add('plugin.list','List installed VFS plugins and recovery status')
+    add('plugin.prompts','Read version-pinned plugin prompt contributions, ownership, conditions and content. Does not execute plugin code.',{'id':string})
     add('plugin.get','Read one verified plugin inventory and manifest.',{'id':string,'revision':string},('id',))
     add('plugin.file.read','Read a current plugin text file up to 1 MiB. Binary files use the common file endpoint.',{'id':string,'revision':string,'path':string},('id','path'))
     plugin_changes={'type':'array','maxItems':32,'items':{'type':'object','properties':{'id':string,'enabled':boolean},'required':['id','enabled'],'additionalProperties':False}}

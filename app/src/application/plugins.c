@@ -11,7 +11,7 @@ static struct {
  xvalue *Map,*Effective,*Frontends,*Failures;xvfsmount Mount,HomeMount;
  size_t Readers;bool Busy,Recovery,Pending,ConfigBroken;
 } SdkPlugins;
-static const cstr SdkPluginMethods[]={"plugin.list","plugin.get","plugin.file.read","plugin.enable","plugin.disable","plugin.plan","plugin.commit","plugin.preset.list","plugin.preset.save","plugin.preset.remove","plugin.preset.plan","plugin.frontend.hello","plugin.frontend.enter","plugin.frontend.leave","plugin.frontend.fail","runtime.reload","runtime.reload.status"};
+static const cstr SdkPluginMethods[]={"plugin.list","plugin.get","plugin.prompts","plugin.file.read","plugin.enable","plugin.disable","plugin.plan","plugin.commit","plugin.preset.list","plugin.preset.save","plugin.preset.remove","plugin.preset.plan","plugin.frontend.hello","plugin.frontend.enter","plugin.frontend.leave","plugin.frontend.fail","runtime.reload","runtime.reload.status"};
 static void SdkPluginDrop(SdkPlugin* P){xrtValueRelease(P->Manifest);memset(P,0,sizeof(*P));}
 static bool SdkPluginEnabled(const xvalue* M){bool Enabled=true;xrtValueGetBool(SdkGet(M,"enabled"),&Enabled);return Enabled;}
 #include "plugins_vfs.inc.c"
@@ -169,6 +169,14 @@ bool MdoApplicationPluginsCall(const mdo_sdk_context_v1* C,cstr Method,const xva
   XS_ServerInfo* Server=MdoApplicationServer();uint64 Id=Server?xsReloadServerSubmit(Server->Name):0;if(!Id)return MdoApplicationError(E,"sdk_reload_failed","Host reload could not be submitted","reload",409,false);*R=xrtValueObject();SdkPutUInt(*R,"id",Id);return true;}
  if(!strcmp(Method,"runtime.reload.status")){uint64 Id=0;XS_ReloadResult Q={0};if(!SdkUInt(SdkGet(P,"id"),&Id)||!xsReloadQuery(Id,&Q))return MdoApplicationError(E,"sdk_reload_missing","Reload receipt unavailable","reload",404,false);*R=xrtValueObject();SdkPutUInt(*R,"state",Q.State);SdkPut(*R,"message",Q.Message);return true;}
  if(!SdkPlugins.Lock)return MdoApplicationError(E,"sdk_unavailable","Plugin manager unavailable","plugin",503,false);
+ if(!strcmp(Method,"plugin.prompts")){
+  cstr Id=SdkField(P,"id");if(Id&&!MdoPluginIdentity(Id))return MdoApplicationError(E,"sdk_arguments_invalid","Choose a typed plugin identity","plugin",422,false);
+  MdoApplicationInvocation* Invocation=C?C->Opaque:NULL;MdoModuleCatalog* Catalog=Invocation&&Invocation->Catalog?MdoModuleCatalogRef(Invocation->Catalog):MdoModuleCatalogSnapshot();
+  xvalue* Items=xrtValueArray();const xvalue* Rows=MdoModuleCatalogPromptContributions(Catalog);bool Ok=Items!=NULL;
+  for(size_t I=0;Ok&&I<xrtValueCount(Rows);I++){const xvalue* Row=xrtValueArrayGet(Rows,I);if(!Id||!strcmp(Id,SdkField(Row,"plugin")))Ok=xrtValueArrayAppend(Items,Row);}
+  *R=Ok?xrtValueObject():NULL;Ok=Ok&&*R&&SdkPutUInt(*R,"generation",MdoModuleCatalogGeneration(Catalog))&&xrtValueObjectSet(*R,XRT_STR_LITERAL("items"),Items);
+  xrtValueRelease(Items);MdoModuleCatalogRelease(Catalog);return Ok;
+ }
  if(!strcmp(Method,"plugin.list")){*R=SdkPluginList();return true;}
  if(!strncmp(Method,"plugin.preset.",14))return SdkPluginPresetCall(Method,P,R,E);
  if(!strcmp(Method,"plugin.file.read"))return SdkPluginFileCall(P,R,E);

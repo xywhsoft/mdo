@@ -28,6 +28,19 @@ static inline bool mdoAgentSetContextText(const mdo_agent_context_v1* Context,co
     xvalue* Source=mdoAgentContextSource(Context,Id);
     return Source && xrtValueObjectSetNew(Source,xrtStrView("text"),xrtValueString(xrtStrView(Text)));
 }
+/* CONTEXT-phase controls, evaluated again against real tools before dispatch.
+ * A role may suppress a contribution but cannot enable an unavailable tool. */
+static inline xvalue* mdoAgentPromptContributions(const mdo_agent_context_v1* Context)
+{return xrtValueObjectGet(mdoAgentContextSource(Context,"plugins.instructions"),XRT_STR_LITERAL("items"));}
+static inline bool mdoAgentSetPromptEnabled(const mdo_agent_context_v1* Context,const char* Key,bool Enabled)
+{
+    xvalue* Items=mdoAgentPromptContributions(Context);
+    for(size_t I=0;Key&&I<xrtValueCount(Items);I++){
+        xvalue* Row=xrtValueArrayGet(Items,I);xstrview Id;
+        if(xrtValueGetString(xrtValueObjectGet(Row,XRT_STR_LITERAL("key")),&Id)&&xrtStrEqual(Id,xrtStrView(Key)))
+            return xrtValueObjectSetNew(Row,XRT_STR_LITERAL("enabled"),xrtValueBool(Enabled));
+    }return false;
+}
 /* Called only inside Program.Run. It reuses the claimed, managed executor,
  * ordinary recovery, tool policy, streaming, persistence and cancellation. */
 static inline mdo_result mdoAgentRunDefault(const mdo_agent_context_v1* Context,xwork_error* Error)

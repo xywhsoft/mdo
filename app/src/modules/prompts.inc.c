@@ -59,3 +59,4 @@ static bool MdoModulesCollectPrompts(MdoModuleCatalog* C){
     xrtValueRelease(Plugins);return Ok;
 }
 const xvalue* MdoModuleCatalogPromptContributions(const MdoModuleCatalog* C){return C?C->Prompts:NULL;}
+uint64 MdoModuleCatalogGeneration(const MdoModuleCatalog* C){return C?C->Generation:0;}

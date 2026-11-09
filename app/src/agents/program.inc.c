@@ -147,7 +147,7 @@ static bool MdoAgentsRefreshContext(MdoAgentOwner* Owner,MdoAgentInstance* Insta
     xwork_agent_extension_context* Native,bool Force,xwork_error* Error)
 {
     const xvalue* McpSpec=MdoAgentsSourceSpec(Instance->Configuration,"mcp.instructions");
-    bool Refresh=Force || !Instance->Plan || MdoAgentsSourceEnabled(McpSpec,MdoAgentsMcpAvailable(&Instance->Definition,Native));
+    bool Refresh=Force || !Instance->Plan || xrtValueCount(MdoModuleCatalogPromptContributions(Owner->Modules)) || MdoAgentsSourceEnabled(McpSpec,MdoAgentsMcpAvailable(&Instance->Definition,Native));
     const xvalue* Context=MdoAgentConfigGet(Instance->Configuration,"context");
     for(size_t I=0;!Refresh && I<xrtValueCount(Context);I++){
         const xvalue* Spec=xrtValueObjectAt(Context,I,NULL);
@@ -160,8 +160,8 @@ static bool MdoAgentsRefreshContext(MdoAgentOwner* Owner,MdoAgentInstance* Insta
     xvalue* SourcePlan=MdoAgentConfigClone(Plan);
     if(!SourcePlan){xrtValueRelease(Plan);return false;}
     if(!MdoAgentsProgramEvent(Owner,Instance,Native,Plan,MDO_AGENT_CONTEXT,Error)){xrtValueRelease(SourcePlan);xrtValueRelease(Plan);return false;}
-    char* System=MdoAgentsContextRender(Plan,"system",Error);
-    char* User=System?MdoAgentsContextRender(Plan,"user",Error):NULL;
+    char* System=MdoAgentsContextRenderBase(Plan,"system",Error);
+    char* User=System?MdoAgentsContextRenderBase(Plan,"user",Error):NULL;
     xllm_error ModelError;
     bool Ok=System && User && xllmSessionSetSystemPrompt(Native->pSession,System,&ModelError);
     if(Ok){
@@ -189,7 +189,7 @@ static bool MdoAgentsRequestCopy(const xllm_request* Source,xllm_request* Copy)
 }
 static bool MdoAgentsRequestContext(MdoAgentInstance* Instance,xllm_request* Request,xwork_error* Error)
 {
-    char* User=Instance->Plan?MdoAgentsContextRender(Instance->Plan,"user",Error):xrtStrDup("");
+    char* User=Instance->Plan?MdoAgentsContextRenderBase(Instance->Plan,"user",Error):xrtStrDup("");
     if(!User)return false;
     if(!User[0]){xrtFree(User);return true;}
     xllm_request Copy;if(!MdoAgentsRequestCopy(Request,&Copy)){xllmRequestUnit(&Copy);xrtFree(User);return false;}
@@ -206,6 +206,7 @@ static bool MdoAgentsRequestContext(MdoAgentInstance* Instance,xllm_request* Req
     xrtFree(User);if(!Ok){xllmRequestUnit(&Copy);return false;}
     xllmRequestUnit(Request);*Request=Copy;return true;
 }
+#include "plugin_prompt_request.inc.c"
 static bool MdoAgentsRequestOptions(MdoAgentInstance* Instance,xllm_request* Request,xwork_error* Error)
 {
     const xvalue* Options=MdoAgentConfigGet(Instance->Configuration,"model_options");
@@ -335,8 +336,25 @@ static xwork_result MdoAgentsExtension(void* Data,xwork_agent_extension_context*
             if(!xworkAgentWaitRecovery(Native->pAgent,"resource",Error,++PrepareAttempt))return XWORK_RESULT_ERROR;
             xworkErrorInit(Error);
         }
+        MdoAgentPluginMessage PluginMessage={0};
+        PrepareAttempt=0;
+        while(!MdoAgentsPluginRequest(Owner,Instance,Native,&PluginMessage,false,Error)){
+            if(Error&&Error->eCode!=XWORK_ERROR_OUT_OF_MEMORY)return XWORK_RESULT_ERROR;
+            if(!xworkAgentWaitRecovery(Native->pAgent,"resource",Error,++PrepareAttempt))return XWORK_RESULT_ERROR;
+            xworkErrorInit(Error);
+        }
         if(!MdoAgentsRequestOptions(Instance,Native->pRequest,Error) ||
-            !MdoAgentsProgramEvent(Owner,Instance,Native,Instance->Plan,MDO_AGENT_BEFORE_REQUEST,Error))return XWORK_RESULT_ERROR;
+            !MdoAgentsProgramEvent(Owner,Instance,Native,Instance->Plan,MDO_AGENT_BEFORE_REQUEST,Error)){
+            xrtFree(PluginMessage.Text);return XWORK_RESULT_ERROR;
+        }
+        PrepareAttempt=0;
+        while(!MdoAgentsPluginRequest(Owner,Instance,Native,&PluginMessage,true,Error)){
+            if((Error&&Error->eCode!=XWORK_ERROR_OUT_OF_MEMORY)||!xworkAgentWaitRecovery(Native->pAgent,"resource",Error,++PrepareAttempt)){
+                xrtFree(PluginMessage.Text);return XWORK_RESULT_ERROR;
+            }
+            xworkErrorInit(Error);
+        }
+        xrtFree(PluginMessage.Text);
         /* Tool schemas may be customized, but executing a name still requires
          * its real managed descriptor and live permission checks. */
         xwork_tool_catalog* Catalog=xworkAgentToolCatalogSnapshot(Native->pAgent);

@@ -47,6 +47,8 @@ xvalue* MdoAgentSessionInspect(MdoAgentSession* Session,xwork_error* Error)
         xvalue* Item=xrtValueObject();
         Ok=Item && MdoAgentsPlanPut(Item,"agent_id",I->Definition.Id) &&
             xrtValueObjectSetNew(Item,XRT_STR_LITERAL("model_calls"),xrtValueUInt(I->ModelCalls));
+        if(Ok&&I->Agent!=Session->Agent&&I->Plan)Ok=xrtValueObjectSetNew(Item,XRT_STR_LITERAL("context"),MdoAgentConfigClone(I->Plan));
+        if(Ok&&I->Agent!=Session->Agent&&I->RequestPreview)Ok=xrtValueObjectSetNew(Item,XRT_STR_LITERAL("request"),MdoAgentConfigClone(I->RequestPreview));
         if(Ok && I->Agent==Session->Agent){
             if(I->Plan)Ok=xrtValueObjectSetNew(Data,XRT_STR_LITERAL("context"),MdoAgentConfigClone(I->Plan));
             if(Ok && I->RequestPreview)Ok=xrtValueObjectSetNew(Data,XRT_STR_LITERAL("request"),MdoAgentConfigClone(I->RequestPreview));

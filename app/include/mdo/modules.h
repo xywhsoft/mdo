@@ -116,6 +116,7 @@ MdoModuleCatalog* MdoModuleCatalogRef(MdoModuleCatalog* pCatalog);
 void MdoModuleCatalogRelease(MdoModuleCatalog* pCatalog);
 /* Borrowed immutable rows, retained by the catalog; no callbacks or file I/O. */
 const xvalue* MdoModuleCatalogPromptContributions(const MdoModuleCatalog*);
+uint64 MdoModuleCatalogGeneration(const MdoModuleCatalog*);
 size_t MdoModuleCatalogModuleCount(const MdoModuleCatalog* pCatalog);
 size_t MdoModuleCatalogToolCount(const MdoModuleCatalog* pCatalog);
 size_t MdoModuleCatalogAgentCount(const MdoModuleCatalog* pCatalog);

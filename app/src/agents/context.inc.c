@@ -132,6 +132,7 @@ static bool MdoAgentsPlanSource(xvalue* Plan,cstr Id,char* Text,const xvalue* Sp
     if(!Ok && (!Error || Error->eCode==XWORK_ERROR_NONE))MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"cannot construct Agent context source");
     return Ok;
 }
+#include "plugin_prompts.inc.c"
 static bool MdoAgentsFrozenSource(MdoAgentInstance* Instance,xvalue* Plan,cstr Id,const xvalue* Spec,bool* Frozen)
 {
     *Frozen=false;
@@ -164,6 +165,7 @@ static bool MdoAgentsContextCollect(MdoAgentOwner* Owner,MdoAgentInstance* Insta
         bool Enabled=MdoAgentsSourceEnabled(Spec,MdoAgentsMcpAvailable(Definition,Native));
         char* Text=Enabled?MdoMcpRolePrompt(Owner->Workspace,NULL,0,false,Error):xrtStrDup("");
         if(Ok)Ok=MdoAgentsPlanSource(Plan,"mcp.instructions",Text,Spec,1200,Enabled,"mcp.instructions",Error);else xrtFree(Text);
+        if(Ok)Ok=MdoAgentsPluginSource(Owner,Instance,Native,Plan,Error);
         goto done;
     }
     static const char* Ids[]={"system","skills.preload","user_instructions","reply_language","environment","external_tools",
@@ -226,6 +228,7 @@ static bool MdoAgentsContextCollect(MdoAgentOwner* Owner,MdoAgentInstance* Insta
         }
         if(Ok)Ok=MdoAgentsPlanSource(Plan,Id,Text,Spec,I*100u,Enabled,Id,Error);else xrtFree(Text);
     }
+    if(Ok)Ok=MdoAgentsPluginSource(Owner,Instance,Native,Plan,Error);
     const xvalue* Context=MdoAgentConfigGet(Instance->Configuration,"context");
     for(size_t I=0;Ok && I<xrtValueCount(Context);I++){
         xstrview Key;const xvalue* Spec=xrtValueObjectAt(Context,I,&Key);
@@ -248,7 +251,7 @@ static int MdoAgentsContextCompare(const void* A,const void* B)
     cstr L=MdoAgentConfigText(*(const xvalue**)A,"id"),R=MdoAgentConfigText(*(const xvalue**)B,"id");
     return strcmp(L?L:"",R?R:"");
 }
-static char* MdoAgentsContextRender(const xvalue* Plan,cstr Role,xwork_error* Error)
+static char* MdoAgentsContextRenderFiltered(const xvalue* Plan,cstr Role,bool BaseOnly,xwork_error* Error)
 {
     const xvalue* Sources=MdoAgentConfigGet(Plan,"sources");const xvalue* Sorted[128];size_t N=xrtValueCount(Sources);
     if(xrtValueType(Sources)!=XVALUE_ARRAY || N>128){MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"Agent context requires at most 128 sources");return NULL;}
@@ -265,6 +268,7 @@ static char* MdoAgentsContextRender(const xvalue* Plan,cstr Role,xwork_error* Er
     qsort(Sorted,N,sizeof(*Sorted),MdoAgentsContextCompare);
     char* Text=xrtStrDup("");
     for(size_t I=0;Text && I<N;I++){
+        if(BaseOnly&&!strcmp(MdoAgentConfigText(Sorted[I],"id"),"plugins.instructions"))continue;
         cstr SourceRole=MdoAgentConfigText(Sorted[I],"role"),Body=MdoAgentConfigText(Sorted[I],"text");
         if(!SourceRole || (strcmp(SourceRole,"system") && strcmp(SourceRole,"user")) || !Body || !xrtUtf8Valid(xrtStrView(Body),NULL)){
             xrtFree(Text);MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"invalid context source role or UTF-8 text");return NULL;
@@ -275,3 +279,5 @@ static char* MdoAgentsContextRender(const xvalue* Plan,cstr Role,xwork_error* Er
     }
     return Text;
 }
+static char* MdoAgentsContextRender(const xvalue* Plan,cstr Role,xwork_error* Error){return MdoAgentsContextRenderFiltered(Plan,Role,false,Error);}
+static char* MdoAgentsContextRenderBase(const xvalue* Plan,cstr Role,xwork_error* Error){return MdoAgentsContextRenderFiltered(Plan,Role,true,Error);}

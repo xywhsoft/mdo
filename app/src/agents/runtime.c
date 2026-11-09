@@ -19,6 +19,7 @@
 #include "../../include/mdo/knowledge.h"
 #include "../../include/mdo/agent_config.h"
 #include "../../include/mdo/agent_file.h"
+#include "../../include/mdo/prompt_contribution.h"
 #include "../../include/mdo/sessions.h"
 
 #define MDO_AGENT_DEFAULT_ID "mdo.default"
@@ -1439,7 +1440,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         MdoAgentInstance Draft={0};xwork_agent_extension_context Native={0};xvalue* Plan=NULL;
         Draft.Definition=AgentInfo;Draft.Configuration=AgentInfo.ConfigurationJson?xrtJsonParse(xrtStrView(AgentInfo.ConfigurationJson)):xrtValueObject();
         bool Collected=Draft.Configuration && MdoAgentsContextCollect(Owner,&Draft,&AgentInfo,&Native,&Plan,Error);
-        Prompt=Collected?MdoAgentsContextRender(Plan,"system",Error):NULL;
+        Prompt=Collected?MdoAgentsContextRenderBase(Plan,"system",Error):NULL;
         xrtValueRelease(Plan);xrtValueRelease(Draft.Configuration);MemoryGeneration=MdoMemoryManagerGeneration();
         if(!Prompt)goto fail;
         if(Options->Recover && !xllmSessionSetSystemPrompt(Owner->LlmSession,Prompt,&ModelError)){
