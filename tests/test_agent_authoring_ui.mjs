@@ -29,9 +29,12 @@ test("role inspector displays source diagnostics in a shared window without savi
   await openRolePlan({kind:"subagents",id:"sample",content:newRole("subagents"),owner:document.body});
   const dialog=document.body.querySelector("dialog");assert(dialog.classList.contains("mdo-layer"));
   assert(dialog.textContent.includes("System fixture"));assert(dialog.textContent.includes("不运行 C 回调"));
-  assert.equal(calls[0].method,"POST");assert.equal(calls[0].url,"/api/v1/extensions/subagents/sample/plan?project=default");
+  assert.equal(calls[0].method,"POST");assert.equal(calls[0].url,"/api/v1/extensions/subagents/sample/plan");
   assert.equal(calls.length,1);
   descendants(dialog).find(node=>node.tagName === "BUTTON"&&node.textContent === "关闭").click();
+  await openRolePlan({kind:"subagents",id:"sample",content:newRole("subagents"),owner:document.body,project:"workspace 1"});
+  assert.equal(calls[1].url,"/api/v1/extensions/subagents/sample/plan?project=workspace%201");
+  const scoped=document.body.querySelector("dialog");descendants(scoped).find(node=>node.tagName === "BUTTON"&&node.textContent === "关闭").click();
 });
 
 test("both role editors save explicit no-tools and expose identical C/configuration controls",async t=>{

@@ -57,13 +57,13 @@ static const mdo_agent_v1 Role={
 MDO_AGENT_MODULE(Role)
 `;
 }
-export async function openRolePlan({kind,id,content,owner}) {
+export async function openRolePlan({kind,id,content,owner,project}) {
   const layer = openLayer({title:uiText("ui.agentAuthoring.roleContextPreview", {}, "角色上下文预览"),icon:"terminal",width:"64rem",height:"85%",owner});
   const status = element("p",{text:uiText("ui.agentAuthoring.buildingPreview", {}, "正在构建预览…"),attrs:{role:"status"}});layer.body.append(status);
   const close=element("button",{className:"secondary-button",text:uiText("context.close", {}, "关闭"),attrs:{type:"button"}});
   close.addEventListener("click",()=>layer.close());layer.footer.append(close);
   try {
-    const url=`/extensions/${kind}/${encodeURIComponent(id)}/plan?project=default`;
+    const url=`/extensions/${kind}/${encodeURIComponent(id)}/plan${project?`?project=${encodeURIComponent(project)}`:""}`;
     const {data}=content === undefined ? await api.get(url,{signal:layer.signal}) : await api.post(url,{content},{signal:layer.signal});
     if(layer.signal.aborted)return;
     writeUiText(status, uiText("ui.agentAuthoring.configurationPreviewDoesNotRunCCallbacksOrCall", {}, "配置预览不运行 C 回调、不调用模型。C 回调后的实际请求可通过运行时检查接口查看。预览包含你的提示词与记忆，仅在当前设备显示。"));
