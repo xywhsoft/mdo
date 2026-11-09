@@ -38,3 +38,20 @@
 重新读取项目选择，每次请求最终筛选复用这一快照，不重新读取说明正文。
 修复角色预览固定传入不存在的 `default` 项目；全局预览不再伪造项目，显式
 项目仍可传入。
+
+## 最终构建与收尾
+
+- Windows 测试程序：`.build/prompt-contributions/mdo.exe`，7,717,913 字节，
+  SHA-256 `c4733fd1f436759b2ead24d202b27c8a2c1713ed8a3cb54641744242a79cd1be`。
+- 默认宿主缓存的 SDK overlay 收据较旧，构建器正确拒绝复用；改为复用现有
+  Browser Use `.mdo/host`，通过锁定 revision、overlay、profile、图标及二进制
+  收据验证后打包。没有修改锁定版本或复制宿主环境。
+- 打包程序实际启动后，首页、贡献选择模块、`plugin.prompts`、无项目的
+  默认角色预览全部 HTTP 200。最终使用该程序重跑 28＋18＋5 项原生检查，
+  以及 8 项前端回归，全部通过。
+- Browser Use 新 ZIP 55,301 字节；Skill ZIP 6,235 字节。安装需使用本次
+  新宿主；未发布线上。原有正式程序与账号数据未替换。
+- 临时源代码服务配置已删除，仅关闭路径与测试 Home 均匹配的自有测试进程。
+  私有证据与构建收据留在 `.build/prompt-contributions`。工作区既有
+  `app/include/mdo/config.h` 原始 SHA-256 保持
+  `418005fc8373174e2ab08d2ef95a6edb61106034133fb4b6610a78f0dd4f12b1`。
