@@ -293,6 +293,27 @@ typedef struct mdo_lifecycle_v1 {
     mdo_agent_event_v1 OnEvent;
 } mdo_lifecycle_v1;
 
+/* Static, generation-owned instructions. Registration copies every string.
+ * These describe capabilities; they never grant tools or permissions. Smaller
+ * Priority values are admitted first within the plugin instructions source. */
+#define MDO_PROMPT_PRIMARY 1u
+#define MDO_PROMPT_SUBAGENT 2u
+#define MDO_PROMPT_WITH_TOOLS 0u
+#define MDO_PROMPT_EXPLICIT 1u
+typedef struct mdo_prompt_contribution_v1 {
+    uint32_t Size,AbiVersion;
+    const char* Id;
+    const char* Text;
+    uint32_t Targets;
+    uint32_t Activation;
+    const char* const* AnyTools;
+    size_t AnyToolCount;
+    const char* const* AllTools;
+    size_t AllToolCount;
+    int32_t Priority;
+    const char* Title;
+} mdo_prompt_contribution_v1;
+
 typedef enum mdo_log_level {
     MDO_LOG_DEBUG = 0,
     MDO_LOG_INFO,
@@ -332,6 +353,9 @@ typedef struct mdo_registrar_v1 {
     /* Bind an existing host tool through this extension's identity/lifecycle.
      * The host retains its real schema, execution and permission handling. */
     mdo_result (*AddBuiltinTool)(void* Context, const char* Id, char*, size_t);
+    /* Optional ABI tail: check Size before using with an older host. */
+    mdo_result (*AddPromptContribution)(void* Context,
+        const mdo_prompt_contribution_v1*, char*, size_t);
 } mdo_registrar_v1;
 
 typedef mdo_result (*mdo_module_register_v1)(

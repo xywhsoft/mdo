@@ -16,13 +16,26 @@ static void SdkPluginDrop(SdkPlugin* P){xrtValueRelease(P->Manifest);memset(P,0,
 static bool SdkPluginEnabled(const xvalue* M){bool Enabled=true;xrtValueGetBool(SdkGet(M,"enabled"),&Enabled);return Enabled;}
 #include "plugins_vfs.inc.c"
 
+static xvalue* SdkPluginResolvePrompts(const xvalue* Doc,cstr Root,char* Error,size_t Capacity){
+ xvalue* Items=xrtValueArray();const xvalue* Prompts=SdkGet(Doc,"prompts");bool Ok=Items!=NULL;
+ for(size_t I=0;Ok&&I<xrtValueCount(Prompts);I++){
+  const xvalue* P=xrtValueArrayGet(Prompts,I);xvalue* Row=xrtValueClone(P);cstr File=SdkField(P,"file");char* Text=NULL;
+  if(File){char* Path=xrtFormat("%s/%s",Root,File);Text=Path?MdoExtensionRead(Path,true,MDO_PLUGIN_PROMPT_BYTES,NULL):NULL;xrtFree(Path);}
+  else Text=xrtStrDup(SdkField(P,"text"));
+  Ok=Row&&Text&&strlen(Text)<=MDO_PLUGIN_PROMPT_BYTES&&xrtStrTrim(xrtStrView(Text)).Size&&xrtUtf8Valid(xrtStrView(Text),NULL)&&SdkPut(Row,"text",Text);
+  if(Ok&&File)Ok=SdkPut(Row,"resource",File)&&xrtValueObjectRemove(Row,XRT_STR_LITERAL("file"));
+  Ok=Ok&&xrtValueArrayAppend(Items,Row);xrtValueRelease(Row);xrtFree(Text);
+ }
+ if(!Ok){xrtValueRelease(Items);if(Error&&Capacity)snprintf(Error,Capacity,"Plugin prompt file is unreadable or invalid UTF-8");return NULL;}return Items;
+}
+
 static bool SdkPluginMountDirectory(SdkPlugin* P,const xvalue* Summary){
  cstr Id=SdkField(Summary,"directory_id");char Error[512]={0},Hash[65];xvalue* Meta=MdoExtensionsRead("plugins",Id,Error);
  cstr Root=SdkField(Meta,"root"),Entry=SdkField(Meta,"entry");char* Path=Root&&Entry?xrtFormat("%s/%s",Root,Entry):NULL;
  char* Text=Path?MdoExtensionRead(Path,true,1048576,NULL):NULL;xvalue* Doc=Text?SdkParse(Text):NULL;xrtFree(Text);xrtFree(Path);
  xvalue* Files=Meta?MdoExtensionsFiles("plugins",Id,NULL,Error):NULL;
  bool Ok=Meta&&Doc&&Files&&MdoExtensionsVerify("plugins",Id,NULL,Error)&&MdoExtensionsFingerprint("plugins",Id,Hash,NULL,Error)&&MdoPluginValidate(Doc,Files,SdkField(Meta,"alias"),Error,sizeof(Error));
- if(Ok){P->Manifest=xrtValueClone(Meta);Ok=P->Manifest&&SdkPut(P->Manifest,"revision",Hash)&&xrtValueObjectSet(P->Manifest,XRT_STR_LITERAL("files"),Files)&&xrtValueObjectSet(P->Manifest,XRT_STR_LITERAL("manifest"),Doc);
+ if(Ok){P->Manifest=xrtValueClone(Meta);xvalue* Prompts=SdkPluginResolvePrompts(Doc,Root,Error,sizeof(Error));Ok=P->Manifest&&Prompts&&SdkPut(P->Manifest,"revision",Hash)&&xrtValueObjectSet(P->Manifest,XRT_STR_LITERAL("files"),Files)&&xrtValueObjectSet(P->Manifest,XRT_STR_LITERAL("manifest"),Doc)&&xrtValueObjectSet(P->Manifest,XRT_STR_LITERAL("prompt_contributions"),Prompts);xrtValueRelease(Prompts);
   /* Display metadata remains in the root manifest. These are a runtime view. */
   const cstr Keys[]={"name","author","copyright","license","version"};for(size_t I=0;Ok&&I<5;I++)if(SdkField(Meta,Keys[I]))Ok=SdkPut(Doc,Keys[I],SdkField(Meta,Keys[I]));
   const xvalue* Flag=SdkGet(Summary,"enabled");if(Flag)Ok=Ok&&xrtValueObjectSet(P->Manifest,XRT_STR_LITERAL("enabled"),Flag);

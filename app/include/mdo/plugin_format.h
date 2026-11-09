@@ -1,6 +1,7 @@
 #ifndef MDO_PLUGIN_FORMAT_H
 #define MDO_PLUGIN_FORMAT_H
 #include "extension_manifest.h"
+#include "prompt_contribution.h"
 /* A plugin recipe refers only to files in its extension directory. Identity,
  * display metadata and installed source are supplied by extension.json/host. */
 #define MDO_PLUGIN_COUNT 32u
@@ -36,8 +37,17 @@ static const xvalue* MdoPluginFile(const xvalue* Files,cstr Path){
  for(size_t I=0;Path&&I<xrtValueCount(Files);I++){const xvalue* F=xrtValueArrayGet(Files,I);cstr P=MdoExtensionText(F,"path",MDO_EXTENSION_PATH_BYTES);bool D=false;xrtValueGetBool(MdoPluginGet(F,"directory"),&D);if(!D&&P&&!strcmp(P,Path))return F;}return NULL;
 }
 static bool MdoPluginValidate(const xvalue* D,const xvalue* Files,cstr ExpectedAlias,char* E,size_t N){
- const cstr Keys[]={"entry","overrides","exclusive"};
- if(!MdoPluginKeys(D,Keys,3)||xrtValueType(Files)!=XVALUE_ARRAY||!xrtValueCount(Files)||xrtValueCount(Files)>MDO_PLUGIN_FILES)return MdoPluginFail(E,N,"A plugin recipe contains entries, overrides and optional relationships; its files belong to the directory ZIP");
+ const cstr Keys[]={"entry","overrides","exclusive","prompts"};
+ if(!MdoPluginKeys(D,Keys,4)||xrtValueType(Files)!=XVALUE_ARRAY||!xrtValueCount(Files)||xrtValueCount(Files)>MDO_PLUGIN_FILES)return MdoPluginFail(E,N,"A plugin recipe contains entries, overrides, prompts and optional relationships; its files belong to the directory ZIP");
+ const xvalue* Prompts=MdoPluginGet(D,"prompts");size_t PromptBytes=0;
+ if(Prompts&&(xrtValueType(Prompts)!=XVALUE_ARRAY||xrtValueCount(Prompts)>MDO_PLUGIN_PROMPT_COUNT))return MdoPluginFail(E,N,"At most 16 prompt contributions per plugin");
+ for(size_t I=0;I<xrtValueCount(Prompts);I++){
+  const xvalue* P=xrtValueArrayGet(Prompts,I);if(!MdoPromptValid(P,E,N))return false;
+  cstr Text=MdoExtensionText(P,"text",MDO_PLUGIN_PROMPT_BYTES),File=MdoExtensionText(P,"file",MDO_EXTENSION_PATH_BYTES);int64 Bytes=Text?(int64)strlen(Text):0;
+  if(File&&(!MdoPluginFile(Files,File)||!MdoExtensionNumber(MdoPluginFile(Files,File),"bytes",&Bytes)||Bytes<=0||Bytes>MDO_PLUGIN_PROMPT_BYTES))return MdoPluginFail(E,N,"Prompt files must be own nonempty files of at most 2 KiB");
+  PromptBytes+=(size_t)Bytes;if(PromptBytes>MDO_PLUGIN_PROMPTS_BYTES)return MdoPluginFail(E,N,"Plugin instructions exceed 4 KiB");
+  for(size_t J=0;J<I;J++)if(!strcmp(MdoExtensionText(P,"id",64),MdoExtensionText(xrtValueArrayGet(Prompts,J),"id",64)))return MdoPluginFail(E,N,"Duplicate prompt contribution ID");
+ }
  const xvalue* Overrides=MdoPluginGet(D,"overrides");const cstr MappingKeys[]={"source","target"};
  if(Overrides&&(xrtValueType(Overrides)!=XVALUE_ARRAY||xrtValueCount(Overrides)>4096))return MdoPluginFail(E,N,"Invalid plugin overrides");
  for(size_t I=0;I<xrtValueCount(Overrides);I++){const xvalue* O=xrtValueArrayGet(Overrides,I);cstr S=MdoExtensionText(O,"source",MDO_EXTENSION_PATH_BYTES),T=MdoExtensionText(O,"target",MDO_EXTENSION_PATH_BYTES);
@@ -49,7 +59,7 @@ static bool MdoPluginValidate(const xvalue* D,const xvalue* Files,cstr ExpectedA
   if(!MdoPluginFile(Files,P)||L<=S||strcmp(P+L-S,I?".c":".js"))return MdoPluginFail(E,N,"An entry must refer to an own .c or .js file");
   HasEntry=true;
   for(size_t J=0;J<xrtValueCount(Overrides);J++)if(!strcmp(P,MdoExtensionText(xrtValueArrayGet(Overrides,J),"source",MDO_EXTENSION_PATH_BYTES)))return MdoPluginFail(E,N,"An entry cannot also be an override");}
- if(!HasEntry&&!xrtValueCount(Overrides))return MdoPluginFail(E,N,"A plugin needs an override or an execution entry");
+ if(!HasEntry&&!xrtValueCount(Overrides)&&!xrtValueCount(Prompts))return MdoPluginFail(E,N,"A plugin needs an override, execution entry or prompt contribution");
  const xvalue* Exclusive=MdoPluginGet(D,"exclusive");if(Exclusive&&(xrtValueType(Exclusive)!=XVALUE_ARRAY||xrtValueCount(Exclusive)>16))return MdoPluginFail(E,N,"Invalid exclusive markers");
  for(size_t I=0;I<xrtValueCount(Exclusive);I++){xstrview K={0};if(!xrtValueGetString(xrtValueArrayGet(Exclusive,I),&K)||memchr(K.Data,0,K.Size)||!MdoExtensionAlias(K.Data))return MdoPluginFail(E,N,"Invalid exclusive marker");
   for(size_t J=0;J<I;J++)if(xrtValueEqual(xrtValueArrayGet(Exclusive,I),xrtValueArrayGet(Exclusive,J)))return MdoPluginFail(E,N,"Duplicate exclusive marker");}

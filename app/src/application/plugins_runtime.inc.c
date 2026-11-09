@@ -48,6 +48,17 @@ xvalue* MdoApplicationPluginNativeSources(void){
         xrtValueObjectSetNew(R,XRT_STR_LITERAL("requires"),Resolved);xrtValueArrayAppendNew(Rows,R);xrtFree(Path);
     }xrtMutexUnlock(SdkPlugins.Lock);return Rows;
 }
+xvalue* MdoApplicationPluginPromptSources(void){
+    xvalue* Rows=xrtValueArray();if(!SdkPlugins.Lock)return Rows;
+    bool Ok=Rows!=NULL;xrtMutexLock(SdkPlugins.Lock);
+    for(size_t I=0;Ok&&I<xrtValueCount(SdkPlugins.Effective);I++){
+        const xvalue* M=xrtValueArrayGet(SdkPlugins.Effective,I);if(!SdkPluginEnabled(M))continue;
+        xvalue* Row=xrtValueObject();Ok=Row&&SdkPut(Row,"id",SdkField(M,"id"))&&SdkPut(Row,"alias",SdkField(M,"alias"))&&
+            SdkPut(Row,"version",SdkField(M,"version"))&&SdkPut(Row,"revision",SdkField(M,"revision"))&&
+            xrtValueObjectSet(Row,XRT_STR_LITERAL("prompts"),SdkGet(M,"prompt_contributions"))&&xrtValueArrayAppend(Rows,Row);xrtValueRelease(Row);
+    }
+    xrtMutexUnlock(SdkPlugins.Lock);if(!Ok){xrtValueRelease(Rows);return NULL;}return Rows;
+}
 static bool SdkPluginFrontendCall(cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E){
     cstr Client=SdkField(P,"client"),Page=SdkField(P,"page"),Id=SdkField(P,"id"),Revision=SdkField(P,"revision");
     if(!strcmp(Method,"plugin.frontend.enter")){char Why[512]={0};if(!MdoExtensionsRuntimeCheck(Id,NULL,"global",NULL,false,Why))return MdoApplicationError(E,"sdk_plugin_dependency_unavailable",Why,"plugin",409,false);}

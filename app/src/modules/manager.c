@@ -8,6 +8,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/extensions.h"
 #include "../../include/mdo/extension_manifest.h"
+#include "../../include/mdo/prompt_contribution.h"
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/application.h"
 #include "../application/internal.h"
@@ -126,6 +127,7 @@ struct MdoModuleGeneration {
     mdo_hook_v1* Hooks;
     size_t HookCount;
     mdo_lifecycle_v1* Lifecycles;size_t LifecycleCount;
+    xvalue* Prompts;
     char CompilerLog[4096];
     size_t CompilerLogLength;
 };
@@ -139,6 +141,7 @@ struct MdoModuleCatalog {
     size_t ToolCount;
     MdoModuleAgentBinding** Agents;
     size_t AgentCount;
+    xvalue* Prompts;
 };
 
 typedef struct MdoModuleDiagnosticEntry {
@@ -373,6 +376,7 @@ static void MdoModulesGenerationRelease(MdoModuleGeneration* pGeneration)
     xrtFree(pGeneration->Services);xrtFree(pGeneration->Hooks);
     for(i=0;i<pGeneration->LifecycleCount;i++){xrtFree((void*)pGeneration->Lifecycles[i].Id);xrtFree((void*)pGeneration->Lifecycles[i].AgentPattern);}
     xrtFree(pGeneration->Lifecycles);
+    xrtValueRelease(pGeneration->Prompts);
     for ( i = 0u; i < pGeneration->ToolCount; ++i )
         MdoModulesToolUnit(&pGeneration->Tools[i]);
     for ( i = 0u; i < pGeneration->AgentCount; ++i )
@@ -451,6 +455,7 @@ void MdoModuleCatalogRelease(MdoModuleCatalog* pCatalog)
     xrtFree(pCatalog->Modules);
     xrtFree(pCatalog->Tools);
     xrtFree(pCatalog->Agents);
+    xrtValueRelease(pCatalog->Prompts);
     memset(pCatalog, 0, sizeof(*pCatalog));
     xrtFree(pCatalog);
 }
@@ -1318,6 +1323,7 @@ failed:
 }
 
 #include "application.inc.c"
+#include "prompts.inc.c"
 
 static bool MdoModulesRegister(MdoModuleGeneration* pGeneration,
     mdo_module_register_v1 Register, MdoModuleDiagnostics* pDiagnostics)
@@ -1339,6 +1345,7 @@ static bool MdoModulesRegister(MdoModuleGeneration* pGeneration,
     Registrar.AddHook = MdoModulesRegistrarAddHook;
     Registrar.AddLifecycle = MdoModulesRegistrarAddLifecycle;
     Registrar.AddBuiltinTool = MdoModulesRegistrarAddBuiltinTool;
+    Registrar.AddPromptContribution = MdoModulesRegistrarAddPrompt;
     memset(sError, 0, sizeof(sError));
     Result = Register(&pGeneration->HostServices, &Registrar,
         &pGeneration->ModuleData, sError, sizeof(sError));
@@ -2008,6 +2015,7 @@ static MdoModuleCatalog* MdoModulesBuildCandidateBody(uint64 Generation,
         xrtFree(pCatalog->Agents);pCatalog->Agents=NULL;pCatalog->AgentCount=0;
         Valid=MdoModulesValidateCatalog(pCatalog,pDiagnostics);
     }
+    if(Valid)Valid=MdoModulesCollectPrompts(pCatalog);
     if ( !Valid ) {
         if ( pDiagnostics->Count == 0u )
             (void)MdoModulesDiagnosticAdd(pDiagnostics,

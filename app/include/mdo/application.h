@@ -81,6 +81,7 @@ bool MdoApplicationPluginsInit(void);
 bool MdoApplicationPluginsReload(char* Error,size_t Capacity);
 bool MdoApplicationPluginsPending(bool* RestartRequired);
 xvalue* MdoApplicationPluginNativeSources(void);
+xvalue* MdoApplicationPluginPromptSources(void);
 bool MdoApplicationPluginWarnings(xvalue* Items);
 bool MdoApplicationPluginsRecover(void);
 bool MdoApplicationPluginsRecovery(void);
