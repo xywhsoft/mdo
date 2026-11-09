@@ -262,7 +262,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertNotIn('id="decisions-panel"', self.index)
         self.assertNotIn('id="trace-panel"', self.index)
         self.assertNotIn('id="context-panel"', self.index)
-        self.assertIn('api.get("/approvals", { signal })', state)
+        self.assertIn('api.get("/approvals" + query, { signal })', state)
         self.assertIn('runDecisionAction({ path: `/approvals/${id}`', state)
         self.assertIn('send = (route, body, options) => api.put(route, body, options)',
                       self.scripts["js/state/decision-action.js"])

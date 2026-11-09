@@ -42,6 +42,13 @@ class BuildContractTests(unittest.TestCase):
     def setUp(self) -> None:
         self.lock = json.loads((ROOT / "deps.lock").read_text(encoding="utf-8"))
 
+    def stage_native_sources(self, root: Path, sdk: Path) -> None:
+        for relative, row in self.lock["sdk_overlay"].get("native_sources", {}).items():
+            data = (ROOT / row["path"]).read_bytes()
+            for target in (root / row["path"], sdk / relative):
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(data)
+
     def test_fresh_sdk_patch_applies_inside_another_git_checkout(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             project = Path(raw).resolve()
@@ -84,12 +91,20 @@ class BuildContractTests(unittest.TestCase):
             record = {**self.lock["sdk_overlay"], "path": "compat.patch",
                       "sha256": hashlib.sha256(compat.read_bytes()).hexdigest()}
             (sdk / ".mdo-sdk-overlay.json").write_text(json.dumps(record), encoding="utf-8")
+            self.stage_native_sources(root, sdk)
             lock = {**self.lock, "sdk_overlay": record}
             with patch.object(BUILD, "ROOT", root), patch.dict(os.environ,
                     {"MDO_SDK_OVERLAY_CACHE": str(root / "different-cache")}), \
                     patch.object(BUILD.subprocess, "run", side_effect=AssertionError("must not export patched SDK from Git")):
                 self.assertEqual(BUILD.find_xserver(sdk, lock), sdk)
                 self.assertFalse((root / "different-cache").exists())
+                relative = next(iter(record["native_sources"]))
+                native = sdk / relative
+                original = native.read_bytes()
+                native.write_bytes(original + b"\n/* changed export */\n")
+                with self.assertRaisesRegex(BUILD.BuildError, "Native browser source/SDK patch mismatch"):
+                    BUILD.find_xserver(sdk, lock)
+                native.write_bytes(original)
                 compat.write_bytes(b"changed patch")
                 with self.assertRaisesRegex(BUILD.BuildError, "patch hash mismatch"):
                     BUILD.find_xserver(sdk, lock)
@@ -120,6 +135,7 @@ class BuildContractTests(unittest.TestCase):
             sdk = root / ".build/sdk-overlays" / record["sha256"]
             sdk.mkdir(parents=True)
             (sdk / ".mdo-sdk-overlay.json").write_text(json.dumps(record), encoding="utf-8")
+            self.stage_native_sources(root, sdk)
             lock = {**self.lock, "sdk_overlay": record}
             with patch.object(BUILD, "ROOT", root), \
                  patch.dict(os.environ, {"MDO_SDK_OVERLAY_CACHE": str(root / ".build/sdk-overlays")}), \
