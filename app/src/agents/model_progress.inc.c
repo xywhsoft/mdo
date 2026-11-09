@@ -12,7 +12,8 @@ struct MdoAgentModelProgress {
 static void MdoAgentsProgressTrack(MdoAgentOwner* Owner, const xwork_event* Event,
     xwork_event_fn Emit, void* UserData)
 {
-    if (!Owner->RouteLock || (Event->eKind != XWORK_EVENT_MODEL_START &&
+    if (!Owner->RouteLock || (Event->eKind != XWORK_EVENT_MODEL_START && Event->eKind != XWORK_EVENT_COMPACTION_START &&
+        Event->eKind != XWORK_EVENT_COMPACTION_DONE &&
         Event->eKind != XWORK_EVENT_MODEL_DONE && Event->eKind != XWORK_EVENT_ERROR &&
         Event->eKind != XWORK_EVENT_AGENT_DONE)) return;
     uint64 Thread = xrtThreadCurrentId();
@@ -28,10 +29,12 @@ static void MdoAgentsProgressTrack(MdoAgentOwner* Owner, const xwork_event* Even
             xrtFree(Item);
         } else Link = &Item->Next;
     }
-    if (Event->eKind == XWORK_EVENT_MODEL_START) {
+    if (Event->eKind == XWORK_EVENT_MODEL_START || Event->eKind == XWORK_EVENT_COMPACTION_START) {
         MdoAgentModelProgress* Item = xrtCalloc(1u, sizeof(*Item));
         if (Item) {
             Item->Thread = Thread;
+            Item->Identity.eKind = Event->eKind;
+            Item->Identity.tSessionStats = Event->tSessionStats;
             Item->Emit = Emit;
             Item->UserData = UserData;
             Item->Identity.uSchemaVersion = Event->uSchemaVersion;
@@ -71,7 +74,8 @@ static bool MdoAgentsRetryProgress(void* User, const xllm_error* Error,
     Event.uHttpStatus = Error->iHttpStatus > 0 ? (uint32)Error->iHttpStatus : 0u;
     Event.tDiagnostics.uAttemptCount = NextAttempt ? NextAttempt - 1u : 0u;
     Event.tDiagnostics.uRetryAfterMs = DelayMs;
-    Event.sText = "Model request recovery is in progress";
+    Event.sText = Progress->Identity.eKind == XWORK_EVENT_COMPACTION_START ?
+        "Context summary recovery is in progress" : "Model request recovery is in progress";
     Event.iTextLength = strlen(Event.sText);
     return Progress->Emit(Progress->UserData, &Event);
 }

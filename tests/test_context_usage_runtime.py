@@ -103,6 +103,8 @@ void ServiceInit(XS_HostInfo* host) {
     parts[0].eKind=XLLM_PART_TEXT;parts[0].sText="中文🙂";parts[1].eKind=XLLM_PART_IMAGE;
     xllm_message message={0};message.eRole=XLLM_ROLE_USER;message.pParts=parts;message.iPartCount=2;
     CHECK(xllmEstimateMessageTokens(&message)==4111);
+    CHECK(!xllmSessionPrepareCompactionWithBudget(NULL,true,1024u,&error) &&
+        error.eCode==XLLM_ERROR_INVALID_ARGUMENT);
     printf("PASS usage anchor, actual user/tool growth, output reserve, checkpoint/journal/byte recovery, profile switch, fork, clear and structured input\n");
 done:
     xrtFree(text);xrtFree(snapshot);xrtFree(journal);

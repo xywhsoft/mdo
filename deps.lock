@@ -47,19 +47,19 @@
   "libraries": {
     "xllm": {
       "version": "3.2.0",
-      "source_commit": "a01b4a13f0c1b82e4a428236800230671bcbd6aa",
-      "production_tree_sha256": "dcffd71c39a57fc561227cb6dc08f5390fc9bce3436ef489eec467f4a7690dad"
+      "source_commit": "e3c3ecb30f8570f138cf5a9d429ccf0e602215d0",
+      "production_tree_sha256": "2f75aa4539bba9aaef0701450738a5c024edcb60c27aa5b10ed7ea13fab8c9ab"
     },
     "xllm-session": {
       "version": "3.0.0-dev",
-      "source_commit": "a01b4a13f0c1b82e4a428236800230671bcbd6aa",
-      "production_tree_sha256": "1308eccbf2e9c1beeee6b1f117fefaa4a5db1ae4f4b57a1c840f690d4c9f9c3c",
+      "source_commit": "e3c3ecb30f8570f138cf5a9d429ccf0e602215d0",
+      "production_tree_sha256": "26c2c4c1536dc1a8a7c729da208385fbbb7d41c7ac39de51cd66148c0c1f826a",
       "persistence_schema_version": 4
     },
     "xwork": {
       "version": "3.11.0",
-      "source_commit": "a01b4a13f0c1b82e4a428236800230671bcbd6aa",
-      "production_tree_sha256": "228c3a266a34e9855ee7dab7a4bd89b7e6d4c283e0a2ead4b8535501115602d5",
+      "source_commit": "e3c3ecb30f8570f138cf5a9d429ccf0e602215d0",
+      "production_tree_sha256": "3efc2a6d82324888e73e3a5a51db96d153875ac2051e19e7762874acc1426ef4",
       "abi_version": 10,
       "event_schema_version": 3
     }
@@ -75,7 +75,7 @@
   },
   "sdk_overlay": {
     "path": "tools/dependencies/xwork-mcp.patch",
-    "sha256": "3667317897b1601d91d28824b53f08df405463e836b00af6b13c1bf7f4a0eff6",
+    "sha256": "ffc291267cf7ce1f03c8ad6f460deeb6863c721964943e852050c06e0630bcbf",
     "base_commit": "e9a3551a5a533de34e2ca4291a8def71612fbf35",
     "purpose": "Pinned XRT agent exports, native browser automation, lifecycle/transfer guards and model media compatibility",
     "xrt_single_header_sha256": "f99fe10ea60b5cb48217be91bc786620b683aae8a7af1b582329c210aa9da83f",

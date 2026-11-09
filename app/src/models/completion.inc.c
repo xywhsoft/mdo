@@ -88,6 +88,7 @@ const char* MdoModelErrorKind(const xllm_error* Error)
     if (MdoModelsCode(Error, "price_changed")) return "model_changed";
     if (MdoModelsCode(Error, "1313")) return "account_restricted";
     if (MdoModelsCode(Error, "context_length_exceeded") ||
+        MdoModelsCode(Error, "1261") ||
         MdoModelsCode(Error, "max_tokens_exceeded")) return "context_limit";
     if (MdoModelsCode(Error, "model_unavailable") ||
         Error->eCode == XLLM_ERROR_MODEL_NOT_FOUND || Error->iHttpStatus == 404)
@@ -374,6 +375,10 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
          * recoveries as network failures. Never replay business denials,
          * caller cancellation or authentication failures after delivery. */
         const char* Kind=MdoModelErrorKind(&Error);
+        /* Context governance owns shrinking/rebuilding this request, including
+         * summary calls. Holding it here would wait forever for a settings
+         * change while the safe history prefix remains available to compact. */
+        if (!strcmp(Kind,"context_limit") || !strcmp(Kind,"request_too_large")) break;
         bool RenewAuthentication = Complete &&
             (!strcmp(Kind,"login_required") ||
              !strcmp(Kind,"profile_login_pending") || !strcmp(Kind,"profile_login_unavailable")) && !*Response &&

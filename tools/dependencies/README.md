@@ -7,7 +7,7 @@ revision, recorded in each `UPSTREAM.txt` and in `deps.lock.libraries`.
 `tools/export_agent_libraries.py --check` and the XS vendoring verifier check
 the export. Production-tree hashes also cover the host-owned bridge headers.
 xllm is 3.2.0; rebuild all consumers for the changed public request layout.
-Session schema 4 and xwork ABI 9/event schema 3 retain the product contract.
+Session schema 4 and xwork ABI 10/event schema 3 retain the product contract.
 The core implementation and declaration headers are pinned together. Existing
 process-tree/ConPTY compatibility fixes stay in the reviewed native overlay;
 the regex fix is already in mainline and needs no separate backport.
@@ -22,6 +22,13 @@ the deleted mdo branches. The preceding `xs-agent-mainline.bundle` retains the
 earlier agent-only integration as historical source evidence.
 
 ## 上游维护约定
+
+2026-11-09 的上下文修复继续保留原 native 核心，三套 Agent 库从 XRT 主线机械导出。
+摘要材料保留结构化文字和附件引用；完整摘要请求检查输入预算，按安全的消息与工具对
+边界缩小前缀。上游拒绝上下文或请求体后由 xwork 重建上下文；摘要再次被拒绝时按
+实际被拒绝的输入缩减，重试次数遵守配置。Anthropic 输入统一包含缓存读写，并通过
+profile 指纹使旧检查点中的低估锚点失效。新增预算 API 的 TCC 导入符号也随宿主更新。
+应用、SDK 锁和实际成品的验证见 `docs/build-records/2026-11-09-context-compaction-recovery.json`。
 
 - XRT 的通用改动优先直接提交 `master`。确实需要临时分支时，按小阶段验证并尽快
   合并回主线，不长期保留 mdo 专用分支。
