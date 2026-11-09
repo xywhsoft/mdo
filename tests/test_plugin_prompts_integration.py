@@ -52,6 +52,12 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  MdoAgentSessionOptions O;MdoAgentSessionOptionsInit(&O);O.AgentId="agent.qa";O.ProjectId="default";O.ProductSessionId="qa-plugin-prompts";O.WorkspaceRoot=SdkField(P,"root");O.OnModelComplete=QaComplete;
  MdoAgentSession* Session=MdoAgentSessionCreateWithRuntime(Runtime,&O,&E);QaCheck(R,"managed_session_created",Session!=NULL);
  if(Session){
+  MdoAgentInstance ScopeRole={0};ScopeRole.Definition.Flags=MDO_AGENT_MAIN;ScopeRole.Configuration=SdkParse("{\"context\":{\"plugins.instructions\":{\"include\":[\"plugin:qa.passive\"]}}}");
+  xwork_agent_extension_context ScopeNative={0};ScopeNative.pAgent=Session->Agent;xvalue* ScopePlan=SdkParse("{\"sources\":[]}");
+  cstr DisabledScope="{\"plugin:qa.passive\":false}";bool Scoped=MdoHomeAtomicWrite(".mdo/plugins.json",DisabledScope,strlen(DisabledScope),false)&&MdoAgentsPluginSource(Session->Owner,&ScopeRole,&ScopeNative,ScopePlan,&E);
+  xvalue* ScopeGroup=MdoAgentsPluginGroup(ScopePlan);QaCheck(R,"prompt_only_plugin_respects_project_disable",Scoped&&ScopeGroup&&!SdkField(ScopeGroup,"text")[0]&&!strcmp(SdkField(SdkGet(ScopeGroup,"scope"),"plugin:qa.passive"),"project_scope"));xrtValueRelease(ScopePlan);
+  ScopePlan=SdkParse("{\"sources\":[]}");Scoped=MdoHomeAtomicWrite(".mdo/plugins.json","{}",2,false)&&MdoAgentsPluginSource(Session->Owner,&ScopeRole,&ScopeNative,ScopePlan,&E);ScopeGroup=MdoAgentsPluginGroup(ScopePlan);
+  QaCheck(R,"project_scope_change_refreshes_next_context",Scoped&&strstr(SdkField(ScopeGroup,"text"),"EXPLICIT-PASSIVE-GUIDE"));xrtValueRelease(ScopePlan);xrtValueRelease(ScopeRole.Configuration);
   QaCheck(R,"base_prompt_never_contains_plugin_text",!strstr(xllmSessionGetSystemPrompt(Session->Owner->LlmSession),"INTEGRATION-GUIDE"));
   MdoAgentRunOptions RunOptions;MdoAgentRunOptionsInit(&RunOptions);RunOptions.Prompt="Run the offline tool and finish.";MdoAgentRun* Run=MdoAgentRunCreate(Session,&RunOptions,&E);
   bool Started=Run&&MdoAgentRunStart(Run,&E);xwork_run_result Result={0};xwork_result Code=Started?MdoAgentRunWait(Run,MdoDeadlineAfterUs(10000000),&Result,&E):XWORK_RESULT_ERROR;

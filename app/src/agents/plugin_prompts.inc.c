@@ -72,8 +72,10 @@ static bool MdoAgentsPluginSelect(MdoAgentOwner* Owner,MdoAgentInstance* Instanc
         bool Exclude=MdoAgentsListMatch(MdoAgentConfigGet(Spec,"exclude"),Plugin,false)||MdoAgentsListMatch(MdoAgentConfigGet(Spec,"exclude"),Key,false);
         cstr Activation=MdoAgentConfigText(Row,"activation");
         bool Explicit=MdoAgentConfigGet(Spec,"include")&&Include;
+        cstr Scope=MdoAgentConfigText(MdoAgentConfigGet(Group,"scope"),Plugin);
         if(!MdoAgentConfigBool(Group,"enabled",true))Why="source_disabled";
         else if(!MdoAgentConfigBool(Row,"enabled",true))Why="agent_disabled";
+        else if(Scope&&Scope[0])Why=Scope;
         else if(Runtime&&!Targets)Why="role_target";
         else if(!Include||Exclude)Why="role_selection";
         else if(Activation&&!strcmp(Activation,"explicit")&&!Explicit)Why="explicit_selection_required";
@@ -107,6 +109,19 @@ static bool MdoAgentsPluginSource(MdoAgentOwner* Owner,MdoAgentInstance* Instanc
     if(!Options)return false;xrtValueObjectRemove(Options,XRT_STR_LITERAL("max_bytes"));
     bool Ok=MdoAgentsPlanSource(Plan,"plugins.instructions",xrtStrDup(""),Options,1300,MdoAgentsSourceEnabled(Spec,true),"plugins.instructions",Error);xrtValueRelease(Options);
     xvalue* Group=Ok?MdoAgentsPluginGroup(Plan):NULL; xvalue* Items=Registry?xrtValueClone(Registry):xrtValueArray();
-    if(Ok)Ok=Items&&xrtValueObjectSet(Group,XRT_STR_LITERAL("items"),Items)&&MdoAgentsPlanPut(Group,"refresh","request")&&MdoAgentsPluginSelect(Owner,Instance,Native,NULL,Group,Error);
+    xvalue* Scope=xrtValueObject();
+    for(size_t I=0;Ok&&Scope&&I<xrtValueCount(Registry);I++){
+        cstr Plugin=MdoAgentConfigText(xrtValueArrayGet(Registry,I),"plugin");if(MdoAgentConfigGet(Scope,Plugin))continue;
+        cstr Reason="";
+        if(Owner->Workspace&&Owner->Workspace[0]){
+            char Why[512]={0};
+            if(!MdoExtensionsPreflight(Plugin,Why))Reason="plugin_unavailable";
+            else if(!MdoExtensionsProjectAllows(Plugin,Owner->Workspace,Why))Reason="project_scope";
+            xrtClearError();
+        }
+        Ok=MdoAgentsPlanPut(Scope,Plugin,Reason);
+    }
+    if(Ok)Ok=Items&&Scope&&xrtValueObjectSet(Group,XRT_STR_LITERAL("items"),Items)&&xrtValueObjectSet(Group,XRT_STR_LITERAL("scope"),Scope)&&MdoAgentsPlanPut(Group,"refresh","request")&&MdoAgentsPluginSelect(Owner,Instance,Native,NULL,Group,Error);
+    xrtValueRelease(Scope);
     xrtValueRelease(Items);return Ok;
 }

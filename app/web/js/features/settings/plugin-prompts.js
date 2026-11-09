@@ -91,6 +91,7 @@ const reasons = {
   agent_disabled: "角色程序已关闭", role_target: "不适用于当前角色身份", role_selection: "角色配置已过滤",
   explicit_selection_required: "需要角色明确选择", tools_unavailable: "当前请求没有所需工具",
   budget: "超出角色说明预算", plugin_budget: "超出单插件说明预算",
+  project_scope: "当前项目未允许此插件", plugin_unavailable: "插件或依赖当前不可用",
 };
 export function promptContributionDetails(source) {
   const list = element("div", { className: "agent-plugin-prompt-details" });

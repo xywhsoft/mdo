@@ -23,7 +23,7 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  xwork_agent_definition_config DC;xworkAgentDefinitionConfigInit(&DC);DC.sId="browser-prompt-qa";DC.sModel="offline";DC.bRegisterBuiltinTools=false;DC.bAutoSaveSession=false;DC.bAllowArtifactWrites=false;DC.eApprovalMode=XWORK_APPROVAL_AUTO;
  xwork_agent_definition* Definition=xworkAgentDefinitionCreate(&DC,&E);xwork_agent_options AO;xworkAgentOptionsInit(&AO);AO.pSession=Session;AO.sWorkspaceRoot=SdkField(P,"root");
  xwork_agent* Agent=Definition&&Session?xworkAgentCreateWithRuntime(Runtime,Definition,&AO,&E):NULL;
- MdoAgentOwner O={0};O.Modules=C;O.RootAgent=Agent;O.InstanceLock=xrtMutexCreate();MdoAgentInstance I={0};I.Configuration=xrtValueObject();I.Definition.Flags=MDO_AGENT_MAIN;I.Plan=SdkParse("{\"sources\":[]}");
+ MdoAgentOwner O={0};O.Modules=C;O.RootAgent=Agent;O.Workspace=(char*)SdkField(P,"root");O.InstanceLock=xrtMutexCreate();MdoAgentInstance I={0};I.Configuration=xrtValueObject();I.Definition.Flags=MDO_AGENT_MAIN;I.Plan=SdkParse("{\"sources\":[]}");
  xwork_agent_extension_context N={0};N.pAgent=Agent;bool Collected=Agent&&MdoAgentsPluginSource(&O,&I,&N,I.Plan,&E);xvalue* G=MdoAgentsPluginGroup(I.Plan);
  QaFlag(R,"all_available_capabilities_have_guides",Collected&&strstr(SdkField(G,"text"),"Browser Use tools")&&strstr(SdkField(G,"text"),"async JavaScript")&&strstr(SdkField(G,"text"),"browser_upload only"));
  xllm_request Q;xllmRequestInit(&Q);xllmRequestAddTextMessage(&Q,XLLM_ROLE_USER,"Inspect tabs only");xllmRequestAddTool(&Q,"browser_tabs","Browser tabs","{}",false);N.pRequest=&Q;MdoAgentPluginMessage B={0};
