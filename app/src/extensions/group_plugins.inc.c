@@ -4,7 +4,7 @@ static int MdoExtPluginTargetOrder(const void* A,const void* B){return strcmp(((
 static bool MdoExtGroupPluginRow(xvalue* Plugins,const xvalue* Meta,cstr Root,char Error[512]){
     cstr Entry=MdoExtensionText(Meta,"entry",4096),Ref=MdoExtensionText(Meta,"id",MDO_EXTENSION_REF_BYTES),Alias=MdoExtensionText(Meta,"alias",64);char* Path=Entry&&Root?xrtFormat("%s/%s",Root,Entry):NULL;
     xvalue* Recipe=Path?MdoExtReadJson(Path,1048576,false):NULL,*Files=xrtValueArray();MdoExtTree Tree={0};bool Ok=Recipe&&Files&&MdoExtCollect(Root,&Tree,NULL,Error);
-    for(size_t I=0;Ok&&I<Tree.Count;I++){xvalue* F=xrtValueObject();Ok=F&&MdoExtPut(F,"path",Tree.Files[I].Path)&&xrtValueObjectSetNew(F,XRT_STR_LITERAL("directory"),xrtValueBool(Tree.Files[I].Directory))&&xrtValueArrayAppend(Files,F);xrtValueRelease(F);}MdoExtTreeUnit(&Tree);
+    for(size_t I=0;Ok&&I<Tree.Count;I++){xvalue* F=xrtValueObject();Ok=F&&MdoExtPut(F,"path",Tree.Files[I].Path)&&xrtValueObjectSetNew(F,XRT_STR_LITERAL("directory"),xrtValueBool(Tree.Files[I].Directory))&&xrtValueObjectSetNew(F,XRT_STR_LITERAL("bytes"),xrtValueUInt(Tree.Files[I].Directory?0:Tree.Files[I].Info.Size))&&xrtValueArrayAppend(Files,F);xrtValueRelease(F);}MdoExtTreeUnit(&Tree);
     Ok=Ok&&MdoPluginValidate(Recipe,Files,Alias,Error,512);xvalue* Row=xrtValueObject();Ok=Ok&&Row&&MdoExtPut(Row,"id",Ref)&&MdoExtPut(Row,"alias",Alias)&&xrtValueObjectSet(Row,XRT_STR_LITERAL("recipe"),Recipe)&&xrtValueArrayAppend(Plugins,Row);
     xrtValueRelease(Row);xrtValueRelease(Recipe);xrtValueRelease(Files);xrtFree(Path);return Ok;
 }
