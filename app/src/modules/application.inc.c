@@ -84,7 +84,7 @@ bool MdoModuleCatalogLifecycle(const MdoModuleCatalog* Source,mdo_agent_phase Ph
         }
     }
     if(Count>1)qsort(List,Count,sizeof(*List),SdkLifecycleCompare);
-    const mdo_sdk_context_v1* Previous=Frame->Application;
+    const mdo_sdk_context_v1* Previous=Frame->Application;const void* PreviousSettings=Frame->ExtensionSettings;
     MdoApplicationInvocation Invocation={0};Invocation.Cancel=(xcancel*)Frame->CancelToken;Invocation.Catalog=Catalog;
     mdo_sdk_context_v1 Application={0};Application.Size=sizeof(Application);Application.Version=MDO_SDK_VERSION;Application.Api=g_MdoModuleApplication;
     Application.Opaque=&Invocation;Application.ExtensionId="lifecycle";Application.InvocationId=Frame->AgentId;Application.DeviceId="local";
@@ -110,7 +110,7 @@ bool MdoModuleCatalogLifecycle(const MdoModuleCatalog* Source,mdo_agent_phase Ph
         if(!Observer){Ok=false;if(Error&&!MdoModulesCallbackStopped(Code,Error)){xworkErrorInit(Error);Error->eCode=Code==MDO_RESULT_CANCELLED?XWORK_ERROR_CANCELLED:Code==MDO_RESULT_TIMEOUT?XWORK_ERROR_TIMEOUT:Code==MDO_RESULT_LIMIT?XWORK_ERROR_LIMIT:XWORK_ERROR_CONTEXT;snprintf(Error->sMessage,sizeof(Error->sMessage),"%s",Message[0]?Message:"Lifecycle control hook rejected execution");}}
         else MdoModulesLifecycleWarning(&Application,H->Id,Phase,Message[0]?Message:"Lifecycle observer failed");
     }
-    Frame->Application=Previous;xrtFree(List);MdoModuleCatalogRelease(Catalog);
+    Frame->Application=Previous;Frame->ExtensionSettings=PreviousSettings;xrtFree(List);MdoModuleCatalogRelease(Catalog);
     if(!Ok&&Error&&Error->eCode==XWORK_ERROR_NONE){xworkErrorInit(Error);Error->eCode=XWORK_ERROR_OUT_OF_MEMORY;snprintf(Error->sMessage,sizeof(Error->sMessage),"Cannot collect lifecycle callbacks");}
     return Ok;
 }
@@ -130,20 +130,28 @@ xvalue* MdoApplicationCustomCatalogFor(const mdo_sdk_context_v1* C){
     }MdoModuleCatalogRelease(Catalog);return A;
 }
 xvalue* MdoApplicationCustomCatalog(void){return MdoApplicationCustomCatalogFor(NULL);}
+static xvalue* MdoModulesApplicationOwner(mdo_sdk_context_v1* Out,const mdo_sdk_context_v1* Caller,MdoModuleGeneration* Owner){
+    *Out=*Caller;Out->ExtensionId=Owner->Id;Out->ExtensionKind=Owner->Application.ExtensionKind;
+    Out->DirectoryId=Owner->Application.DirectoryId;Out->ExtensionRoot=Owner->Application.ExtensionRoot;
+    char Why[512]={0};cstr Ref=MdoExtensionText(Owner->Directory,"id",192);
+    xvalue* Settings=Owner->ExtensionSettings?xrtValueClone(Owner->ExtensionSettings):Ref?MdoExtensionSettingsSnapshot(Ref,true,Why):xrtValueObject();
+    Out->ExtensionSettings=Settings;return Settings;
+}
 bool MdoApplicationCustomCall(const mdo_sdk_context_v1* C,cstr Id,const xvalue* P,xvalue** R,mdo_error_v1* E,bool* Found){
     MdoApplicationInvocation* Invocation=C->Opaque;
-    *Found=false;MdoModuleCatalog* Catalog=Invocation&&Invocation->Catalog?MdoModuleCatalogRef(Invocation->Catalog):MdoModuleCatalogSnapshot();mdo_service_v1* Service=NULL;
+    *Found=false;MdoModuleCatalog* Catalog=Invocation&&Invocation->Catalog?MdoModuleCatalogRef(Invocation->Catalog):MdoModuleCatalogSnapshot();mdo_service_v1* Service=NULL;MdoModuleGeneration* Owner=NULL;
     for(size_t i=0;Catalog&&i<Catalog->ModuleCount;i++){
         MdoModuleGeneration* M=Catalog->Modules[i];
         for(size_t j=0;M&&j<M->ServiceCount;j++)if(!strcmp(M->Services[j].Id,Id)){
             if(Service){*Found=true;MdoModuleCatalogRelease(Catalog);return MdoApplicationError(E,"sdk_service_conflict","Multiple providers registered this service","dispatch",409,false);}
-            Service=&M->Services[j];
+            Service=&M->Services[j];Owner=M;
         }
     }
-    bool Ok=true;if(Service){*Found=true;Ok=Service->Execute(Service->UserData,C,P,R,E)==MDO_RESULT_OK;}
+    bool Ok=true;if(Service){*Found=true;mdo_sdk_context_v1 Own;xvalue* Settings=MdoModulesApplicationOwner(&Own,C,Owner);
+        Ok=Settings?Service->Execute(Service->UserData,&Own,P,R,E)==MDO_RESULT_OK:MdoApplicationError(E,"extension_settings_required","Complete this extension's configuration","extension",422,false);xrtValueRelease(Settings);}
     MdoModuleCatalogRelease(Catalog);return Ok;
 }
-typedef struct SdkHookBinding {const mdo_hook_v1* Hook;cstr Module;} SdkHookBinding;
+typedef struct SdkHookBinding {const mdo_hook_v1* Hook;cstr Module;MdoModuleGeneration* Owner;} SdkHookBinding;
 static int SdkHookCompare(const void* L,const void* R){
     const SdkHookBinding *A=L,*B=R;
     if(A->Hook->Priority!=B->Hook->Priority)return A->Hook->Priority<B->Hook->Priority?-1:1;
@@ -156,13 +164,16 @@ bool MdoApplicationHooks(const mdo_sdk_context_v1* C,cstr Topic,xvalue** Value,m
         MdoModuleGeneration* M=Catalog->Modules[i];
         for(size_t j=0;M&&j<M->HookCount;j++)if(!strcmp(M->Hooks[j].Topic,Topic)){
             SdkHookBinding* Next=xrtRealloc(List,(Count+1)*sizeof(*Next));if(!Next){Ok=false;break;}
-            List=Next;List[Count++]=(SdkHookBinding){&M->Hooks[j],M->Id};
+            List=Next;List[Count++]=(SdkHookBinding){&M->Hooks[j],M->Id,M};
         }
     }
     if(Count>1)qsort(List,Count,sizeof(*List),SdkHookCompare);
     for(size_t i=0;Ok&&i<Count;i++){
         const mdo_hook_v1* H=List[i].Hook;xvalue* Replacement=NULL;mdo_error_v1 E={0};
-        mdo_result Result=H->Execute(H->UserData,C,Topic,*Value,&Replacement,&E);
+        mdo_sdk_context_v1 Own;xvalue* Settings=MdoModulesApplicationOwner(&Own,C,List[i].Owner);
+        mdo_result Result=Settings?H->Execute(H->UserData,&Own,Topic,*Value,&Replacement,&E):MDO_RESULT_ERROR;
+        if(!Settings)MdoApplicationError(&E,"extension_settings_required","Complete this extension's configuration","extension",422,false);
+        xrtValueRelease(Settings);
         if(H->Transform&&Result!=MDO_RESULT_OK){if(Error)*Error=E;Ok=false;}
         else if(H->Transform&&Replacement){xrtValueRelease(*Value);*Value=Replacement;Replacement=NULL;}
         else if(Result!=MDO_RESULT_OK)fprintf(stderr,"[mdo] observer %s:%s failed (%s)\n",List[i].Module,H->Id,E.Code);

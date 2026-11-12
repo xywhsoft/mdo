@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
+import uuid
 
 from current_product_host import APP, product_http_config
 from test_api_runtime import ROOT, free_port, request, wait_ready
@@ -24,6 +26,19 @@ FORM = {"schema": "mdo.extension-settings.v1", "config_version": 1,
      "visible_if": {"field": "enabled", "equals": True}}
 ]}]}
 
+COMMAND = r'''/* mdo-command {"id":"qa-settings","description":"Private configuration test","effects":["read"],"timeout_ms":15000} */
+#include <xsbase.h>
+#include "mdo/command.h"
+#include "mdo/sdk.h"
+mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue* A,xvalue** R){
+ xvalue* S=NULL;mdo_error_v1 E={0};bool Ready=mdoReadExtensionSettings(C->Application,&S,&E)==MDO_RESULT_OK;
+ xstrview Key={0};Ready=Ready&&xrtValueGetString(xrtValueObjectGet(S,XRT_STR_LITERAL("api_key")),&Key)&&Key.Size>0&&C->Application->ExtensionSettings;
+ xvalue* Cross=C->Host->Parse("{\"extension_id\":\"command:other\"}"),*Other=NULL;
+ bool Denied=mdoCall(C->Application,"extension.settings.current",Cross,&Other,&E)!=MDO_RESULT_OK;
+ C->Host->Release(Other);C->Host->Release(Cross);C->Host->Release(S);
+ xrtSleep(1500);*R=C->Host->Parse(Ready&&Denied?"{\"ready\":true}":"{\"ready\":false}");return MDO_RESULT_OK;
+}'''
+
 
 def run(host, browser=None):
     port = free_port()
@@ -32,12 +47,13 @@ def run(host, browser=None):
         for kind, prefix in KINDS.items():
             root = home / kind / "qa-settings"; root.mkdir(parents=True)
             (root / "entry.txt").write_text("Fixture entry; disabled, never executed.")
+            if kind == "commands": (root / "entry.txt").write_text(COMMAND, encoding="utf-8")
             (root / "role.md").write_text("Name: {{$settings.character_name}}")
             (root / "settings.form.json").write_text(json.dumps(FORM))
             manifest = dict(kind=kind, id=prefix+":qa.settings", name="Settings fixture", alias="qa-settings",
                             entry="entry.txt", platforms=["any"], settings={"form": "settings.form.json", "templates": ["role.md"]})
             (root / "extension.json").write_text(json.dumps(manifest))
-            state[kind+":qa-settings"] = dict(kind=kind, id="qa-settings", logical_id=manifest["id"], source="manual", enabled=False)
+            state[kind+":qa-settings"] = dict(kind=kind, id="qa-settings", logical_id=manifest["id"], source="manual", enabled=kind == "commands")
         (home / "data/extensions").mkdir(parents=True)
         (home / "data/extensions/state.json").write_text(json.dumps(state))
         (home / "config").mkdir(exist_ok=True)
@@ -118,6 +134,21 @@ def run(host, browser=None):
             check(reset["values"]["count"] == 5 and reset["values"]["character_name"] == "Mira" and reset["secrets"]["api_key"] is True, reset)
             cleared, _ = call("PUT", body=mutation(reset, reset=True, clear_secrets=True))
             check(not cleared["valid"] and not cleared["secrets"].get("api_key", False), cleared)
+            command, _ = call("GET", kind="commands")
+            call("PUT", kind="commands", body=mutation(command, values={"endpoint":"https://example.invalid"}, secrets={"api_key":"command-fixture-private"}))
+            identity="cmd-"+uuid.uuid4().hex
+            status, _, body=request(port,"POST","/api/v1/command-invocations?project=default",body=json.dumps({"invocation_id":identity,"command_id":"qa-settings"}).encode(),headers={"Content-Type":"application/json"})
+            check(status == 202, body)
+            end=time.monotonic()+20; result=None; seen_private=False
+            while time.monotonic()<end:
+                for path in (home / "data/commands").rglob("*.json"):
+                    try: seen_private |= b"command-fixture-private" in path.read_bytes()
+                    except FileNotFoundError: pass
+                _, _, body=request(port,"GET","/api/v1/command-invocations/"+identity);result=json.loads(body)["data"]
+                if result["terminal"]: break
+                time.sleep(.03)
+            check(result and result["state"] == "succeeded" and result["result"] == {"ready":True}, result)
+            check(not seen_private, "Private configuration leaked into command IPC JSON")
             if browser:
                 proof = ROOT / ".build/extension-settings-browser"; proof.mkdir(exist_ok=True)
                 for locale, width in (("en-US", 1400), ("ru-RU", 390), ("zh-CN", 1400)):

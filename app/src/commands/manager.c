@@ -13,7 +13,7 @@
 typedef struct CommandJob {
     char Id[37],Hash[65],Directory[128];
     char* Workspace;
-    xvalue *Input,*Info,*Actions,*ExtensionSettings;
+    xvalue *Input,*Info,*Actions;
     xthread* Thread;
     xprocess* Process;
     xcancel* Cancel;
@@ -74,7 +74,7 @@ static CommandJob* CommandFind(cstr Id) {
 }
 static void CommandDispose(CommandJob* J) {
     if(J->Thread){xrtThreadWait(J->Thread);xrtThreadDestroy(J->Thread);}
-    xrtValueRelease(J->ExtensionSettings);xrtValueRelease(J->Input);xrtValueRelease(J->Info);xrtValueRelease(J->Actions);
+    xrtValueRelease(J->Input);xrtValueRelease(J->Info);xrtValueRelease(J->Actions);
     xrtCancelDestroy(J->Cancel);xrtFree(J->Workspace);MdoProjectLeaseRelease(J->Lease);MdoExtensionsRelease(J->ExtensionLease);memset(J,0,sizeof(*J));
 }
 static void CommandCleanup(CommandJob* J,unsigned Count) {
@@ -151,10 +151,6 @@ static xvalue* CommandHostCall(CommandJob* J,const xvalue* Q,char Error[512]) {
         if(!xrtValueGetUInt(Source,&Origin)&&xrtValueGetInt(Source,&SignedOrigin)&&SignedOrigin>=0)Origin=(uint64)SignedOrigin;
         C.Origin=Origin<=MDO_ORIGIN_EXTENSION?(uint32)Origin:MDO_ORIGIN_UNKNOWN;
         mdo_error_v1 E={0};xvalue* Result=NULL;cstr Service=CommandText(Params,"method");
-        if(Service&&!strcmp(Service,"extension.settings.current")&&!J->ExtensionSettings){
-            J->ExtensionSettings=MdoExtensionSettingsAt(C.ExtensionRoot,true,Error);
-        }
-        C.ExtensionSettings=J->ExtensionSettings;
         mdo_result Code=MdoApplicationCall(&C,Service,xrtValueObjectGet(Params,XRT_STR_LITERAL("params")),&Result,&E);
         xvalue* Frame=xrtValueObject(),*Failure=xrtValueObject();
         xrtValueObjectSetNew(Frame,XRT_STR_LITERAL("code"),xrtValueInt(Code));
@@ -208,11 +204,33 @@ static bool CommandCopyResource(CommandJob* J,cstr Source,cstr Target) {
     size_t N=0;char* Text=(char*)xrtVfsReadAllLimit(MdoHomeApplicationVfs(),Source,256u*1024u,&N);
     bool Ok=Text&&!memchr(Text,0,N)&&CommandJobWrite(J,Target,Text);xrtFree(Text);return Ok;
 }
+/* Private settings are framed over the existing parent-watch stdin pipe.
+ * The ordinary request/response files must never carry a decrypted snapshot. */
+static bool CommandPrivateSettings(CommandJob* J){
+    char Why[512]={0};cstr Id=CommandText(J->Input,"directory_id");
+    xvalue* Meta=MdoExtensionsRead("commands",Id,Why);cstr Ref=CommandText(Meta,"id");
+    xvalue* Settings=Ref?MdoExtensionSettingsSnapshot(Ref,true,Why):NULL;xrtValueRelease(Meta);
+    size_t Size=0;char* Json=Settings?xrtJsonStringify(Settings,false,&Size):NULL;xrtValueRelease(Settings);
+    bool Ok=Json&&Size&&Size<=512u*1024u;unsigned char Header[4];
+    for(size_t I=0;I<4;I++)Header[I]=(unsigned char)(Size>>(8*I));
+    uint64 End=MdoDeadlineAfterUs(15000000u);
+    for(size_t Part=0;Ok&&Part<2;Part++){
+        const unsigned char* Data=Part?(const unsigned char*)Json:Header;size_t Count=Part?Size:4,At=0;
+        while(At<Count){
+            if(xrtCancelRequested(J->Cancel)||MdoDeadlineExpired(End)||xrtProcessState(J->Process)==XPROCESS_EXITED){Ok=false;break;}
+            size_t Want=Count-At;if(Want>4096)Want=4096;int64 Sent=xrtProcessWrite(J->Process,Data+At,Want);
+            if(Sent<0&&xrtGetError()&&xrtErrorKind(xrtGetError())==XERR_AGAIN){xrtClearError();xrtSleep(2);continue;}
+            if(Sent<=0){Ok=false;break;}At+=(size_t)Sent;
+        }
+    }
+    if(Json){xrtSecureZero(Json,Size);xrtFree(Json);}return Ok;
+}
 static int32 CommandExecute(void* Value) {
     CommandJob* J=Value;unsigned Sequence=1;char Error[512]={0};cstr State="failed",ErrorCode="command_worker_start_failed";xvalue* Final=NULL;
     xrtMutexLock(CommandManager.Lock);CommandSet(J->Info,"state","running");CommandSave(J);xrtMutexUnlock(CommandManager.Lock);
     char* Directory=MdoHomeExternalPath(J->Directory);char* Executable=NULL,*ConfigPath=NULL;
     const char* Args[2];size_t ArgCount=0;
+    xrtValueObjectSetNew(J->Input,XRT_STR_LITERAL("settings_pipe"),xrtValueBool(true));
     if(!CommandCopyResource(J,"/app/command-worker.c","worker.c")||
        !CommandCopyResource(J,"/app/generated/module-sdk/mdo/command.h","mdo/command.h")||
        !CommandCopyResource(J,"/app/generated/module-sdk/mdo/module.h","mdo/module.h")||
@@ -236,6 +254,7 @@ static int32 CommandExecute(void* Value) {
     if(!xrtCancelRequested(J->Cancel))J->Process=Executable?xrtProcessSpawn(&Config):NULL;
     xrtMutexUnlock(CommandManager.Lock);
     if(!J->Process){snprintf(Error,sizeof(Error),"Isolated command worker could not start");goto finish;}
+    if(!CommandPrivateSettings(J)){snprintf(Error,sizeof(Error),"Command private configuration could not be loaded or transferred; complete its settings before retrying");goto finish;}
     ErrorCode="command_worker_lost";
     for(;;){
         if(xrtCancelRequested(J->Cancel))break;

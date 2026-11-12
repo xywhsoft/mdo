@@ -176,7 +176,7 @@ typedef struct MdoModuleRegistrarContext {
     char Message[MDO_MODULE_ERROR_LIMIT];
 } MdoModuleRegistrarContext;
 
-typedef struct MdoModuleAgentScope {xwork_agent* Agent;void* Owner;uint64 AgentId,SettingsRun;xvalue* Settings;char Project[128],Session[128],Namespace[129],MemberId[65];struct MdoModuleAgentScope* Next;} MdoModuleAgentScope;
+typedef struct MdoModuleAgentScope {xwork_agent* Agent;void* Owner;uint64 AgentId;xvalue* Settings;char Project[128],Session[128],Namespace[129],MemberId[65];struct MdoModuleAgentScope* Next;} MdoModuleAgentScope;
 typedef struct MdoModuleState {
     xmutex* Lock;
     xmutex* ReloadLock;
@@ -2480,14 +2480,15 @@ bool MdoModuleCatalogAgentEvent(const MdoModuleCatalog* Catalog,cstr Id,mdo_agen
     if(!Binding->Program.OnEvent)return true;
     mdo_sdk_context_v1 Application;MdoApplicationInvocation Invocation;
     if(!MdoModulesAgentApplication(Binding,Frame,&Application,&Invocation,Catalog)){
-        MdoModulesXworkError(Error,XWORK_ERROR_CONTEXT,"extension_settings_required: Complete this extension's configuration before running");return false;
+        if(Notification||Phase==MDO_AGENT_INSTANCE_RELEASE){Application.ExtensionSettings=xrtValueObject();Frame->ExtensionSettings=Application.ExtensionSettings;}
+        if(!Application.ExtensionSettings){Frame->Application=NULL;MdoModulesXworkError(Error,XWORK_ERROR_CONTEXT,"extension_settings_required: Complete this extension's configuration before running");return false;}
     }
     char Message[1024]={0};mdo_result Result;uint32 Attempt=0;
     do{Result=Binding->Program.OnEvent(Binding->UserData,Phase,Frame,Message,sizeof(Message));
         if(Notification||Phase==MDO_AGENT_INSTANCE_RELEASE||
             !MdoModulesCallbackRecover(Frame,Result,++Attempt,Error,Message))break;
     }while(true);
-    xrtValueRelease((xvalue*)Application.ExtensionSettings);Frame->ExtensionSettings=NULL;
+    xrtValueRelease((xvalue*)Application.ExtensionSettings);Application.ExtensionSettings=NULL;Frame->ExtensionSettings=NULL;
     Frame->Application=NULL;
     if(Result==MDO_RESULT_OK){xworkErrorInit(Error);return true;}
     if(MdoModulesCallbackStopped(Result,Error))return false;
@@ -2502,13 +2503,13 @@ xwork_result MdoModuleCatalogAgentDrive(const MdoModuleCatalog* Catalog,cstr Id,
     if(!Binding || !Binding->Program.Run)return XWORK_RESULT_ERROR;
     mdo_sdk_context_v1 Application;MdoApplicationInvocation Invocation;
     if(!MdoModulesAgentApplication(Binding,Frame,&Application,&Invocation,Catalog)){
-        MdoModulesXworkError(Error,XWORK_ERROR_CONTEXT,"extension_settings_required: Complete this extension's configuration before running");return false;
+        Frame->Application=NULL;MdoModulesXworkError(Error,XWORK_ERROR_CONTEXT,"extension_settings_required: Complete this extension's configuration before running");return XWORK_RESULT_ERROR;
     }
     char Message[1024]={0};mdo_result Result;uint32 Attempt=0;
     do{Result=Binding->Program.Run(Binding->UserData,Frame,Message,sizeof(Message));
         if(!MdoModulesCallbackRecover(Frame,Result,++Attempt,Error,Message))break;
     }while(true);
-    xrtValueRelease((xvalue*)Application.ExtensionSettings);Frame->ExtensionSettings=NULL;
+    xrtValueRelease((xvalue*)Application.ExtensionSettings);Application.ExtensionSettings=NULL;Frame->ExtensionSettings=NULL;
     Frame->Application=NULL;
     if(MdoModulesCallbackStopped(Result,Error))return Error->eCode==XWORK_ERROR_CANCELLED?XWORK_RESULT_CANCELLED:XWORK_RESULT_TIMEOUT;
     if(Result==MDO_RESULT_OK)xworkErrorInit(Error);

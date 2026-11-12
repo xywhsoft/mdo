@@ -12,6 +12,7 @@
 /* The pinned compact TCC SDK intentionally omits POSIX system headers.
  * These stable libc declarations cover only the Linux/Android pipe watchdog. */
 struct CWPosixPoll {int fd;short events,revents;};
+extern intptr_t read(int,void*,size_t);
 extern int poll(struct CWPosixPoll*,unsigned long,int);
 extern int getpid(void);
 extern int kill(int,int);
@@ -27,6 +28,24 @@ static mdo_result CWSdkFailureResult;
 static unsigned CWSequence;
 static char* CWRoot;
 static xatomic32 CWDone;
+static xvalue* CWSettings;
+static bool CWPrivateRead(void* Buffer,size_t Count){
+    size_t At=0;
+    while(At<Count){
+#if defined(_WIN32) || defined(_WIN64)
+        DWORD Read=0;if(!ReadFile(GetStdHandle(STD_INPUT_HANDLE),(char*)Buffer+At,(DWORD)(Count-At),&Read,NULL)||!Read)return false;At+=Read;
+#else
+        intptr_t N=read(0,(char*)Buffer+At,Count-At);if(N<=0)return false;At+=(size_t)N;
+#endif
+    }return true;
+}
+static xvalue* CWPrivateSettings(void){
+    unsigned char Header[4];if(!CWPrivateRead(Header,4))return NULL;size_t Size=0;
+    for(size_t I=0;I<4;I++)Size|=(size_t)Header[I]<<(8*I);
+    if(!Size||Size>512u*1024u)return NULL;char* Json=xrtMalloc(Size+1);if(!Json)return NULL;
+    bool Ok=CWPrivateRead(Json,Size);Json[Size]=0;xvalue* Settings=Ok?xrtJsonParse(xrtStrViewN(Json,Size)):NULL;
+    xrtSecureZero(Json,Size);xrtFree(Json);if(xrtValueType(Settings)!=XVALUE_OBJECT){xrtValueRelease(Settings);return NULL;}return Settings;
+}
 static int32 CWParentWatch(void* Unused) {
     (void)Unused;
     while(!xrtAtomic32Load(&CWDone,XMEMORY_ACQUIRE)){
@@ -105,6 +124,10 @@ static bool CWSdkCancelled(const mdo_sdk_context_v1* C){return C->Deadline&&xllm
 static mdo_result CWSdkCall(const mdo_sdk_context_v1* C,cstr M,const xvalue* P,xvalue** R,mdo_error_v1* E){
     CWSdkFailureCode[0]=0;
     (void)C;*R=NULL;if(E){memset(E,0,sizeof(*E));E->Size=sizeof(*E);}
+    if(M&&!strcmp(M,"extension.settings.current")&&CWSettings){
+        if(xrtValueCount(P)){if(E){snprintf(E->Code,sizeof(E->Code),"extension_settings_identity");snprintf(E->Message,sizeof(E->Message),"Settings identity is fixed by the host");}return MDO_RESULT_ERROR;}
+        *R=xrtValueClone(CWSettings);return *R?MDO_RESULT_OK:MDO_RESULT_ERROR;
+    }
     xvalue* Q=xrtValueObject(),*Frame=NULL;
     bool Ok=Q&&M&&xrtValueObjectSetNew(Q,XRT_STR_LITERAL("method"),CWSdkString(M))&&
         xrtValueObjectSetNew(Q,XRT_STR_LITERAL("params"),P?xrtValueClone(P):xrtValueNull());
@@ -134,6 +157,8 @@ void ServiceInit(XS_HostInfo* H) {
 #endif
     CWRoot=xrtPathParent(H->DevFile);
     xvalue* Input=CWRead("input.json"),*Output=xrtValueObject(),*Result=NULL;
+    bool Private=false;xrtValueGetBool(CWGet(Input,"settings_pipe"),&Private);
+    CWSettings=Private?CWPrivateSettings():xrtValueObject();
     bool Monitor=false;xrtValueGetBool(CWGet(Input,"watch_parent"),&Monitor);
 #if defined(_WIN32) || defined(_WIN64)
     /* The child owns this nested Job handle. Closing it on process death also
@@ -164,7 +189,7 @@ void ServiceInit(XS_HostInfo* H) {
         if(Parent)tcc_add_include_path(Tcc,Parent);xrtFree(Parent);
     }
     union {void* P;mdo_command_run_v1 F;} Entry={0};bool Compiled=false;
-    if(Input&&Source&&Tcc&&JobReady&&(!Monitor||Watch)&&tcc_compile_string(Tcc,Source)>=0&&tcc_relocate(Tcc)>=0) {
+    if(Input&&CWSettings&&Source&&Tcc&&JobReady&&(!Monitor||Watch)&&tcc_compile_string(Tcc,Source)>=0&&tcc_relocate(Tcc)>=0) {
         Compiled=true;
         Entry.P=tcc_get_symbol(Tcc,MDO_COMMAND_ENTRY);
         if(Entry.F){
@@ -183,6 +208,7 @@ void ServiceInit(XS_HostInfo* H) {
             Application.SessionId=C.SessionId;Application.RunId=C.RunId;Application.Workspace=C.Workspace;Application.DeviceId="local";Application.Deadline=C.Deadline;
             uint64 Origin=0;int64 SignedOrigin=0;
             if(!xrtValueGetUInt(CWGet(Input,"call_origin"),&Origin)&&xrtValueGetInt(CWGet(Input,"call_origin"),&SignedOrigin)&&SignedOrigin>=0)Origin=(uint64)SignedOrigin;
+            Application.ExtensionSettings=CWSettings;
             Application.Origin=Origin<=MDO_ORIGIN_EXTENSION?(uint32)Origin:MDO_ORIGIN_UNKNOWN;
             C.Application=&Application;
             C.ExtensionRoot=CWText(Input,"extension_root");C.DirectoryId=CWText(Input,"directory_id");
@@ -214,6 +240,7 @@ void ServiceInit(XS_HostInfo* H) {
     (void)CWWrite("final.json",Output);
     xrtAtomic32Store(&CWDone,1,XMEMORY_RELEASE);
     if(Watch){xrtThreadWait(Watch);xrtThreadDestroy(Watch);}
+    xrtValueRelease(CWSettings);CWSettings=NULL;
     xrtValueRelease(Result);xrtValueRelease(Output);xrtValueRelease(Input);xrtFree(Source);
     if(Tcc)tcc_delete(Tcc);
     if(ExtensionMount)xrtVfsMountDestroy(ExtensionMount);if(WorkerMount)xrtVfsMountDestroy(WorkerMount);
