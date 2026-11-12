@@ -60,6 +60,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/extension-tasks/{task}/install", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiExtensionTasksRoute, false },
     { "/api/v1/extension-tasks/{task}/forget", XHTTP_METHOD_DELETE, "DELETE, OPTIONS", MdoApiExtensionTasksRoute, false },
     { "/api/v1/extensions/{kind}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS", MdoApiExtensionsRoute, false },
+    { "/api/v1/extensions/{kind}/{id}/settings", XHTTP_METHOD_GET | XHTTP_METHOD_PUT, "GET, PUT, OPTIONS", MdoApiExtensionsRoute, false },
+    { "/api/v1/extensions/{kind}/{id}/settings/preview", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiExtensionsRoute, false },
     { "/api/v1/extensions/{kind}/{id}/plan", XHTTP_METHOD_GET | XHTTP_METHOD_POST,
       "GET, POST, OPTIONS", MdoApiAgentPlanRoute, false },
     { "/api/v1/extensions/{kind}/{id}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT | XHTTP_METHOD_DELETE,

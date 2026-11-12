@@ -886,3 +886,5 @@ bool MdoExtensionsEdit(cstr Kind,cstr Id,cstr Action,cstr Path,cstr Target,const
 #include "directory_save.inc.c"
 
 #include "group.inc.c"
+
+#include "settings.inc.c"

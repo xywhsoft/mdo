@@ -2,6 +2,7 @@
 #define MDO_EXTENSION_MANIFEST_H
 #include "extension_zip.h"
 #include "extension_identity.h"
+#include "extension_settings_form.h"
 
 #define MDO_EXTENSION_MANIFEST_BYTES (64u*1024u)
 static cstr MdoExtensionText(const xvalue* O,cstr Key,size_t Limit)
@@ -83,6 +84,16 @@ static bool MdoExtensionManifest(const xvalue* M,char* Error,size_t Capacity)
     cstr Why="extension.json must describe one of the nine extension types";
     if(xrtValueType(M)!=XVALUE_OBJECT)goto bad;
     if(!MdoExtensionPresentation(M,Error,Capacity))return false;
+    const xvalue* Settings=xrtValueObjectGet(M,XRT_STR_LITERAL("settings"));bool Off=false;
+    if(Settings&&!(xrtValueGetBool(Settings,&Off)&&!Off)){
+        cstr Form=MdoEsText(Settings,"form");
+        if(!MdoEsKeys(Settings,"|form||templates||environment|")||!Form||!MdoExtensionRelativePath(Form)||!strcmp(Form,"extension.json")){Why="Settings require an in-directory form JSON file";goto bad;}
+        const xvalue* Templates=MdoEsGet(Settings,"templates");
+        if(Templates&&(xrtValueType(Templates)!=XVALUE_ARRAY||xrtValueCount(Templates)>32)){Why="Declare at most 32 explicit text template paths";goto bad;}
+        for(size_t I=0;I<xrtValueCount(Templates);I++){xstrview P={0};if(!xrtValueGetString(xrtValueArrayGet(Templates,I),&P)||memchr(P.Data,0,P.Size)||!MdoExtensionRelativePath(P.Data)||!strcmp(P.Data,"extension.json")||!strcmp(P.Data,Form)){Why="Invalid settings text template path";goto bad;}size_t N=P.Size;bool Text=(N>3&&!strcmp(P.Data+N-3,".md"))||(N>4&&!strcmp(P.Data+N-4,".txt"));if(!Text){Why="Only explicit Markdown or plain text resources can be settings templates";goto bad;}for(size_t J=0;J<I;J++){xstrview Q={0};xrtValueGetString(xrtValueArrayGet(Templates,J),&Q);if(xrtStrEqual(P,Q)){Why="Duplicate settings template path";goto bad;}}}
+        const xvalue* Env=MdoEsGet(Settings,"environment");if(Env&&(xrtValueType(Env)!=XVALUE_OBJECT||xrtValueCount(Env)>32)){Why="Settings environment must map at most 32 variable names to fields";goto bad;}
+        for(size_t I=0;I<xrtValueCount(Env);I++){xstrview K={0},V={0};const xvalue* X=xrtValueObjectAt(Env,I,&K);if(!MdoEsName(K.Data)||!xrtValueGetString(X,&V)||memchr(V.Data,0,V.Size)||!MdoEsName(V.Data)){Why="Use identifier environment names and settings fields";goto bad;}}
+    }
     const char* const Removed[]={"format","resources","files","base64","min_build_id","format_version"};
     for(size_t I=0;I<sizeof(Removed)/sizeof(*Removed);I++)if(xrtValueObjectHas(M,xrtStrView(Removed[I]))){Why="Legacy package fields are not accepted in extension.json";goto bad;}
     cstr Kind=MdoExtensionText(M,"kind",32),Name=MdoExtensionText(M,"name",240),Alias=MdoExtensionText(M,"alias",64),Entry=MdoExtensionText(M,"entry",MDO_EXTENSION_PATH_BYTES);
@@ -116,6 +127,17 @@ static xvalue* MdoExtensionZipManifest(MdoZip* Z,xcancel* Cancel)
     const char* const Keys[]={"entry","native","frontend","readme"};
     for(size_t I=0;I<sizeof(Keys)/sizeof(*Keys);I++){cstr P=MdoExtensionText(M,Keys[I],MDO_EXTENSION_PATH_BYTES);if(!P)continue;int64 Index=MdoZipFind(Z,P);
         if(Index<0||Z->Entries[Index].Directory||(!Z->Entries[Index].Bytes&&strcmp(Keys[I],"readme"))){xrtValueRelease(M);MdoZipFail(Z,"Declared extension entry or resource is missing or empty");return NULL;}}
+    const xvalue* Settings=MdoEsGet(M,"settings");cstr Form=MdoEsText(Settings,"form");
+    if(Form){
+        int64 Index=MdoZipFind(Z,Form);xvalue* Definition=NULL;MdoExtensionManifestBuffer F={0};
+        bool Good=Index>=0&&!Z->Entries[Index].Directory&&Z->Entries[Index].Bytes&&Z->Entries[Index].Bytes<=MDO_ES_FORM_BYTES;
+        if(Good){F.Capacity=(size_t)Z->Entries[Index].Bytes;F.Data=xrtMalloc(F.Capacity+1);Good=F.Data&&MdoZipEntryRead(Z,(size_t)Index,MdoExtensionManifestSink,&F,Cancel,NULL)&&F.Used==F.Capacity&&!memchr(F.Data,0,F.Used);}
+        if(Good)Definition=xrtJsonParse(xrtStrViewN((cstr)F.Data,F.Used));xrtFree(F.Data);
+        Good=Good&&Definition&&MdoExtensionSettingsFormValid(Definition,Z->Error,sizeof(Z->Error));
+        const xvalue* Env=MdoEsGet(Settings,"environment");for(size_t I=0;Good&&I<xrtValueCount(Env);I++){xstrview Field={0};xrtValueGetString(xrtValueObjectAt(Env,I,NULL),&Field);const xvalue* Fld=MdoEsFind(Definition,Field.Data);cstr T=MdoEsText(Fld,"type");Good=Fld&&strcmp(T,"multiselect");}
+        const xvalue* Templates=MdoEsGet(Settings,"templates");for(size_t I=0;Good&&I<xrtValueCount(Templates);I++){xstrview P={0};xrtValueGetString(xrtValueArrayGet(Templates,I),&P);int64 At=MdoZipFind(Z,P.Data);Good=At>=0&&!Z->Entries[At].Directory&&Z->Entries[At].Bytes&&Z->Entries[At].Bytes<=128u*1024u;}
+        xrtValueRelease(Definition);if(!Good){xrtValueRelease(M);MdoZipFail(Z,"Extension settings form, field binding or text template is invalid or missing");return NULL;}
+    }
     return M;
 }
 #endif

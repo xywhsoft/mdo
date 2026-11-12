@@ -96,8 +96,11 @@ static bool MdoDirectoryApiFile(MdoApiContext* C,cstr Kind,cstr Id,const xvalue*
  xrtFree(Text);
  if(!Ok){xrtValueRelease(Data);return MdoApiReplyError(C,404,"extension_file_unavailable","File is unavailable; preview is limited to 1 MiB of UTF-8 text",NULL);}return MdoApiReplySuccessTake(C,200,Data,NULL);
 }
+#include "extension_settings.inc.c"
+
 bool MdoApiExtensionsRoute(MdoApiContext* C){
  char Kind[33],Id[97],Error[512]={0};if(!MdoDirectoryApiParams(C,Kind,Id))return MdoApiReplyError(C,400,"extension_path_invalid","Choose one of the nine types and a portable directory ID",NULL);
+ if(Id[0]&&(MdoArchiveApiSuffix(C,"/settings")||MdoArchiveApiSuffix(C,"/settings/preview")))return MdoApiExtensionSettings(C,Kind,Id);
  xvalue* Q=MdoDirectoryApiQuery(C);if(!Q)return MdoApiReplyError(C,400,"extension_query_invalid","Unsupported or repeated extension query field",NULL);xhttpmethod Method=C->Request->head->MethodCode;bool Result=false;
  if(Method==XHTTP_METHOD_GET||Method==XHTTP_METHOD_HEAD){
   if(!Id[0]||MdoArchiveApiSuffix(C,"/files"))Result=MdoDirectoryApiList(C,Kind,Q,Id[0]!=0,Id);

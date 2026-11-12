@@ -115,6 +115,7 @@ INPUTS={
  'Ecosystem':document('action:s kind:s version_id:s version:s platform:s q:s state:s work:s path:s offset:u limit:u task:s proof_task:s publish:b review_notes:s source_url:s source_included:b expected_revision:u type:s requested:u reason:s',('action',),True),
  'Purge':document('purge_request_id:s project_id:s revision:u created_at:i confirmation:s'),
  'BackupUpload':document('id:s bytes:u sha256:s',('id','bytes'),True),
+ 'ExtensionSettingsMutation':document('revision:s schema_digest:s values:o secrets:o reset:b clear_secrets:b',('revision','schema_digest'),True),
  'ExtensionDirectory':document('action:s manifest:o edits:a expected_revision:s trust_code:b enabled:b path:s destination:s text:s',closed=True),
  'ExtensionTask':document('purpose:s kind:s sha256:s bytes:u id:s expected_revision:s trust_code:b enabled:b'),
  'BackupPreview':document('upload_id:s id:s'),
@@ -245,6 +246,7 @@ def contract(row):
         'revision':{**S,'description':'Strong ETag returned by the previous read; required by revisioned mutations'},
         'headers':{'type':'object','additionalProperties':S,'description':'Optional product headers; write token, Host and Origin are host-owned'}}
     required=[];body_name=BODY.get(handler)
+    if handler=='ExtensionsRoute' and ('/settings' in path):body_name='ExtensionSettingsMutation'
     if handler=='AccountRoute':body_name='AccountCallback' if path.endswith('/callback') else 'AccountLogin' if path.endswith('/login') else None
     if handler=='AccountRoute' and method=='POST' and not body_name:body_name='AccountSkip' if path.endswith('/search/skip') else 'Empty'
     if handler=='DraftSubmissionRoute':body_name='QueueState'
