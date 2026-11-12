@@ -39,7 +39,7 @@ def main():
     for name in ('xs_plugin.h','xs_plugin_work.h','plugin_support.h','value_util.h'):shutil.copyfile(PLATFORM/'plugin_sdk'/name,sdk/name)
     shutil.copyfile(PLATFORM/'include/xadmin/time.h',fixture/'include/xadmin/time.h')
     shutil.copyfile(sdk_root()/'lib/sqlite3.h',sdk/'sqlite3.h')
-    for name in ('extension_manifest.h','extension_identity.h','extension_path.h','extension_casefold.h','extension_zip.h'):shutil.copyfile(ECO/name,fixture/name)
+    for name in ('extension_manifest.h','extension_identity.h','extension_path.h','extension_casefold.h','extension_zip.h','extension_settings_form.h'):shutil.copyfile(ECO/name,fixture/name)
     core=platform_store_source(ECO,None);routes=(ECO/'directory_routes.inc.c').read_text(encoding='utf-8').replace('#include "directory_store.inc.c"',core)
     startup=(ECO/'main.c').read_text(encoding='utf-8').replace('#include "directory_routes.inc.c"',routes)
     try:
