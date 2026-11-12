@@ -1,0 +1,15 @@
+{
+  "schema": "mdo.extension-settings.v1",
+  "config_version": 1,
+  "default_locale": "en-US",
+  "title": {"zh-CN": "角色设置", "en-US": "Role settings", "ru-RU": "Настройки роли"},
+  "groups": [{
+    "id": "character",
+    "title": {"zh-CN": "角色", "en-US": "Character", "ru-RU": "Персонаж"},
+    "fields": [
+      {"name": "character_name", "type": "text", "label": {"zh-CN": "角色名称", "en-US": "Name", "ru-RU": "Имя"}, "default": "Mira", "required": true, "max_length": 80, "expose_to_prompt": true},
+      {"name": "tone", "type": "select", "label": {"zh-CN": "语气", "en-US": "Tone", "ru-RU": "Стиль"}, "default": "concise", "options": [{"value": "concise", "label": {"zh-CN": "简洁", "en-US": "Concise", "ru-RU": "Краткий"}}, {"value": "friendly", "label": {"zh-CN": "亲切", "en-US": "Friendly", "ru-RU": "Дружелюбный"}}], "expose_to_prompt": true},
+      {"name": "show_examples", "type": "switch", "label": {"zh-CN": "在自定义 C 程序中启用示例", "en-US": "Enable examples for custom C programs", "ru-RU": "Включить примеры для программ C"}, "default": false}
+    ]
+  }]
+}

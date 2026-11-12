@@ -27,7 +27,11 @@
     assert(dialog().querySelector('[name=enabled]').checked===false,'False remains unchecked');
     assert([...dialog().querySelectorAll('input[type=checkbox]')].every(node=>node.getAttribute('role')==='switch'),'All boolean controls use accessible capsule switches');
     assert(dialog().querySelector('.extension-settings-switch').getBoundingClientRect().height>=44,'Boolean rows provide a touch-friendly hit area');
-    input('endpoint','https://example.invalid/v1');input('api_key','browser-private-key');input('new_field','complete');input('count','0');
+    input('endpoint','https://example.invalid/v1');input('api_key','browser-private-key');input('new_field','complete');input('count','0');input('character_name','draft name');
+    button('preview').click();await until(()=>dialog()?.querySelector('.extension-settings-previews pre'),'template preview');
+    assert(dialog().querySelector('.extension-settings-previews pre').textContent==='Name: draft name','Preview renders the draft with XRT');
+    assert(!dialog().querySelector('.extension-settings-previews').textContent.includes('browser-private-key'),'Prompt preview excludes the credential');
+    await until(()=>!button('save').disabled,'preview completed');
     button('save').click();await until(()=>dialog()?.textContent.includes(settingsText('saved')),'save confirmed');
     let response=(await api.get('/extensions/skills/qa-settings/settings')).data;
     assert(response.valid&&response.values.count===0,'Actual UI saved integer zero');

@@ -1,0 +1,10 @@
+{
+  "kind": "tools",
+  "id": "tool:example.image-configuration",
+  "alias": "image-configuration",
+  "name": "Image API configuration example",
+  "version": "1.0.0",
+  "entry": "tool.c",
+  "platforms": ["any"],
+  "settings": {"form": "settings.form.json"}
+}

@@ -55,7 +55,8 @@ static MdoAgentInstance* MdoAgentsInstance(MdoAgentOwner* Owner,xwork_agent_exte
         Instance->ExtensionSettings=MdoModuleAgentSettings(Native->pAgent,0,0,Instance->Definition.ExtensionId,SettingsError);
         /* Preserve recovered pre-v1 pinned contexts, while all new v1 roles
          * rebuild from their independently addressable sources. */
-        if(!Instance->Definition.HasProgram && !MdoAgentConfigGet(Instance->Configuration,"schema") &&
+        if(!xrtValueCount(MdoAgentConfigGet(MdoAgentConfigGet(Instance->ExtensionSettings,"$mdo"),"templates")) &&
+            !Instance->Definition.HasProgram && !MdoAgentConfigGet(Instance->Configuration,"schema") &&
             !MdoAgentConfigGet(Instance->Configuration,"context") && Native->pAgent==Owner->RootAgent){
             cstr Previous=xllmSessionGetSystemPrompt(Native->pSession);
             Instance->LegacyPrompt=MdoAgentsLegacyPrompt(Previous);
@@ -127,9 +128,9 @@ static void MdoAgentsLifecycleRuntime(MdoAgentOwner* Owner,const xwork_event* Ev
     }
 }
 static xwork_result MdoAgentsLifecycleRun(MdoAgentOwner* Owner,MdoAgentInstance* Instance,xwork_agent_extension_context* Native,xwork_error* Error){
+    if(!MdoModuleAgentBindContext(Native->pAgent,Owner->ProductProject,Owner->ProductSession)){MdoAgentsError(Error,XWORK_ERROR_OUT_OF_MEMORY,"cannot bind the Agent configuration scope");return XWORK_RESULT_ERROR;}
     MdoAgentActiveFrame Active={0};Active.Instance=Instance;Active.Native=Native;Active.Thread=xrtThreadCurrentId();Active.Error=Error;
     xrtMutexLock(Owner->InstanceLock);Active.Next=Owner->ActiveFrames;Owner->ActiveFrames=&Active;xrtMutexUnlock(Owner->InstanceLock);
-    if(!MdoModuleAgentBindContext(Native->pAgent,Owner->ProductProject,Owner->ProductSession)){MdoAgentsError(Error,XWORK_ERROR_OUT_OF_MEMORY,"cannot bind the Agent configuration scope");return XWORK_RESULT_ERROR;}
     MdoModuleAgentSetMemberContext(Native->pAgent,NULL,0,Owner->Namespace,Owner->MemberId);
     MdoModuleAgentSettingsBegin(Native->pAgent);
     xrtValueRelease(Instance->ExtensionSettings);Instance->ExtensionSettings=NULL;

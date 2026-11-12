@@ -1,0 +1,17 @@
+{
+  "schema": "mdo.extension-settings.v1",
+  "config_version": 1,
+  "default_locale": "en-US",
+  "title": {"zh-CN": "图片服务", "en-US": "Image service", "ru-RU": "Сервис изображений"},
+  "groups": [{
+    "id": "service",
+    "title": {"zh-CN": "API 设置", "en-US": "API settings", "ru-RU": "Настройки API"},
+    "fields": [
+      {"name": "api_url", "type": "url", "label": {"zh-CN": "接口地址", "en-US": "Endpoint", "ru-RU": "Адрес API"}, "required": true},
+      {"name": "api_key", "type": "secret", "label": {"zh-CN": "API 密钥", "en-US": "API key", "ru-RU": "Ключ API"}, "required": true},
+      {"name": "model", "type": "text", "label": {"zh-CN": "模型名称", "en-US": "Model", "ru-RU": "Модель"}, "required": true},
+      {"name": "enabled", "type": "switch", "label": {"zh-CN": "启用图片处理", "en-US": "Enable image processing", "ru-RU": "Включить обработку изображений"}, "default": true},
+      {"name": "timeout_seconds", "type": "integer", "label": {"zh-CN": "请求超时（秒）", "en-US": "Timeout (seconds)", "ru-RU": "Таймаут (секунды)"}, "min": 1, "max": 300, "default": 60}
+    ]
+  }]
+}

@@ -1,0 +1,10 @@
+{
+  "kind": "plugins",
+  "id": "plugin:example.configurable-prompt",
+  "alias": "configurable-prompt",
+  "name": "Configurable prompt example",
+  "version": "1.0.0",
+  "entry": "plugin.json",
+  "platforms": ["any"],
+  "settings": {"form": "settings.form.json", "templates": ["instructions.md"]}
+}

@@ -104,8 +104,8 @@ static bool MdoAgentsFilterMetadata(char** Text,const xvalue* Spec)
     Ok=Next!=NULL;if(Ok){xrtFree(*Text);*Text=Next;}
     xrtFree(Prefix);xrtFree(Json);xrtValueRelease(Selected);xrtValueRelease(Parsed);return Ok;
 }
-static bool MdoAgentsPlanSource(xvalue* Plan,cstr Id,char* Text,const xvalue* Spec,
-    uint64 Order,bool Enabled,cstr Resource,xwork_error* Error)
+static bool MdoAgentsPlanSourceBound(xvalue* Plan,cstr Id,char* Text,const xvalue* Spec,
+    uint64 Order,bool Enabled,cstr Resource,xwork_error* Error,MdoAgentInstance* Instance,cstr File)
 {
     xvalue* Item=xrtValueObject();
     cstr Replacement=MdoAgentConfigText(Spec,"text"),Template=MdoAgentConfigText(Spec,"template");
@@ -114,6 +114,9 @@ static bool MdoAgentsPlanSource(xvalue* Plan,cstr Id,char* Text,const xvalue* Sp
     if(Ok && Enabled && Replacement){xrtFree(Text);Text=xrtStrDup(Replacement);Ok=Text!=NULL;}
     if(Ok && Enabled && Template){char* Rendered=MdoAgentsRenderTemplate(Template,MdoAgentConfigGet(Plan,"variables"),Error);xrtFree(Text);Text=Rendered;Ok=Text!=NULL;}
     if(Ok && Enabled && Append)Ok=MdoAgentsAppendPrompt(&Text,Append,strlen(Append),Error);
+    if(Ok&&Enabled&&Instance&&Instance->Definition.ExtensionId&&File){char Why[512]={0};
+        char* Rendered=MdoExtensionSettingsRender(Instance->Definition.ExtensionId,File,Text,Instance->ExtensionSettings,Why);
+        xrtFree(Text);Text=Rendered;Ok=Text!=NULL;if(!Ok)MdoAgentsError(Error,XWORK_ERROR_CONTEXT,Why);}
     uint64 Limit=0;
     if(Ok)Ok=MdoAgentConfigNumber(Spec,"max_bytes",0,MDO_AGENT_PROMPT_LIMIT,&Limit) &&
         MdoAgentConfigNumber(Spec,"order",Order,100000,&Order);
@@ -131,6 +134,9 @@ static bool MdoAgentsPlanSource(xvalue* Plan,cstr Id,char* Text,const xvalue* Sp
     xrtFree(Text);xrtValueRelease(Item);
     if(!Ok && (!Error || Error->eCode==XWORK_ERROR_NONE))MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"cannot construct Agent context source");
     return Ok;
+}
+static bool MdoAgentsPlanSource(xvalue* Plan,cstr Id,char* Text,const xvalue* Spec,uint64 Order,bool Enabled,cstr Resource,xwork_error* Error){
+ return MdoAgentsPlanSourceBound(Plan,Id,Text,Spec,Order,Enabled,Resource,Error,NULL,NULL);
 }
 #include "plugin_prompts.inc.c"
 static bool MdoAgentsFrozenSource(MdoAgentInstance* Instance,xvalue* Plan,cstr Id,const xvalue* Spec,bool* Frozen)
@@ -186,11 +192,7 @@ static bool MdoAgentsContextCollect(MdoAgentOwner* Owner,MdoAgentInstance* Insta
         char* Text=xrtStrDup("");
         if(!Text){Ok=false;break;}
         if(Enabled){
-            if(!strcmp(Id,"system")){xrtFree(Text);
-                char Why[512]={0};xvalue* Meta=Definition->ExtensionId?MdoExtensionsResolve(Definition->ExtensionId,Why):NULL;
-                cstr Entry=MdoExtensionText(Meta,"entry",4096);
-                Text=Definition->ExtensionId?MdoExtensionSettingsRender(Definition->ExtensionId,Entry,Definition->SystemPrompt,Instance->ExtensionSettings,Why):xrtStrDup(Definition->SystemPrompt);
-                xrtValueRelease(Meta);if(!Text){MdoAgentsError(Error,XWORK_ERROR_CONTEXT,Why);Ok=false;}}
+            if(!strcmp(Id,"system")){xrtFree(Text);Text=xrtStrDup(Definition->SystemPrompt);}
             else if(!strcmp(Id,"skills.preload")){
                 MdoModuleAgentInfo Selected=*Definition;const char* Names[128];size_t N=0;
                 for(size_t J=0;J<Definition->SkillCount;J++)if(MdoAgentsSelection(Spec,Definition->Skills[J]))Names[N++]=Definition->Skills[J];
@@ -213,8 +215,7 @@ static bool MdoAgentsContextCollect(MdoAgentOwner* Owner,MdoAgentInstance* Insta
             } else if(!strcmp(Id,"project_rules")){
                 cstr File=MdoAgentConfigText(Spec,"file");
                 char* Read=MdoAgentsContextRead(Owner->Workspace,File?File:"AGENTS.md");
-                if(Read){char Why[512]={0};char* Rendered=Definition->ExtensionId?MdoExtensionSettingsRender(Definition->ExtensionId,File,Read,Instance->ExtensionSettings,Why):xrtStrDup(Read);
-                    xrtFree(Read);xrtFree(Text);Text=Rendered;if(!Text){MdoAgentsError(Error,XWORK_ERROR_CONTEXT,Why);Ok=false;}}
+                if(Read){xrtFree(Text);Text=Read;}
                 else if(MdoAgentConfigBool(Spec,"required",false)){MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"required project rule file cannot be read");Ok=false;}
                 else xrtClearError();
             } else if(!strcmp(Id,"mcp.instructions")){
@@ -228,13 +229,16 @@ static bool MdoAgentsContextCollect(MdoAgentOwner* Owner,MdoAgentInstance* Insta
                 cstr Origin=MdoAgentConfigText(Spec,"origin");
                 char* Path=xrtFormat("%s/%s",Origin?Origin:"invalid-role-directory",File);
                 char* Read=Path?MdoExtensionRead(Path,true,MDO_EXTENSION_TEXT_LIMIT,NULL):NULL;xrtFree(Path);
-                if(Read){char Why[512]={0};char* Rendered=Definition->ExtensionId?MdoExtensionSettingsRender(Definition->ExtensionId,File,Read,Instance->ExtensionSettings,Why):xrtStrDup(Read);
-                    xrtFree(Read);xrtFree(Text);Text=Rendered;if(!Text){MdoAgentsError(Error,XWORK_ERROR_CONTEXT,Why);Ok=false;}}
+                if(Read){xrtFree(Text);Text=Read;}
                 else if(MdoAgentConfigBool(Spec,"required",true)){MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"required role context file cannot be read");Ok=false;}
                 else xrtClearError();
             }
         }
-        if(Ok)Ok=MdoAgentsPlanSource(Plan,Id,Text,Spec,I*100u,Enabled,Id,Error);else xrtFree(Text);
+        xvalue* TemplateOwner=Enabled&&!strcmp(Id,"system")&&Definition->ExtensionId?MdoExtensionsResolve(Definition->ExtensionId,NULL):NULL;
+        cstr TemplateFile=MdoAgentConfigText(Spec,"file");if(!TemplateFile&&!strcmp(Id,"system"))TemplateFile=MdoExtensionText(TemplateOwner,"entry",4096);
+        if(!strcmp(Id,"project_rules"))TemplateFile=NULL;
+        if(Ok)Ok=MdoAgentsPlanSourceBound(Plan,Id,Text,Spec,I*100u,Enabled,Id,Error,Instance,TemplateFile);else xrtFree(Text);
+        xrtValueRelease(TemplateOwner);
     }
     if(Ok)Ok=MdoAgentsPluginSource(Owner,Instance,Native,Plan,Error);
     const xvalue* Context=MdoAgentConfigGet(Instance->Configuration,"context");
@@ -245,8 +249,8 @@ static bool MdoAgentsContextCollect(MdoAgentOwner* Owner,MdoAgentInstance* Insta
         char* Text=xrtStrDup("");cstr File=MdoAgentConfigText(Spec,"file");
         bool Enabled=MdoAgentsSourceEnabled(Spec,true);
         if(Enabled && File){cstr Origin=MdoAgentConfigText(Spec,"origin");char* Path=xrtFormat("%s/%s",Origin?Origin:"invalid-role-directory",File);xrtFree(Text);Text=Path?MdoExtensionRead(Path,true,MDO_EXTENSION_TEXT_LIMIT,NULL):NULL;xrtFree(Path);if(!Text&&!MdoAgentConfigBool(Spec,"required",true)){xrtClearError();Text=xrtStrDup("");}}
-        if(Enabled&&File&&Text&&Definition->ExtensionId){char Why[512]={0};char* Rendered=MdoExtensionSettingsRender(Definition->ExtensionId,File,Text,Instance->ExtensionSettings,Why);xrtFree(Text);Text=Rendered;if(!Text)MdoAgentsError(Error,XWORK_ERROR_CONTEXT,Why);}
-        Ok=MdoAgentsPlanSource(Plan,Key.Data,Text,Spec,2000u+I,Enabled,File?File:Key.Data,Error);
+
+        Ok=MdoAgentsPlanSourceBound(Plan,Key.Data,Text,Spec,2000u+I,Enabled,File?File:Key.Data,Error,Instance,File);
     }
     (void)Native;
 done:

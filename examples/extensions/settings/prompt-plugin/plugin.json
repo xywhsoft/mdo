@@ -1,0 +1,1 @@
+{"prompts":[{"id":"character","file":"instructions.md","activation":"explicit","targets":["primary","subagent"]}]}

@@ -29,7 +29,7 @@ static inline cstr MdoEsValueError(const xvalue* F,const xvalue* V){
   if(S.Size>(!strcmp(T,"secret")?4096u:16384u))return "length";
   if(MdoEsUInt(MdoEsGet(F,"max_length"),&U)&&S.Size>U)return "length";
   if(MdoEsUInt(MdoEsGet(F,"min_length"),&U)&&S.Size<U)return "length";
-  if(!strcmp(T,"url")&&S.Size){if((S.Size<7||memcmp(S.Data,"http://",7))&&(S.Size<8||memcmp(S.Data,"https://",8)))return "url";for(size_t I=0;I<S.Size;I++)if((unsigned char)S.Data[I]<=32)return "url";}
+  if(!strcmp(T,"url")&&S.Size){if((S.Size<7||memcmp(S.Data,"http://",7))&&(S.Size<8||memcmp(S.Data,"https://",8)))return "url";size_t Host=!memcmp(S.Data,"http://",7)?7u:8u;if(S.Size<=Host||S.Data[Host]=='/'||S.Data[Host]=='?'||S.Data[Host]=='#')return "url";for(size_t I=0;I<S.Size;I++)if((unsigned char)S.Data[I]<=32)return "url";}
  }else if(!strcmp(T,"integer")||!strcmp(T,"number")){
   if(!MdoEsNumber(V,&N)||(!strcmp(T,"integer")&&xrtValueType(V)!=XVALUE_INT&&xrtValueType(V)!=XVALUE_UINT))return "type";
   if(MdoEsNumber(MdoEsGet(F,"min"),&Bound)&&N<Bound)return "range";
@@ -61,6 +61,7 @@ static inline bool MdoExtensionSettingsFormValid(const xvalue* Form,char* Error,
    const cstr Flags[]={"required","expose_to_prompt"};for(size_t K=0;K<2;K++){bool B;const xvalue* V=MdoEsGet(F,Flags[K]);if(V&&!xrtValueGetBool(V,&B))goto bad;}
    if(MdoEsSecret(F)&&(MdoEsGet(F,"default")||MdoEsBool(F,"expose_to_prompt"))){Why="Secret fields cannot declare defaults or prompt exposure";goto bad;}
    const cstr Lengths[]={"min_length","max_length"};for(size_t K=0;K<2;K++){uint64 U;const xvalue* V=MdoEsGet(F,Lengths[K]);if(V&&(!MdoEsUInt(V,&U)||U>16384))goto bad;}
+   uint64 MinLength=0,MaxLength=0;if(MdoEsUInt(MdoEsGet(F,"min_length"),&MinLength)&&MdoEsUInt(MdoEsGet(F,"max_length"),&MaxLength)&&MinLength>MaxLength)goto bad;
    double Low,High;const xvalue* L=MdoEsGet(F,"min"),*H=MdoEsGet(F,"max");if((L&&!MdoEsNumber(L,&Low))||(H&&!MdoEsNumber(H,&High))||(L&&H&&Low>High))goto bad;
    const xvalue* Options=MdoEsGet(F,"options");if(!strcmp(Type,"select")||!strcmp(Type,"multiselect")){
     if(xrtValueType(Options)!=XVALUE_ARRAY||!xrtValueCount(Options)||xrtValueCount(Options)>64)goto bad;

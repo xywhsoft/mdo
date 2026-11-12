@@ -23,7 +23,7 @@
 
 ## 阶段一验证
 
-`python tests/test_extension_settings_runtime.py --host .build/host-model-policy/xs.exe`：真实原目录产品 API，84 项检查通过，覆盖九类扩展、默认/0/false、显式凭据操作、预览无写入、失败与冲突无写入、重启、schema 升级、坏表单隔离及重置。不复制应用/SDK，不调用模型。
+第一阶段使用真实原目录产品 API，84 项检查通过（当前源码请使用文末最终验收命令），覆盖九类扩展、默认/0/false、显式凭据操作、预览无写入、失败与冲突无写入、重启、schema 升级、坏表单隔离及重置。不复制应用/SDK，不调用模型。
 
 ## 统一配置窗口
 
@@ -35,7 +35,7 @@
 
 C 工具/Agent 的 context 尾部新增只读 ExtensionSettings；可使用 `<mdo/agent.h>` 的 mdoToolSettings / mdoAgentSettings 获取 `const xvalue*`，字段直接使用 XRT 读取。按 Size 检查尾字段，旧 ABI 调用方不受影响。SDK 的 mdoReadExtensionSettings 适用于命令和原生插件；身份由宿主绑定，不允许通过参数选择别的扩展。没有原生私有上下文的调用只返回非密钥视图。
 
-原生工具、Agent 生命周期和插件提示词，按当前 Agent 一轮内首次使用固定各自配置；下一轮重新读取，子 Agent 有独立作用域。常驻原生插件在注册时取得的配置固定到模块重载；命令固定到该次调用。Skill 在每次加载正文时读取最新配置，不缓存渲染结果。需要立即换配置时，应先完成当前流程再启动新流程；运行中的 MCP 服务重新连接后应用环境变量。
+原生工具、Agent 生命周期和插件提示词，按当前 Agent 一轮内首次使用固定各自配置；下一轮重新读取，子 Agent 有独立作用域。常驻原生插件在注册时取得的配置固定到模块重载；命令固定到该次调用，经有长度边界的私有 stdin 管道传入工作进程；不会经过普通的 JSON 请求/响应文件。Skill 在每次加载正文时读取最新配置，不缓存渲染结果。需要立即换配置时，应先完成当前流程再启动新流程；MCP 在其页面重新加载配置或重启 mdo 后应用环境变量。
 
 模板只针对 settings.templates 明确列出的 `.md` / `.txt`。支持 Agent Markdown 正文、Agent context 引用的文本文件、插件 prompts.file、Skill 正文。配置字典在模板中的名称为 `$settings`，例如 `{{$settings.character_name}}`。只有 expose_to_prompt=true 的非密钥字段可用，未暴露/不存在的字段严格报错；替换值只渲染一次。不同扩展使用自身身份。插件模板失败只跳过其片段，并在上下文检查器标记 settings_template_invalid。
 
@@ -44,3 +44,23 @@ C 工具/Agent 的 context 尾部新增只读 ExtensionSettings；可使用 `<md
 settings.environment 在 MCP stdio 启动时直接构建进程环境；同名普通连接变量由设置覆盖，MDO_* 宿主变量保留。密钥不写入生成的连接 JSON、启动命令或列表。其他原生程序可使用 MdoExtensionSettingsEnvironment 将自己的私有快照转为环境字典，再通过进程 API 传递；全局 PATH 启动的外部工具不会把密钥写入包装脚本。
 
 宿主精简配置需要 TEMPLATE_CORE；源码构建已纳入该模块。验证：原目录产品 API/浏览器回归、`tests/test_extension_settings_native.py` 的密钥隔离、作用域固定、模板及 SDK 自身身份检查。不需要复制 app 或 SDK。
+
+## 发布与验收
+
+商店服务器同步使用同一表单校验器，在 ZIP 封存时校验表单、显式文本文件及环境字段绑定；保留服务器已有的第十类 local-models 支持。客户端配置只存在设备的 Home/config，不属于发布包。当前阶段已提交服务器代码，未进行线上部署或客户端发布。
+
+三个可运行示例位于 examples/extensions/settings：角色 Agent、C 图片服务配置探针、插件提示词片段。图片探针只验证参数读取，不调用任何真实图片服务。新扩展配置入口无需另外编写设置页面。
+
+最终验收命令：
+
+```powershell
+python tools/build_mdo.py --prepare-only
+python tests/test_extension_settings_native.py --host .build/host/xs.exe
+python tests/test_extension_settings_archives.py --host .build/host/xs.exe
+python tests/test_extension_settings_runtime.py --host .build/host/xs.exe --browser "C:/Program Files/Google/Chrome/Application/chrome.exe"
+node --test tests/test_extension_settings.mjs
+```
+
+测试直接编译 app 当前源码，只创建小型、临时的 Home / 文本探针 / 配置 / ZIP，不复制 app 或 SDK。真实 Agent 回合使用离线模型回调，覆盖普通 Agent 与插件文本渲染、C 工具密钥读取、运行中更新与下轮生效、项目规则及扩展 context 文件、MCP 私有环境，以及真实命令工作进程读取配置、拒绝跨扩展参数、在执行期间扫描确认密钥没有进入 IPC JSON；浏览器覆盖三种语言及 390px 触屏布局。宿主已按 TEMPLATE_CORE 配置实编译。
+
+当前验收结果：104 项原生检查、94 项 API/浏览器检查、客户端和服务器各 23 项真实 ZIP 校验、4 项前端状态单元测试均通过。

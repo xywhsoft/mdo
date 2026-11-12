@@ -1,0 +1,7 @@
+{
+  "schema": "mdo.extension-settings.v1", "config_version": 1, "default_locale": "en-US",
+  "title": {"zh-CN": "提示词设置", "en-US": "Prompt settings", "ru-RU": "Настройки инструкций"},
+  "groups": [{"id": "role", "title": {"zh-CN": "角色", "en-US": "Character", "ru-RU": "Персонаж"}, "fields": [
+    {"name": "character_name", "type": "text", "label": {"zh-CN": "角色名称", "en-US": "Name", "ru-RU": "Имя"}, "default": "Mira", "required": true, "max_length": 80, "expose_to_prompt": true}
+  ]}]
+}

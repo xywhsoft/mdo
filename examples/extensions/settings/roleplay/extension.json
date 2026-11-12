@@ -1,0 +1,10 @@
+{
+  "kind": "agents",
+  "id": "agent:example.configurable-role",
+  "alias": "configurable-role",
+  "name": "Configurable role",
+  "version": "1.0.0",
+  "entry": "agent.md",
+  "platforms": ["any"],
+  "settings": {"form": "settings.form.json", "templates": ["agent.md"]}
+}
