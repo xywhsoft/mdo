@@ -13,6 +13,10 @@ from test_extension_zip_native import headers
 ROOT = Path(__file__).resolve().parents[1]
 HOME_STUBS = r'''
 static xroot QaRoot;
+/* Manager settings share the product's private release helper. These isolated
+ * filesystem contracts own their TCC state, so provide the same wipe/free
+ * contract; credential resolution is covered by test_extension_settings_runtime. */
+void MdoSecretRelease(char** Value){if(Value&&*Value){xrtSecureZero(*Value,strlen(*Value));xrtFree(*Value);*Value=NULL;}}
 /* These filesystem/command contracts never consume transfer tasks. The actual
  * binary-task lifecycle is exercised by the full-product save/task tests. */
 bool MdoExtensionTaskComplete(cstr Id,const xvalue* Outcome,xvalue** Result,char Error[512]){(void)Id;(void)Outcome;*Result=NULL;snprintf(Error,512,"Transfer task completion is outside this filesystem fixture");return false;}
