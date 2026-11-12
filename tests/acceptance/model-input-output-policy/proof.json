@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-12",
+  "mdo_commit": "47ac7bf3",
+  "service_commit": "8fdd9819",
+  "version": "0.9.6",
+  "client_published": false,
+  "unit_tests": 15,
+  "native_onboarding_checks": 16,
+  "reviewed_packed_checks": 16,
+  "browser": {
+    "1320": {
+      "passed": true,
+      "checks": 42
+    },
+    "390": {
+      "passed": true,
+      "checks": 43
+    }
+  },
+  "server": {
+    "passed": true,
+    "backup": "/home/xs/mdo-model-policy-20261112T032803Z/backup",
+    "catalog_version": "981a65da34bf97af8f98697d36ad43431c0990837ddaddbda54929fb123125c5",
+    "entries": 56,
+    "assets": {
+      "client-catalog.js": "cab73f4cdf0885e8c3504da71fae5a8ee0a9ed24e6a2f2d07f4b8e7e4c5d3a27",
+      "catalog-i18n.js": "9a6ff882360183b872894d54b5cb050eab8df7c765810e952834880625b953ba"
+    },
+    "hashes": {
+      "plugin/mdo/modules/models/client-catalog.defaults.json": "4c3821e50266628a1abaa82624c9b6eb1e29e50a06dd68ba3d483388d8ff1cb2",
+      "plugin/mdo/modules/models/src/client_catalog.c": "f99efbe1dd9cd1a744a56b3e0eaf53bae5a5d49c406e435800ef0c5b673df930",
+      "plugin/mdo/page/models/client-catalog.js": "cab73f4cdf0885e8c3504da71fae5a8ee0a9ed24e6a2f2d07f4b8e7e4c5d3a27",
+      "plugin/mdo/page/models/catalog-i18n.js": "9a6ff882360183b872894d54b5cb050eab8df7c765810e952834880625b953ba",
+      "plugin_data/model-gateway/client-catalog.json": "4c3821e50266628a1abaa82624c9b6eb1e29e50a06dd68ba3d483388d8ff1cb2"
+    },
+    "native_unchanged": true,
+    "config_unchanged": true,
+    "legacy_projection": true,
+    "service": "active"
+  },
+  "scope": "Model fixes validated against committed sources. Concurrent uncommitted extension-settings changes were excluded in the existing packaging stage; no checkout or runtime copy was created."
+}
