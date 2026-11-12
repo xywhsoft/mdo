@@ -180,8 +180,18 @@ test("unknown parameters remain editable and block validation until filled",asyn
     f.input("parameter-1-context_tokens","16000");f.input("parameter-1-max_output_tokens","8000");f.input("parameter-1-output-budget","2048");
     const choice=f.input("parameter-1-reasoning","provider-default");choice.dispatchEvent(new Event("change"));
     f.button("添加并验证（2）").click();await flush();assert.equal(f.config().items.length,3);
+    assert.deepEqual(f.config().items.find(item=>item.wire_model==="beta").output_budget,{mode:"custom",tokens:2048});
   }finally{f.restore();}
 });
+test("editing missing limits keeps the automatic output budget recommended",async()=>{
+  const f=fixture({missingBeta:true});try{
+    await f.add();f.input("parameter-1-context_tokens","16000");f.input("parameter-1-max_output_tokens","8000");
+    f.input("parameter-1-reasoning","provider-default").dispatchEvent(new Event("change"));
+    f.button("添加并验证（2）").click();await flush();
+    assert.deepEqual(f.config().items.find(item=>item.wire_model==="beta").output_budget,{mode:"recommended",tokens:8000});
+  }finally{f.restore();}
+});
+
 test("deselecting an incomplete profile hides its editor and allows the remaining selection",async()=>{
   const f=fixture({missingBeta:true});try{await f.add();
     const box=descendants(f.surface).find(n=>n.name==="selected-model"&&n.value==="beta");assert(box);

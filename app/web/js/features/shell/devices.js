@@ -207,7 +207,7 @@ export function createDevices() {
     if (!signedIn()) rows.push(actionButton(t("account.login"), async () => { layer?.dispose(); await open(); }));
     for (const device of signedIn() ? snapshot?.listing?.devices || [] : []) {
       const thisDevice = device.id === snapshot.device_id;
-      const selected = targetState().selected?.id === device.id;
+      const selected = Boolean(targetState().selected && targetState().selected.id === device.id);
       const currentMode = selected ? targetState().selected.mode : null;
       const available = device.online && device.allow_remote && !device.revoked;
       const row = rowsById.get(device.id) || element("div", { className: "device-row" }); rowsById.set(device.id, row); row.dataset.deviceId = device.id;
@@ -297,7 +297,14 @@ export function createDevices() {
         }
         if (disposed) return;
         layer = openLayer({ title: copy("choose", {}, "选择设备"), icon: "monitor", width: "48rem", height: "75%",
-          onClosed() { layer = null; clearTimeout(timer); } });
+          onClosed() {
+            layer = null; clearTimeout(timer); generation++;
+            // Discard listing reads and detached actions without cancelling a
+            // submitted remote mutation, whose receipt still needs reconciliation.
+            if (!operation) {
+              lifetime.abort(); lifetime = new AbortController(); busy = false; selection = null;
+            }
+          } });
         layer.element.id = "devices-dialog";
         layer.body.append(accountText, description, feedback, list); layer.footer.append(synced, refreshButton, closeButton);
         render(); void perform(listDevices);

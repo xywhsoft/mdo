@@ -57,8 +57,8 @@ async function setup(t){
   ['import { connectorRequest } from "../../api/connector.js";',"const { connectorRequest } = globalThis.__accountWindows;"],
   ['import { createLoginWindow } from "./login-window.js";',"const { createLoginWindow } = globalThis.__accountWindows;"]]);
  const devicesModule=await sourceModule("../app/web/js/features/shell/devices.js",[
-  ['import { connectorRequest, connectorJob } from "../../api/connector.js";',"const { connectorRequest, connectorJob } = globalThis.__accountWindows;"],
-  ['import { targetState, subscribeTarget, requestTargetSwitch, initializeTarget } from "../../api/target.js";',"const { targetState, subscribeTarget, requestTargetSwitch, initializeTarget } = globalThis.__accountWindows;"],
+  ['import { connectorRequest, connectorJob, connectorWatchJob } from "../../api/connector.js";',"const { connectorRequest, connectorJob, connectorWatchJob } = globalThis.__accountWindows;"],
+  ['import { targetState, subscribeTarget, requestTargetSwitch, initializeTarget, revokeTarget } from "../../api/target.js";',"const { targetState, subscribeTarget, requestTargetSwitch, initializeTarget, revokeTarget } = globalThis.__accountWindows;"],
   ['import { createLoginWindow } from "../account/login-window.js";',"const { createLoginWindow } = globalThis.__accountWindows;"]]);
  const modelChanges=[];
  const account=accountModule.createAccount({navigation:{openSettings:page=>navigations.push(page)},onModelsChange:()=>modelChanges.push(true)}),chooser=devicesModule.createDevices();

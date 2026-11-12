@@ -241,7 +241,7 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
       row.append(element("label",{className:"model-wizard-model"},[check,element("strong",{text:id})]));
       if(parameterLoading.has(id))row.append(element("p",{className:"model-config-status",text:text("identifying","正在自动识别参数…") }));
       const value=records.get(id),editor=createParameterEditor(value,{index,onChange:()=>{
-        value.budgetEdited=true;value.budgetMode=old.budgetMode;value.effortEdited=true;errors.delete(id);updatePrimary();
+        errors.delete(id);updatePrimary();
       }});toggleEditor();row.append(editor);
       if(errors.has(id))row.append(element("p",{className:"resource-error",text:errors.get(id),attrs:{role:"status"}}));
       body.append(row);
