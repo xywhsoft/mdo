@@ -24,3 +24,9 @@
 ## 阶段一验证
 
 `python tests/test_extension_settings_runtime.py --host .build/host-model-policy/xs.exe`：真实原目录产品 API，84 项检查通过，覆盖九类扩展、默认/0/false、显式凭据操作、预览无写入、失败与冲突无写入、重启、schema 升级、坏表单隔离及重置。不复制应用/SDK，不调用模型。
+
+## 统一配置窗口
+
+九类本机扩展行在更多操作前显示“配置”，只对声明 form 的扩展出现，停用仍可配置。所有窗口使用相同主题和公共弹层，手机全屏。前端保留配置输入直到得到成功回执；412 冲突支持读取最新表单、只保留用户实际修改的仍存在字段，再由用户检查并提交。默认值、远端修改、密钥保留/清除不会被未编辑的空控件覆盖。切换连接设备会销毁窗口、取消请求并清空密钥输入，不将原设备的配置提交到新设备。
+
+`node --test tests/test_extension_settings.mjs` 通过 4 项状态/本地化检查。`python tests/test_extension_settings_runtime.py --browser "C:/Program Files/Google/Chrome/Application/chrome.exe"` 通过接口检查及英文 1400px、俄文 390px、中文 1400px 三组真实 DOM 保存、校验、冲突合并、取消、重开、按钮顺序和布局检查。截图和回执只保存到忽略的 `.build/extension-settings-browser`。

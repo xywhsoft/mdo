@@ -25,7 +25,7 @@ FORM = {"schema": "mdo.extension-settings.v1", "config_version": 1,
 ]}]}
 
 
-def run(host):
+def run(host, browser=None):
     port = free_port()
     with tempfile.TemporaryDirectory(prefix="extension-settings-", dir=ROOT / ".build") as raw, product_http_config(port) as config:
         base = Path(raw); home = base / "home"; state = {}
@@ -116,6 +116,16 @@ def run(host):
             check(reset["values"]["count"] == 5 and reset["values"]["character_name"] == "Mira" and reset["secrets"]["api_key"] is True, reset)
             cleared, _ = call("PUT", body=mutation(reset, reset=True, clear_secrets=True))
             check(not cleared["valid"] and not cleared["secrets"].get("api_key", False), cleared)
+            if browser:
+                proof = ROOT / ".build/extension-settings-browser"; proof.mkdir(exist_ok=True)
+                for locale, width in (("en-US", 1400), ("ru-RU", 390), ("zh-CN", 1400)):
+                    with tempfile.TemporaryDirectory(prefix="settings-browser-", dir=base) as profile:
+                        result = subprocess.run(["node", str(ROOT / "tests/queue_browser_driver.mjs"), str(browser), profile,
+                            f"http://127.0.0.1:{port}/?locale={locale}", str(width), str(proof / f"{locale}-{width}.png"),
+                            str(ROOT / "tests/extension_settings_browser_driver.js"), "desktop"],
+                            capture_output=True, timeout=50, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                        report = json.loads(result.stdout.decode("utf-8")); (proof / f"{locale}-{width}.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+                        check(result.returncode == 0 and report.get("passed"), (report, result.stderr.decode("utf-8", errors="replace")[-1000:]))
         except BaseException as error:
             raise AssertionError(f"{error}\n{log.read_text(errors='replace')[-3000:]}") from error
         finally:
@@ -126,4 +136,5 @@ def run(host):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", type=Path, default=ROOT / ".build/host-model-policy/xs.exe")
-    run(parser.parse_args().host.resolve())
+    parser.add_argument("--browser", type=Path)
+    args = parser.parse_args(); run(args.host.resolve(), args.browser)

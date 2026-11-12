@@ -168,6 +168,7 @@ export function createExtensionBrowser({ kind, onClose } = {}) {
         if (row.update) controls.append(row.update);
         if (row.primary) controls.append(row.primary);
         if (row.toggle) controls.append(row.toggle);
+        if (row.configure) controls.append(row.configure);
         if (row.actions?.length) controls.append(actionMenu(row.actions));
         entry.append(openButton, controls);
         [...controls.querySelectorAll("button,summary,a")].forEach((b, index) => { b.dataset.ebFocus = `${row.key}:${index}`; });
