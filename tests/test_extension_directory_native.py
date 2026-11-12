@@ -17,6 +17,10 @@ static xroot QaRoot;
  * filesystem contracts own their TCC state, so provide the same wipe/free
  * contract; credential resolution is covered by test_extension_settings_runtime. */
 void MdoSecretRelease(char** Value){if(Value&&*Value){xrtSecureZero(*Value,strlen(*Value));xrtFree(*Value);*Value=NULL;}}
+bool MdoSecretReferenceSyntaxValid(xstrview Reference){(void)Reference;return false;}
+bool MdoSecretStore(cstr Value,char Reference[71]){(void)Value;Reference[0]=0;return false;}
+bool MdoSecretDiscard(cstr Reference){(void)Reference;return false;}
+bool MdoSecretResolve(xstrview Reference,size_t Limit,char** Value){(void)Reference;(void)Limit;*Value=NULL;return false;}
 /* These filesystem/command contracts never consume transfer tasks. The actual
  * binary-task lifecycle is exercised by the full-product save/task tests. */
 bool MdoExtensionTaskComplete(cstr Id,const xvalue* Outcome,xvalue** Result,char Error[512]){(void)Id;(void)Outcome;*Result=NULL;snprintf(Error,512,"Transfer task completion is outside this filesystem fixture");return false;}
