@@ -2616,7 +2616,6 @@
   "ui.pluginWorkbench.defaultAgentOrchestration": "Default Agent orchestration",
   "ui.pluginWorkbench.conversationLayoutOverride": "Conversation layout override",
   "ui.pluginWorkbench.binaryFileOrPreviewLimitExceededExportTheFull": "Binary file or preview limit exceeded. Export the full ZIP to inspect it.",
-  "ui.pluginWorkbench.legacyPluginFormat": "Legacy plugin format",
   "ui.pluginWorkbench.currentRevision": "Current revision",
   "ui.pluginWorkbench.activeRevision": "Active revision",
   "ui.pluginWorkbench.notEnabled": "Not enabled",

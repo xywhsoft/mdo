@@ -2616,7 +2616,6 @@
   "ui.pluginWorkbench.defaultAgentOrchestration": "Оркестрация агента по умолчанию",
   "ui.pluginWorkbench.conversationLayoutOverride": "Замена оформления диалога",
   "ui.pluginWorkbench.binaryFileOrPreviewLimitExceededExportTheFull": "Двоичный файл или превышен лимит предпросмотра. Экспортируйте полный ZIP для проверки.",
-  "ui.pluginWorkbench.legacyPluginFormat": "Старый формат плагина",
   "ui.pluginWorkbench.currentRevision": "Текущая редакция",
   "ui.pluginWorkbench.activeRevision": "Действующая редакция",
   "ui.pluginWorkbench.notEnabled": "Не включено",

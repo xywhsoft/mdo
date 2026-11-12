@@ -2616,7 +2616,6 @@
   "ui.pluginWorkbench.defaultAgentOrchestration": "默认 Agent 编排",
   "ui.pluginWorkbench.conversationLayoutOverride": "对话布局接管",
   "ui.pluginWorkbench.binaryFileOrPreviewLimitExceededExportTheFull": "二进制或超过预览上限，请导出完整 ZIP 查看。",
-  "ui.pluginWorkbench.legacyPluginFormat": "旧格式插件",
   "ui.pluginWorkbench.currentRevision": "当前修订",
   "ui.pluginWorkbench.activeRevision": "实际生效修订",
   "ui.pluginWorkbench.notEnabled": "未启用",

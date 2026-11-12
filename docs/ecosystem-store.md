@@ -2,6 +2,8 @@
 
 九类扩展统一使用普通 ZIP。唯一实体为 `mdo-home/<kind>/<directory_id>/`；公开安装的 directory_id 是平台作品 XID，本机创作可用自己的目录名。稳定逻辑 `id`（例如 `mcp:acme.example-service`）独立于目录名；身份、依赖和迁移见[扩展依赖](extension-dependencies.md)。`extension.json` 在 ZIP 根目录，不再包一层文件夹。目录中的 JSON 是配置，不能承载文件字节。
 
+生态验证期间，规范确定后直接采用当前方案，不并行维护旧格式、旧导入器或兼容分支。历史发布物和诊断证据可以留档，不作为受支持的运行格式。插件的名称、说明、作者、版本来自根目录 `extension.json`；`plugin.json` 只声明入口、覆盖和提示词等执行配置。说明为空仅表示“暂无说明”，不能据此判定格式新旧。
+
 类型：`agents`、`subagents`、`tools`、`mcp`、`skills`、`commands`、`external-tools`、`knowledge`、`plugins`。
 
 ```json
