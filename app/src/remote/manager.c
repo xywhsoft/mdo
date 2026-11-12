@@ -6,6 +6,7 @@
 #include "../../include/mdo/version.h"
 #include "service_client.h"
 #include "browser_use_job_diagnostic.inc.c"
+#include "device_listing.inc.c"
 #include "bridge.h"
 #include "lan.h"
 #include "direct_rudp.inc.c"
@@ -37,6 +38,8 @@ typedef struct MdoRemoteManager {
     uint64 DevicesMember, TicketMember, TicketExpires;
     uint64 Serial, Epoch, Revision;
     char JobId[33];
+    MdoRemoteAction JobAction;
+    char JobDevice[33];
     cstr JobState;
     cstr Stage;
     cstr Error;
@@ -187,6 +190,8 @@ bool MdoRemoteRequest(MdoRemoteAction Action, cstr Argument)
         memcpy(g_MdoRemote.Pending.Id,random,32u); g_MdoRemote.Pending.Id[32] = 0;
         strcpy(g_MdoRemote.Pending.Argument,Argument ? Argument : "");
         strcpy(g_MdoRemote.JobId,g_MdoRemote.Pending.Id);
+        g_MdoRemote.JobAction=Action;
+        snprintf(g_MdoRemote.JobDevice,sizeof(g_MdoRemote.JobDevice),"%s",Action>=MDO_REMOTE_REVOKE?Argument:"");
         g_MdoRemote.JobState = "queued";
         g_MdoRemote.JobError = ""; g_MdoRemote.JobStatus = 0u;
         memset(&g_MdoRemote.JobTransport,0,sizeof(g_MdoRemote.JobTransport));
@@ -200,6 +205,15 @@ bool MdoRemoteRequest(MdoRemoteAction Action, cstr Argument)
     xrtMutexUnlock(g_MdoRemote.Lock);
     xrtSecureZero(random,sizeof(random));
     return ok;
+}
+static cstr MdoRemoteActionName(MdoRemoteAction Action)
+{
+    switch(Action){
+        case MDO_REMOTE_ENABLE:return "enable";case MDO_REMOTE_DISABLE:return "disable";
+        case MDO_REMOTE_LIST:return "refresh";case MDO_REMOTE_REVOKE:return "revoke";
+        case MDO_REMOTE_REMOVE:return "remove";case MDO_REMOTE_CONTROL:return "connect";
+        case MDO_REMOTE_VIEW:return "view";default:return "";
+    }
 }
 xvalue* MdoRemoteSnapshot(void)
 {
@@ -222,6 +236,8 @@ xvalue* MdoRemoteSnapshot(void)
         MdoAccountSetUInt(value,"status",g_MdoRemote.Status) &&
         MdoAccountSetUInt(value,"revision",g_MdoRemote.Revision) &&
         MdoAccountSetString(job,"id",g_MdoRemote.JobId) &&
+        MdoAccountSetString(job,"action",MdoRemoteActionName(g_MdoRemote.JobAction)) &&
+        MdoAccountSetString(job,"device_id",g_MdoRemote.JobDevice) &&
         MdoAccountSetString(job,"state",g_MdoRemote.JobState) &&
         MdoAccountSetString(job,"error",g_MdoRemote.JobError) &&
         MdoAccountSetUInt(job,"status",g_MdoRemote.JobStatus) &&
@@ -340,9 +356,13 @@ done:
             /* Service tickets are <=60 s; this shorter local consume window
              * prevents exposing stale credentials from an abandoned tab. */
             g_MdoRemote.TicketExpires = MdoDeadlineAfterUs(20000000u);
-        } else if (ok && (Job->Action == MDO_REMOTE_REVOKE || Job->Action == MDO_REMOTE_REMOVE) &&
-            g_MdoRemote.Identity.MemberId == lease.MemberId && !strcmp(Job->Argument,g_MdoRemote.Identity.Id)) {
-            MdoRemoteOffLocked("disabled","");
+        } else if (ok && (Job->Action == MDO_REMOTE_REVOKE || Job->Action == MDO_REMOTE_REMOVE)) {
+            if(g_MdoRemote.DevicesMember==lease.MemberId){
+                xvalue* Next=MdoRemoteListingAfterMutation(g_MdoRemote.Devices,Job->Argument,Job->Action==MDO_REMOTE_REMOVE);
+                xrtValueRelease(g_MdoRemote.Devices);g_MdoRemote.Devices=Next;
+            }
+            if(g_MdoRemote.Identity.MemberId == lease.MemberId && !strcmp(Job->Argument,g_MdoRemote.Identity.Id))
+                MdoRemoteOffLocked("disabled","");
         }
         g_MdoRemote.JobState = ok ? "done" : "failed";
         g_MdoRemote.JobError = ok ? "" : error; g_MdoRemote.JobStatus = status;

@@ -17,6 +17,7 @@ let transport = null, connecting = null, retry = 0, attempts = 0, switching = fa
 let status = { selected, connected: !selected, error: null };
 let switchGuard = async () => true;
 let previousRuntime = "", runtimeChanged = false;
+let permissionRevoked = false;
 const publish = changes => {
   status = { ...status, ...changes, selected };
   for (const listener of listeners) listener(status);
@@ -24,6 +25,14 @@ const publish = changes => {
 export function targetState() { return status; }
 export function isRemoteTarget() { return Boolean(selected); }
 export function subscribeTarget(listener) { listeners.add(listener); listener(status); return () => listeners.delete(listener); }
+// Keep the selected workspace and drafts. A revoked remote must never turn into
+// local writes or reconnect itself after a late ticket/socket completion.
+export function revokeTarget(deviceId, owner) {
+  if (!selected || selected.id !== deviceId || selected.owner !== String(owner)) return;
+  permissionRevoked = true; clearTimeout(retry); retry = 0;
+  transport?.close(); transport = null;
+  publish({ connected: false, permissionRevoked: true, error: remoteError("remote_revoked", uiText("devices.revoked", {}, "已撤销")) });
+}
 export function setTargetSwitchGuard(guard) { switchGuard = guard; }
 export async function requestTargetSwitch(next, options = {}) {
   if (!await switchGuard(options)) throw remoteError("target_switch_busy", uiText("ui.target.waitForTheOperationToFinishAndSaveOr", {}, "请等待操作完成，并保存或复制未保存的草稿后切换设备"), { target: next });
@@ -52,15 +61,16 @@ export function targetLiveSocket(url, protocols) {
 }
 function schedule(error) {
   clearTimeout(retry);
-  if (stopped || switching || !selected || ["remote_revoked", "connector_login_required", "connector_account_changed"].includes(error?.code)) return;
+  if (stopped || switching || permissionRevoked || !selected || ["remote_revoked", "connector_login_required", "connector_account_changed"].includes(error?.code)) return;
   const delay = Math.min(500 * 2 ** Math.min(attempts++, 5), 15000);
   retry = setTimeout(() => { retry = 0; void initializeTarget(); }, delay);
 }
 export function initializeTarget() {
-  if (!selected || switching || stopped) return Promise.resolve();
+  if (!selected || switching || stopped || permissionRevoked) return Promise.resolve();
   if (connecting) return connecting;
   if (transport?.state()) return Promise.resolve();
   if (!transport) transport = createRemoteTransport({ directSocket: connectorDirectSocket, onState(value) {
+    if (permissionRevoked) return;
     if (value.connected) {
       if (previousRuntime && previousRuntime !== value.hello.runtime_id) runtimeChanged = true;
       previousRuntime = value.hello.runtime_id;
@@ -75,9 +85,9 @@ export function initializeTarget() {
     try {
       const details = await connectorTicket(selected.id, selected.mode, undefined, selected.owner);
       if (details.owner !== selected.owner) throw remoteError("connector_account_changed", uiText("ui.target.theControllerAccountChangedSelectADeviceForThe", {}, "控制端账号已变化，请重新选择该账号的设备"));
-      if (switching || stopped) return;
+      if (switching || stopped || permissionRevoked) return;
       await transport.connect(details);
-    } catch (error) { publish({ connected: false, error }); schedule(error); }
+    } catch (error) { if (!permissionRevoked) { publish({ connected: false, error }); schedule(error); } }
     finally { connecting = null; }
   })();
   return connecting;

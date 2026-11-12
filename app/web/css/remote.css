@@ -18,7 +18,15 @@
 .device-labels strong { overflow-wrap: anywhere; }
 .device-labels small { color: var(--muted); }
 .device-actions, .device-toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
-.device-feedback { color: var(--danger); overflow-wrap: anywhere; }
+.device-feedback { color: var(--muted); overflow-wrap: anywhere; }
+.device-feedback[data-tone="error"], .device-operation[data-tone="error"] { color: var(--danger); }
+.device-feedback[data-tone="success"], .device-operation[data-tone="success"] { color: var(--success); }
+.device-feedback[data-tone="warning"], .device-operation[data-tone="warning"] { color: var(--warning, var(--ink)); }
+.device-operation { display: block; max-width: 32rem; overflow-wrap: anywhere; }
+.device-synced { margin-right: auto; color: var(--muted); }
+.device-spinner { display: inline-block; width: .85em; height: .85em; margin-right: .45em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: device-spin .8s linear infinite; }
+@keyframes device-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .device-spinner { animation-duration: 2s; } }
 .dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .dialog-heading h2 { margin: 0; font-size: 17px; }
 .remote-form input:not([type="checkbox"]) {

@@ -14,5 +14,6 @@ export function connectorJobError(state, action) {
     "设备服务连接中断，操作结果尚未确认；请先刷新设备状态，避免重复操作";
   const error = new Error(message);
   error.code = code; error.status = status; error.jobId = job.id; error.transport = job.transport;
+  error.outcomeUnknown = !status && phase === "transport";
   return error;
 }
