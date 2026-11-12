@@ -95,9 +95,24 @@ static bool MdoModelVerificationKey(const xvalue* Models, const xvalue* Transpor
     /* Stable effective JSON also includes immutable vault references. Changing
      * default selection or unrelated appearance settings keeps valid evidence. */
     xvalue* EffectiveModel = xrtValueClone(Model);
+    bool Normalized = EffectiveModel && MdoModelPolicyNormalize(EffectiveModel);
+    /* Advisory provenance is not evidence, but resolved budgets change wire
+     * requests and must participate in verification, including effort maps. */
+    if (Normalized && MdoModelPolicyGet(EffectiveModel,"output_budget")) {
+        xvalue* Budgets=xrtValueObject();const xvalue* Efforts=MdoModelPolicyGet(EffectiveModel,"reasoning_efforts");
+        Normalized=Budgets!=NULL;
+        for(size_t I=0;Normalized && I<xrtValueCount(Efforts);I++) {
+            xstrview E={0};char Name[16];
+            if(!xrtValueGetString(xrtValueArrayGet(Efforts,I),&E)||E.Size>=sizeof(Name)){Normalized=false;break;}
+            memcpy(Name,E.Data,E.Size);Name[E.Size]=0;
+            Normalized=MdoApiValueSetUInt(Budgets,Name,MdoModelPolicyBudget(EffectiveModel,Name));
+        }
+        Normalized=Normalized && xrtValueObjectSet(EffectiveModel,XRT_STR_LITERAL("effective_output_budgets"),Budgets);
+        xrtValueRelease(Budgets);
+    }
     if (EffectiveModel && xrtValueObjectHas(EffectiveModel, XRT_STR_LITERAL("parameters")))
         xrtValueObjectRemove(EffectiveModel, XRT_STR_LITERAL("parameters"));
-    bool Ok = EffectiveModel && Provider && Binding && Tools && MdoApiValueAppendString(Binding, MDO_MODEL_VERIFICATION_CONTRACT) &&
+    bool Ok = Normalized && Provider && Binding && Tools && MdoApiValueAppendString(Binding, MDO_MODEL_VERIFICATION_CONTRACT) &&
         xrtValueArrayAppend(Binding, Tools) && xrtValueArrayAppend(Binding, EffectiveModel) &&
         xrtValueArrayAppend(Binding, (xvalue*)Provider) &&
         (!Transport || xrtValueArrayAppend(Binding, (xvalue*)Transport));

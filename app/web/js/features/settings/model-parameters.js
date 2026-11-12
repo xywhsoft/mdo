@@ -1,5 +1,6 @@
 import { element } from "../../utils/dom.js";
 import { t, currentLocale } from "../../i18n.js";
+import { applyInputModalities, outputPolicy, outputLimit } from "./model-policy.js";
 
 const text = (key, fallback, params = {}) => t(`modelParameters.${key}`, params, fallback);
 export const effortNames = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
@@ -19,8 +20,9 @@ export function parameterDraft(record, model) {
   const result = structuredClone(record || { id: model?.wire_model, protocol: model?.default_protocol, fields: {} });
   result.fields ||= {};
   const effort = model?.default_reasoning_effort || parameterValue(result, "reasoning")?.default || "default";
-  return { record: result, output: model?.window?.max_output_tokens || recommendedOutputBudget(result, effort), effort,
-    budgetEdited: Boolean(model?.window?.max_output_tokens),
+  const policy = model ? outputPolicy(model) : { mode: "recommended" };
+  return { record: result, output: policy.mode === "recommended" ? recommendedOutputBudget(result, effort) : policy.tokens, effort,
+    budgetEdited: policy.mode !== "recommended", budgetMode: policy.mode,
     temperature: model?.temperature ?? parameterValue(result, "temperature") ?? null };
 }
 
@@ -35,7 +37,7 @@ export function availableEfforts(record) {
 export function parameterIssues(draft) {
   const fields = draft.record.fields, issues = [];
   if (!positive(fields.context_tokens?.value)) issues.push("context_tokens");
-  if (!positive(fields.max_output_tokens?.value)) issues.push("max_output_tokens");
+  if (!positive(fields.max_output_tokens?.value) || fields.max_output_tokens.value > (fields.context_tokens?.value || Infinity)) issues.push("max_output_tokens");
   const reasoning = fields.reasoning?.value;
   if (!reasoning || !["none", "effort", "toggle", "budget", "adaptive", "provider-default"].includes(reasoning.kind) ||
       (reasoning.kind === "effort" && (!reasoning.efforts?.length || reasoning.efforts.length > 7 ||
@@ -48,14 +50,15 @@ export function parameterIssues(draft) {
 
 export function applyParameters(model, draft) {
   if (parameterIssues(draft).length) throw new Error(text("incomplete", "无法获取模型参数，请补全这些参数。"));
-  const result = structuredClone(model), record = structuredClone(draft.record);
+  let result = structuredClone(model); const record = structuredClone(draft.record);
   if (!result.protocols.includes(record.protocol)) result.protocols = [record.protocol];
   result.default_protocol = record.protocol;
   const context = parameterValue(record, "context_tokens"), output = draft.output;
   const mode = parameterValue(record, "window_mode") || "shared-context";
   result.window = { mode, context_tokens: context,
-    max_input_tokens: Math.min(parameterValue(record, "max_input_tokens") || context, mode === "shared-context" ? context - output : context),
-    max_output_tokens: output, output_reserve_tokens: Math.floor(output / 2), summary_tokens: Math.min(2048, Math.floor(output / 4)) };
+    max_input_tokens: Math.min(parameterValue(record, "max_input_tokens") || context, context),
+    max_output_tokens: parameterValue(record, "max_output_tokens"), output_reserve_tokens: Math.floor(output / 2), summary_tokens: Math.min(2048, Math.floor(output / 4)) };
+  result.output_budget = { mode: draft.budgetEdited ? draft.budgetMode === "legacy" ? "legacy" : "custom" : "recommended", tokens: output };
   result.reasoning_efforts = availableEfforts(record);
   result.default_reasoning_effort = result.reasoning_efforts.includes(draft.effort) ? draft.effort : "default";
   if(draft.temperature==null)delete result.temperature;else result.temperature=draft.temperature;
@@ -64,14 +67,19 @@ export function applyParameters(model, draft) {
   if (!["none", "provider-default"].includes(parameterValue(record, "reasoning").kind)) result.capabilities.push("reasoning-output");
   if (parameterValue(record, "tools") === false)
     result.capabilities = result.capabilities.filter(cap => !["tool-call-output", "parallel-tool-calls"].includes(cap));
+  if (typeof parameterValue(record, "max_completion_tokens") === "boolean") {
+    result.capabilities = result.capabilities.filter(cap => cap !== "max-completion-tokens");
+    if (parameterValue(record, "max_completion_tokens")) result.capabilities.push("max-completion-tokens");
+  }
   result.parameters = { schema_version: 1, ...record };
+  result = applyInputModalities(result, record);
   return result;
 }
 
 export function parameterSummary(model) {
   const format=value=>Number.isSafeInteger(value)?value.toLocaleString(currentLocale()):"—";
-  return text("cardSummary", "上下文 {context} · 输出预算 {output} · 思考 {reasoning}", {
-    context: format(model.window?.context_tokens), output: format(model.window?.max_output_tokens),
+  return text("cardSummary", "上下文 {context} · 最大输出 {capacity} · 默认预算 {output} · 思考 {reasoning}", {
+    context: format(model.window?.context_tokens), capacity: format(outputLimit(model)), output: format(model.output_budget?.tokens || model.window?.max_output_tokens),
     reasoning: (model.reasoning_efforts?.length ? model.reasoning_efforts : ["default"])
       .map(effort=>t(`reasoning.${effort}`,{},effort)).join(" / "),
   });
@@ -154,14 +162,20 @@ export function createParameterEditor(draft, { onChange = () => {}, index = 0 } 
   root.append(element("label", { className: "model-field" }, [element("span", { text: labels.reasoning }), kind, levels, source]), adapter,
     element("label", { className: "model-field" }, [element("span", { text: text("defaultEffort", "默认思考档位") }), effortSelect]));
   const budget = element("input", { attrs: { type: "number", name: `parameter-${index}-output-budget`, min: "1", step: "1" } });
-  budget.value = draft.output; budget.addEventListener("input", () => { draft.output = Number(budget.value); draft.budgetEdited = true; update(); });
+  budget.value = draft.output; budget.addEventListener("input", () => { draft.output = Number(budget.value); draft.budgetEdited = true; draft.budgetMode = "custom"; update(); });
+  const media = element("input", { attrs: { type: "checkbox", name: `parameter-${index}-image` } });
+  media.checked = (parameterValue(record, "input_modalities") || []).includes("image");
+  media.addEventListener("change", () => { const values = new Set(parameterValue(record, "input_modalities") || ["text"]);
+    if (media.checked) values.add("image"); else values.delete("image"); manual("input_modalities", [...values]); update(); });
+  root.append(element("label", { className: "model-field" }, [element("span", { text: t("modelConfig.imageUnderstanding", {}, "图片理解") }), media]));
   const useRecommended = element("button", { text: text("useRecommendedBudget", "使用推荐预算"), attrs: { type: "button" } });
   useRecommended.addEventListener("click", () => {
-    draft.output = recommendedOutputBudget(record, draft.effort); draft.budgetEdited = false;
+    draft.output = recommendedOutputBudget(record, draft.effort); draft.budgetEdited = false; draft.budgetMode = "recommended";
     budget.value = draft.output; update();
   });
   root.append(element("label", { className: "model-field" }, [element("span", { text: labels.output_budget }), budget]),
-    useRecommended, element("small", { text: text("recommendedBudgetHelp", "优先采用服务器记录的官方默认值；未公布默认值时使用已确认的输出上限。已有预算不自动覆盖。") }));
+    useRecommended, element("small", { text: text("recommendedBudgetHelp", "优先采用服务器记录的官方默认值；未公布默认值时使用已确认的输出上限。自定义预算保持不变；推荐预算随参数与思考档位调整。") }));
+  if (draft.budgetMode === "legacy") root.append(element("p", { className: "model-parameter-warning", text: text("legacyBudget", "此预算来自旧配置，尚不能确认是否由您手动设置。可点击“使用推荐预算”更新，已有设置会在确认应用后才修改。") }));
   if (record.request_defaults?.source_url) {
     const basis = record.request_defaults.basis;
     root.append(element("small", { text: text(basis === "official-default" ? "budgetOfficialDefault" : basis === "official-recommendation" ? "budgetOfficialRecommendation" : "budgetCapabilityLimit",

@@ -318,7 +318,7 @@ static bool MdoAgentsResolveModel(const MdoModelCatalog* Catalog,
         return false;
     }
     Result->MaxOutputTokens = MaxOutputTokens != 0u ? MaxOutputTokens :
-        Result->Info.MaxOutputTokens;
+        MdoModelCatalogOutputBudget(Catalog,Result->Info.Id,Result->ReasoningEffort);
     if ( Result->MaxOutputTokens == 0u ||
          Result->MaxOutputTokens > Result->Info.MaxOutputTokens ) {
         MdoAgentsProfileError(Error, "profile_output_limit",

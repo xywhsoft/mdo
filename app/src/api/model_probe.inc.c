@@ -348,7 +348,7 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
         }
         xrtValueRelease(Verification); Verification = NULL;
     }
-    Ok = MdoApiModelProbeExecute(Context, Catalog, Id, Info.MaxOutputTokens, Tools, &Latency, &Error);
+    Ok = MdoApiModelProbeExecute(Context, Catalog, Id, MdoModelCatalogOutputBudget(Catalog,Id,NULL), Tools, &Latency, &Error);
     MdoModelCatalogRelease(Catalog); xrtClearError();
     char Code[64];
     snprintf(Code, sizeof(Code), "model_%s", Error.eCode == XLLM_ERROR_NONE ?

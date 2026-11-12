@@ -6,6 +6,8 @@ import { loadModels } from "../../state/catalogs.js";
 import { clear, element, errorMessage, isImeKey, toast } from "../../utils/dom.js";
 
 import { providerPresets, presetVariant, presetProvider } from "./provider-presets.js";
+import { normalizeMedia, outputLimit, outputPolicy } from "./model-policy.js";
+import { recommendedOutputBudget } from "./model-parameters.js";
 import { sameModelConfig } from "./model-config-state.js";
 import { createModelProxyEditor } from "./model-proxy-editor.js";
 
@@ -20,10 +22,9 @@ const capabilities = [
   ["tool-call-output", "工具调用"], ["reasoning-output", "思考输出"],
   ["streaming", "流式输出"], ["reasoning-control", "思考强度"],
   ["parallel-tool-calls", "并行工具"], ["max-completion-tokens", "max_completion_tokens"],
-  ["developer-role", "Developer 角色"], ["media-input", "媒体输入"],
+  ["developer-role", "Developer 角色"],
 ];
 const efforts = ["default", "none", "minimal", "low", "medium", "high", "xhigh", "max"];
-const attachments = [["image", "图片"], ["audio", "音频"], ["file", "文件"]];
 const clone = (value) => structuredClone(value);
 
 // Translate by stable form names and option values, never by display copy.
@@ -40,7 +41,7 @@ const fieldKeys = Object.freeze({
   default_reasoning_effort: "modelConfig.defaultEffort",
   billable: "modelConfig.billable", protocol: "modelConfig.protocols",
   capability: "modelConfig.capabilities", effort: "modelConfig.efforts",
-  attachment: "modelConfig.attachments", window_mode: "modelConfig.windowMode",
+  attachment: "modelConfig.inputSupport", output_budget_mode:"modelParameters.budgetMode", output_budget_tokens:"modelParameters.budget", window_mode: "modelConfig.windowMode",
   context_tokens: "modelConfig.contextTokens",
   max_input_tokens: "modelConfig.maxInputTokens",
   max_output_tokens: "modelConfig.maxOutputTokens",
@@ -62,7 +63,8 @@ const optionKeys = Object.freeze({
   "max-completion-tokens": "modelConfig.maxCompletionTokens",
   "developer-role": "modelConfig.developerRole",
   "media-input": "modelConfig.mediaInput",
-  image: "modelConfig.image", audio: "modelConfig.audio",
+  recommended:"modelParameters.followRecommended",custom:"modelParameters.customBudget",legacy:"modelParameters.legacyBudgetMode",
+  image: "modelConfig.imageUnderstanding", audio: "modelConfig.audio",
   file: "modelConfig.file",
   default: "reasoning.default", none: "settings.reasoningNone", minimal: "settings.reasoningMinimal",
   low: "settings.reasoningLow", medium: "settings.reasoningMedium",
@@ -107,7 +109,7 @@ function input(label, name, value, options = {}) {
   });
   if (options.kind === "select") {
     for (const [key, text] of options.choices ?? []) {
-      const optionKey = name === "default_reasoning_effort" || name === "window_mode"
+      const optionKey = name === "default_reasoning_effort" || name === "window_mode" || name === "output_budget_mode"
         ? optionKeys[key] : null;
       control.append(optionKey
         ? copy("option", optionKey, text, {}, { attrs: { value: key } })
@@ -429,6 +431,7 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
   }
 
   function renderModel(form, item) {
+    item = normalizeMedia(item);
     formHeader(form, item, true);
     if (item.builtin) {
       const provider = config.providers.find((entry) => entry.id === item.provider);
@@ -470,7 +473,10 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
         checks(uiText("modelConfig.capabilities", {}, "能力"), "capability", item.capabilities, capabilities),
         checks(uiText("schedule.reasoning", {}, "思考强度"), "effort", item.reasoning_efforts,
           efforts.map((value) => [value, value])),
-        checks(uiText("modelConfig.attachments", {}, "附件"), "attachment", item.attachments, attachments),
+        checks(uiText("modelConfig.inputSupport", {}, "输入支持"), "attachment", item.attachments, [["image",uiText("modelConfig.imageUnderstanding",{},"图片理解")]]),
+        copy("p","modelConfig.fileHandling","普通文件由墨斗解析或工具读取，无需媒体输入开关。音频、视频及原生文档输入仅在对应协议适配器支持后可用。",{},{className:"model-config-status"}),
+        input(uiText("modelParameters.budgetMode",{},"默认输出预算"),"output_budget_mode",outputPolicy(item).mode,{kind:"select",choices:[["recommended",uiText("modelParameters.followRecommended",{},"使用推荐预算")],["custom",uiText("modelParameters.customBudget",{},"自定义预算")],["legacy",uiText("modelParameters.legacyBudgetMode",{},"保留旧预算（来源未确认）")]]}),
+        input(uiText("modelParameters.budget",{},"每次请求输出预算（tokens）"),"output_budget_tokens",outputPolicy(item).tokens,{type:"number",min:1,max:outputLimit(item),required:true}),
         element("div", { className: "model-form-grid" }, [
           input(uiText("modelConfig.windowMode", {}, "窗口模式"), "window_mode", item.window.mode,
             { kind: "select", choices: [["shared-context", uiText("modelConfig.sharedContext", {}, "共享上下文")],
@@ -478,7 +484,7 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
           ...[["context_tokens", uiText("modelConfig.contextTokens", {}, "上下文 token")], ["max_input_tokens", uiText("modelConfig.maxInputTokens", {}, "最大输入 token")],
             ["max_output_tokens", uiText("modelConfig.maxOutputTokens", {}, "最大输出 token")], ["output_reserve_tokens", uiText("modelConfig.outputReserveTokens", {}, "输出预留 token")],
             ["summary_tokens", uiText("modelConfig.summaryTokens", {}, "摘要 token")]].map(([key, label]) =>
-            input(label, key, item.window[key], { type: "number", required: true,
+            input(label, key, key === "max_output_tokens" ? outputLimit(item) : item.window[key], { type: "number", required: true,
               min: key === "output_reserve_tokens" || key === "summary_tokens" ? 0 : 1 })),
         ]),
       ]),
@@ -503,6 +509,12 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
       if (defaultProtocol.selectedOptions[0]?.disabled)
         defaultProtocol.value = enabled.find((checkbox) => checkbox.checked)?.value || "";
     };
+    const budgetMode=form.elements.output_budget_mode,budget=form.elements.output_budget_tokens;
+    const syncBudget=()=>{budget.readOnly=budgetMode.value==="recommended";if(budget.readOnly){const record=clone(item.parameters||{fields:{}});record.fields||={};
+      for(const key of ["context_tokens","max_output_tokens","window_mode"])record.fields[key]={value:key==="window_mode"?form.elements[key].value:Number(form.elements[key].value)};
+      budget.value=recommendedOutputBudget(record,form.elements.default_reasoning_effort.value);}};
+    for(const key of ["context_tokens","max_output_tokens","window_mode","default_reasoning_effort"])form.elements[key].addEventListener("change",syncBudget);
+    budgetMode.addEventListener("change",syncBudget);budget.addEventListener("input",()=>{budgetMode.value="custom";budget.readOnly=false;});syncBudget();
     providerSelect.addEventListener("change", syncProtocols);
     syncProtocols();
   }
@@ -526,15 +538,26 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
     const window = { mode: data.get("window_mode") };
     for (const key of ["context_tokens", "max_input_tokens", "max_output_tokens",
       "output_reserve_tokens", "summary_tokens"]) window[key] = Number(data.get(key));
-    return { ...old, id: String(data.get("id") || "").trim(),
+    const result = normalizeMedia({ ...old, id: String(data.get("id") || "").trim(),
       name: String(data.get("name") || "").trim(),
+      output_budget:{mode:data.get("output_budget_mode"),tokens:Number(data.get("output_budget_tokens"))},
       provider: data.get("provider"), wire_model: String(data.get("wire_model") || "").trim(),
       proxy: proxyEditors.get(form).read(),
       protocols: selected(form, "protocol"), default_protocol: data.get("default_protocol"),
       capabilities: selected(form, "capability"), window,
       reasoning_efforts: selected(form, "effort"),
       default_reasoning_effort: data.get("default_reasoning_effort"),
-      attachments: selected(form, "attachment"), free: !data.has("billable") };
+      attachments: selected(form, "attachment"), free: !data.has("billable") });
+    if(old.parameters){result.parameters=clone(old.parameters);const fields=result.parameters.fields;
+      const manual=(key,value)=>{fields[key]={value,source:"manual",checked_at:new Date().toISOString()};};
+      for(const key of ["context_tokens","max_input_tokens","max_output_tokens","window_mode"])
+        if(result.window[key] !== (key === "max_output_tokens" ? outputLimit(old) : old.window[key]))manual(key,result.window[key]);
+      if(result.attachments.includes("image") !== normalizeMedia(old).attachments.includes("image")){
+        const modalities=new Set(fields.input_modalities?.value||["text"]);
+        if(result.attachments.includes("image"))modalities.add("image");else modalities.delete("image");manual("input_modalities",[...modalities]);
+      }
+    }
+    return result;
   }
 
   function render(preservedForm = null) {

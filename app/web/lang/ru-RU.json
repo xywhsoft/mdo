@@ -3425,7 +3425,7 @@
   "modelWizard.previous": "Назад",
   "modelWizard.next": "Далее",
   "modelSetup.modelsAdded": "Добавлено моделей: {count}.",
-  "modelParameters.cardSummary": "Контекст {context} · Бюджет вывода {output} · Рассуждение {reasoning}",
+  "modelParameters.cardSummary": "Контекст {context} · Предел вывода {capacity} · Бюджет по умолчанию {output} · Рассуждение {reasoning}",
   "modelWizard.alreadyAdded": "Уже добавлена",
   "ui.extensionPanels.restoreBuiltinRole": "Восстановить по умолчанию",
   "ui.extensionPanels.restoreBuiltinRoleConfirm": "Восстановить встроенные файлы этой роли? Локальные изменения будут заменены. Состояние включения сохранится.",
@@ -3602,7 +3602,7 @@
   "modelParameters.temperatureDefault": "Настройки поставщика",
   "modelParameters.defaultsHelp": "Проверка и диалоги используют эти настройки температуры и рассуждений. Пустая температура не передаётся.",
   "modelParameters.useRecommendedBudget": "Использовать рекомендуемый бюджет",
-  "modelParameters.recommendedBudgetHelp": "Приоритет у официального значения по умолчанию из каталога; иначе используется подтверждённый лимит вывода. Существующий бюджет сохраняется.",
+  "modelParameters.recommendedBudgetHelp": "Приоритет имеет официальный бюджет из каталога, иначе подтвержденный предел вывода. Свой бюджет не меняется; рекомендуемый зависит от параметров и уровня рассуждения.",
   "modelParameters.budgetOfficialDefault": "Основание бюджета: официальное значение по умолчанию",
   "modelParameters.budgetOfficialRecommendation": "Основание бюджета: официальная рекомендация",
   "modelParameters.budgetCapabilityLimit": "Основание бюджета: лимит возможностей модели, не значение по умолчанию",
@@ -3644,5 +3644,13 @@
   "ui.pluginPrompts.reason.budget": "Превышен бюджет инструкций роли",
   "ui.pluginPrompts.reason.plugin_budget": "Превышен бюджет инструкций плагина",
   "ui.pluginPrompts.reason.project_scope": "Плагин не включён для этого проекта",
-  "ui.pluginPrompts.reason.plugin_unavailable": "Плагин или зависимость недоступны"
+  "ui.pluginPrompts.reason.plugin_unavailable": "Плагин или зависимость недоступны",
+  "modelConfig.inputSupport": "Поддержка ввода",
+  "modelConfig.imageUnderstanding": "Понимание изображений",
+  "modelConfig.fileHandling": "Обычные файлы обрабатывает mdo или инструменты. Для аудио, видео и прямого ввода документов требуется поддержка адаптера протокола.",
+  "modelParameters.budgetMode": "Бюджет вывода по умолчанию",
+  "modelParameters.followRecommended": "Использовать рекомендуемый бюджет",
+  "modelParameters.customBudget": "Свой бюджет",
+  "modelParameters.legacyBudgetMode": "Сохранить прежний бюджет (источник не подтвержден)",
+  "modelParameters.legacyBudget": "Бюджет взят из старой конфигурации и мог быть задан вручную. Выберите «Использовать рекомендуемый бюджет», затем примените изменения."
 }

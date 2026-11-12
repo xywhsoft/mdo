@@ -8,6 +8,7 @@ import { mountIcons } from "../../components/icons.js";
 
 import { createAdvancedModelConfigPanel } from "./model-config-advanced.js";
 import { providerPresets, setProviderCatalog, presetVariant, providerDisplayName } from "./provider-presets.js";
+import { mergeParameterRecord } from "./model-policy.js";
 import { sameModelConfig } from "./model-config-state.js";
 import { createModelSetupWizard } from "./model-setup-wizard.js";
 import { verifyModelSetup } from "./model-verification.js";
@@ -38,7 +39,7 @@ export function createModelConfigPanel(container) {
   let draft = null, setup = null, parameterEdit = null, advanced = null, advancedChanged = false, needsRead = false;
   let notice = "", failed = false, disposed = false, loading = null;
   const controller = new AbortController();
-  let verificationController = null;
+  let verificationController = null, metadataChecked = false;
   let removal = null;
   const verified = new Map();
   const keyDrafts = new Map();
@@ -74,8 +75,44 @@ export function createModelConfigPanel(container) {
         notice = ""; failed = false; render();
         if (config.providers.some(item => item.template_id)) void api.get("/models/providers", { signal: controller.signal }).then(response => { if (!disposed) { setProviderCatalog(response.data.providers, response.data); if (!draft && !advanced && !busy) render(); } }).catch(() => {});
       } catch (cause) { if (!disposed) { notice = errorMessage(cause); failed = true; render(); } }
-      finally { loading = null; setBusy(false); }
+      finally { loading = null; setBusy(false); if (!metadataChecked && config) { metadataChecked = true; void refreshRecommendations(); } }
     })(); return loading;
+  }
+  async function refreshRecommendations() {
+    const snapshot = config;
+    if (!snapshot || snapshot.runtime_override) return;
+    const next = clone(snapshot); let first = true, changed = false;
+    const groups = new Map();
+    for (const model of next.items) if (!model.builtin && model.parameters) {
+      const key = JSON.stringify([model.provider, model.default_protocol]);
+      if (!groups.has(key)) groups.set(key, []); groups.get(key).push(model);
+    }
+    try {
+      for (const models of [...groups.values()].flatMap(rows => Array.from({ length: Math.ceil(rows.length / 32) }, (_, i) => rows.slice(i * 32, (i + 1) * 32)))) {
+        const provider = next.providers.find(p => p.id === models[0].provider);
+        const response = await api.post("/models/parameters", { provider, protocol: models[0].default_protocol,
+          models: [...new Set(models.map(m => m.wire_model))], catalog_only: true, refresh_catalog: first }, { signal: controller.signal });
+        first = false;
+        for (const model of models) {
+          const incoming = response.data.items.find(row => row.id === model.wire_model);
+          if (!incoming || incoming.catalog_stale || incoming.catalog_unavailable || incoming.registry_version === model.parameters.registry_version) continue;
+          const record = mergeParameterRecord(model.parameters, incoming), parameters = parameterDraft(record, model);
+          if (parameterIssues(parameters).length) continue;
+          const updated = applyParameters(model, parameters);
+          if (JSON.stringify(updated) !== JSON.stringify(model)) { next.items[next.items.indexOf(model)] = updated; changed = true; }
+        }
+      }
+      // Never race an editor, another config writer, or a closed page.
+      if (!changed || disposed || config !== snapshot || busy || setup || advanced || removal || view === "parameters" || [...keyDrafts.values()].some(Boolean)) return;
+      setBusy(true);
+      try {
+        const latest = await api.get("/models/config", { signal: controller.signal });
+        if (!sameModelConfig(snapshot, latest.data)) return;
+        await api.put("/settings/models", { schema_version: 1, patch: { default_model: next.default_model, providers: next.providers, items: next.items } }, { ifMatch: latest.etag, signal: controller.signal });
+        const saved = await api.get("/models/config", { signal: controller.signal });
+        if (!disposed) { config = saved.data; etag = saved.etag; render(); await loadModels(); }
+      } finally { setBusy(false); }
+    } catch { /* Offline metadata refresh must never block model management. */ }
   }
   async function save(next, keys = []) {
     if (busy || needsRead || config.runtime_override) return false;
@@ -228,7 +265,9 @@ export function createModelConfigPanel(container) {
       const response = await api.post("/models/parameters", { provider: entry, protocol: parameterEdit.model.default_protocol,
         models: [parameterEdit.model.wire_model] }, { signal: controller.signal });
       if (disposed) return;
-      const detected = parameterDraft(response.data.items[0], parameterEdit.model);
+      const record = mergeParameterRecord({ fields: Object.fromEntries(Object.entries(parameterEdit.draft.record.fields).filter(([,field]) => field.source === "manual")) }, response.data.items[0]);
+      const detected = parameterDraft(record, parameterEdit.model);
+      if (parameterEdit.draft.budgetEdited) { detected.output = parameterEdit.draft.output; detected.budgetMode = parameterEdit.draft.budgetMode; detected.budgetEdited = true; }
         if(parameterEdit.draft.temperatureEdited){detected.temperature=parameterEdit.draft.temperature;detected.temperatureEdited=true;}
       for (const [key, field] of Object.entries(parameterEdit.draft.record.fields))
         if (field.source === "manual") detected.record.fields[key] = clone(field);

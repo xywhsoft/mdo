@@ -3425,7 +3425,7 @@
   "modelWizard.previous": "上一步",
   "modelWizard.next": "下一步",
   "modelSetup.modelsAdded": "已添加 {count} 个模型。",
-  "modelParameters.cardSummary": "上下文 {context} · 输出预算 {output} · 思考 {reasoning}",
+  "modelParameters.cardSummary": "上下文 {context} · 最大输出 {capacity} · 默认预算 {output} · 思考 {reasoning}",
   "modelWizard.alreadyAdded": "已添加",
   "ui.extensionPanels.restoreBuiltinRole": "恢复默认",
   "ui.extensionPanels.restoreBuiltinRoleConfirm": "恢复此角色的内置文件？本地修改将被替换，当前启停状态保持不变。",
@@ -3602,7 +3602,7 @@
   "modelParameters.temperatureDefault": "使用供应商默认",
   "modelParameters.defaultsHelp": "验证和对话默认使用这些温度与思考配置；留空温度表示不发送该参数。",
   "modelParameters.useRecommendedBudget": "使用推荐预算",
-  "modelParameters.recommendedBudgetHelp": "优先采用服务器记录的官方默认值；未公布默认值时使用已确认的输出上限。已有预算不自动覆盖。",
+  "modelParameters.recommendedBudgetHelp": "优先采用服务器记录的官方默认值；未公布默认值时使用已确认的输出上限。自定义预算保持不变；推荐预算随参数与思考档位调整。",
   "modelParameters.budgetOfficialDefault": "预算依据：官方默认值",
   "modelParameters.budgetOfficialRecommendation": "预算依据：官方推荐值",
   "modelParameters.budgetCapabilityLimit": "预算依据：模型能力上限（非官方默认值）",
@@ -3644,5 +3644,13 @@
   "ui.pluginPrompts.reason.budget": "超出角色说明预算",
   "ui.pluginPrompts.reason.plugin_budget": "超出单插件说明预算",
   "ui.pluginPrompts.reason.project_scope": "当前项目未允许此插件",
-  "ui.pluginPrompts.reason.plugin_unavailable": "插件或依赖当前不可用"
+  "ui.pluginPrompts.reason.plugin_unavailable": "插件或依赖当前不可用",
+  "modelConfig.inputSupport": "输入支持",
+  "modelConfig.imageUnderstanding": "图片理解",
+  "modelConfig.fileHandling": "普通文件由墨斗解析或工具读取，无需媒体输入开关。音频、视频及原生文档输入仅在对应协议适配器支持后可用。",
+  "modelParameters.budgetMode": "默认输出预算",
+  "modelParameters.followRecommended": "使用推荐预算",
+  "modelParameters.customBudget": "自定义预算",
+  "modelParameters.legacyBudgetMode": "保留旧预算（来源未确认）",
+  "modelParameters.legacyBudget": "此预算来自旧配置，尚不能确认是否由您手动设置。可点击“使用推荐预算”更新，已有设置会在确认应用后才修改。"
 }

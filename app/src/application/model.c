@@ -68,7 +68,7 @@ static bool SdkModelCall(const mdo_sdk_context_v1* C,const xvalue* P,xvalue** R,
     if(!Ok){MdoApplicationError(E,"sdk_arguments_invalid","Invalid model options, message content, parts or tool schema","model",400,false);goto done;}
     if(!MdoModelCatalogProfile(Catalog,Options.ModelId,Options.Protocol,&Profile,&Error)){Ok=false;goto done;}
     MdoModelInfo Info={0};Info.Size=sizeof(Info);Ok=MdoModelCatalogModelFind(Catalog,Profile.sId,&Info)&&xllmRequestSetModel(&Request,Info.WireModel)&&xllmRequestSetReasoningEffort(&Request,Options.ReasoningEffort?Options.ReasoningEffort:Info.DefaultReasoningEffort);
-    Request.uMaxOutputTokens=Options.MaxOutputTokens?Options.MaxOutputTokens:Info.MaxOutputTokens;
+    Request.uMaxOutputTokens=Options.MaxOutputTokens?Options.MaxOutputTokens:MdoModelCatalogOutputBudget(Catalog,Info.Id,Options.ReasoningEffort);
     const xvalue* Temperature=SdkGet(P,"temperature");double Number=0;
     if(Temperature){if(!MdoModelTemperatureRead(Temperature,&Number)){Ok=false;MdoApplicationError(E,"sdk_arguments_invalid","Temperature must be between 0 and 2","model",400,false);goto done;}Request.bHasTemperature=true;Request.fTemperature=Number;}
     MdoModelApplyRequestDefaults(Catalog,Info.Id,&Request);

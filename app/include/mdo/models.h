@@ -79,7 +79,7 @@ typedef struct MdoModelClientOptions {
     const char* ModelId;          /* NULL or empty selects the catalog default. */
     MdoModelProtocol Protocol;    /* zero selects the model default. */
     const char* ReasoningEffort;  /* NULL or empty selects the model default. */
-    uint32 MaxOutputTokens;       /* zero selects the model maximum. */
+    uint32 MaxOutputTokens;       /* zero selects the model request budget. */
     bool RestartableStream;       /* Agent drafts can be replaced on recovery. */
     const MdoModelRetryObserver* RetryObserver;
 } MdoModelClientOptions;
@@ -183,6 +183,8 @@ bool MdoModelCatalogDefault(const MdoModelCatalog* pCatalog,
 bool MdoModelCatalogProfile(const MdoModelCatalog* pCatalog,
     const char* ModelId, MdoModelProtocol Protocol,
     xllm_model_profile* pProfile, xllm_error* pError);
+
+uint32 MdoModelCatalogOutputBudget(const MdoModelCatalog*,const char*,const char*);
 
 void MdoModelClientOptionsInit(MdoModelClientOptions* pOptions);
 xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,

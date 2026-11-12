@@ -52,7 +52,8 @@ test("an existing request budget survives re-identification and a split input li
   const r = record(); r.fields.window_mode = field("split-input-output"); r.fields.max_input_tokens = field(1000000);
   const old = { ...model, window: { max_output_tokens: 2048 }, default_reasoning_effort: "low" };
   const profile = applyParameters(old, parameterDraft(r, old));
-  assert.equal(profile.window.max_output_tokens, 2048);
+  assert.equal(profile.window.max_output_tokens, 128000);
+  assert.deepEqual(profile.output_budget,{mode:"legacy",tokens:2048});
   assert.equal(profile.window.max_input_tokens, 1000000);
   assert.equal(profile.default_reasoning_effort, "low");
 });
@@ -67,4 +68,34 @@ test("official per-effort defaults are distinct from model capacity and respect 
   assert.equal(parameterDraft(r,{window:{max_output_tokens:4096}}).output,4096);
   r.fields.max_output_tokens=field(32768);
   assert.equal(recommendedOutputBudget(r,"max"),32768);
+});
+
+import { normalizeMedia, mergeParameterRecord } from "../app/web/js/features/settings/model-policy.js";
+test("vision metadata derives both native image capability and attachment support",()=>{
+  const r=record();r.fields.input_modalities=field(["text","image","video"]);
+  const result=applyParameters({...model,attachments:[]},parameterDraft(r));
+  assert(result.capabilities.includes("media-input"));assert.deepEqual(result.attachments,["image"]);
+  r.fields.input_modalities=field(["text"]);
+  const textOnly=applyParameters(result,parameterDraft(r,result));
+  assert(!textOnly.capabilities.includes("media-input"));assert.deepEqual(textOnly.attachments,[]);
+  delete r.fields.input_modalities;
+  assert(applyParameters(result,parameterDraft(r,result)).capabilities.includes("media-input"));
+  for(const partial of [{capabilities:[],attachments:["image"]},{capabilities:["media-input"],attachments:[]}]) {
+    const normalized=normalizeMedia(partial);assert(normalized.capabilities.includes("media-input"));assert(normalized.attachments.includes("image"));
+  }
+});
+test("recommended defaults follow refreshed parameters while custom and legacy budgets survive",()=>{
+  const r=record();r.request_defaults={output_tokens:65536};
+  const first=applyParameters({...model,attachments:[]},parameterDraft(r));
+  assert.equal(first.window.max_output_tokens,128000);assert.deepEqual(first.output_budget,{mode:"recommended",tokens:65536});
+  r.request_defaults.output_tokens=96000;
+  assert.equal(parameterDraft(r,first).output,96000);
+  assert.equal(parameterDraft(r,{...first,output_budget:{mode:"custom",tokens:4096}}).output,4096);
+  assert.equal(parameterDraft(r,{...model,window:{max_output_tokens:8192}}).output,8192);
+  const updated=mergeParameterRecord({fields:{temperature:{value:0.3,source:"manual"},max_output_tokens:{value:100000,source:"api"}}},r);
+  assert.equal(updated.fields.temperature.value,0.3);assert.equal(updated.fields.max_output_tokens.value,100000);
+});
+test("profiles outside the current runtime context limit are rejected before saving",()=>{
+  const r=record();r.fields.context_tokens=field(64000);r.fields.window_mode=field("split-input-output");
+  const draft=parameterDraft(r);assert(parameterIssues(draft).includes("max_output_tokens"));
 });

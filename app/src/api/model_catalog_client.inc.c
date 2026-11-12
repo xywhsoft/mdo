@@ -31,7 +31,7 @@ static xvalue* MdoParameterRegistry(MdoApiContext* Context,bool Refresh,bool* St
     if(!xrtValueGetInt(Stamp,&At) && xrtValueGetUInt(Stamp,&Unsigned) && Unsigned<=INT64_MAX)At=(int64)Unsigned;
     int64 Now=MdoUtcUs()/1000;
     if(Cached && !Refresh && At>0 && At<=Now && Now-At<86400000)return Cached;
-    const char* Url=MDO_ACCOUNT_SERVICE_ORIGIN "/api/v1/ai/client-catalog?sampling_defaults=1";
+    const char* Url=MDO_ACCOUNT_SERVICE_ORIGIN "/api/v1/ai/client-catalog?sampling_defaults=1&capability_metadata=1";
     xllm_error Error={0};xhttpclient* Client=MdoApiModelDiscoveryClient(Context,Url,true,NULL,5000000u,&Error);
     xhttprequest* Request=xrtHttpRequestCreate(XRT_STR_LITERAL("GET"),xrtStrView(Url));
     xhttpresult* Result=NULL;xvalue* Envelope=NULL;xvalue* Catalog=NULL;

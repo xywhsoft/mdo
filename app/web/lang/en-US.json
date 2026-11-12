@@ -3425,7 +3425,7 @@
   "modelWizard.previous": "Back",
   "modelWizard.next": "Next",
   "modelSetup.modelsAdded": "Added {count} models.",
-  "modelParameters.cardSummary": "Context {context} · Output budget {output} · Reasoning {reasoning}",
+  "modelParameters.cardSummary": "Context {context} · Output limit {capacity} · Default budget {output} · Reasoning {reasoning}",
   "modelWizard.alreadyAdded": "Already added",
   "ui.extensionPanels.restoreBuiltinRole": "Restore default",
   "ui.extensionPanels.restoreBuiltinRoleConfirm": "Restore this role’s built-in files? Local changes will be replaced. Its enabled or disabled state will be kept.",
@@ -3602,7 +3602,7 @@
   "modelParameters.temperatureDefault": "Use provider default",
   "modelParameters.defaultsHelp": "Verification and conversations use these temperature and reasoning defaults. Leave temperature empty to omit it.",
   "modelParameters.useRecommendedBudget": "Use recommended budget",
-  "modelParameters.recommendedBudgetHelp": "Use the catalogued official default first; otherwise use the verified output limit. Existing budgets are preserved.",
+  "modelParameters.recommendedBudgetHelp": "Prefer the catalogued official default; otherwise use the verified output limit. Custom budgets stay unchanged; recommended budgets follow model parameters and reasoning effort.",
   "modelParameters.budgetOfficialDefault": "Budget basis: official default",
   "modelParameters.budgetOfficialRecommendation": "Budget basis: official recommendation",
   "modelParameters.budgetCapabilityLimit": "Budget basis: model capability limit (not an official default)",
@@ -3644,5 +3644,13 @@
   "ui.pluginPrompts.reason.budget": "Exceeds role instruction budget",
   "ui.pluginPrompts.reason.plugin_budget": "Exceeds per-plugin instruction budget",
   "ui.pluginPrompts.reason.project_scope": "Plugin is not enabled for this project",
-  "ui.pluginPrompts.reason.plugin_unavailable": "Plugin or dependency unavailable"
+  "ui.pluginPrompts.reason.plugin_unavailable": "Plugin or dependency unavailable",
+  "modelConfig.inputSupport": "Input support",
+  "modelConfig.imageUnderstanding": "Image understanding",
+  "modelConfig.fileHandling": "Ordinary files are parsed by mdo or read with tools. Audio, video and native document inputs require a supporting protocol adapter.",
+  "modelParameters.budgetMode": "Default output budget",
+  "modelParameters.followRecommended": "Use recommended budget",
+  "modelParameters.customBudget": "Custom budget",
+  "modelParameters.legacyBudgetMode": "Keep legacy budget (origin unconfirmed)",
+  "modelParameters.legacyBudget": "This budget comes from an older configuration and may have been set manually. Choose “Use recommended budget” to update it, then apply your changes."
 }

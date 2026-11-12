@@ -72,10 +72,10 @@ static bool MdoApiModelAddRun(MdoApiContext* Context, MdoApiJsonBody Body, uint6
     const xvalue* Transport = xrtValueObjectGet(xrtValueObjectGet(Root, XRT_STR_LITERAL("settings")), XRT_STR_LITERAL("transport"));
     if (Verify && !MdoModelVerificationKey(Patch, Transport, Id, Fingerprint)) goto done;
     NeedsTools = (Info.Capabilities & XLLM_CAP_TOOL_CALL_OUT) != 0u;
-    bool Ok = !Verify || MdoApiModelProbeExecute(Context, Catalog, Id, Info.MaxOutputTokens, false, &ReplyMs, &Error);
+    bool Ok = !Verify || MdoApiModelProbeExecute(Context, Catalog, Id, MdoModelCatalogOutputBudget(Catalog,Id,NULL), false, &ReplyMs, &Error);
     bool ToolPhase = Verify && Ok && NeedsTools;
     if (ToolPhase && MdoApiDownloadLive(Context))
-        Ok = MdoApiModelProbeExecute(Context, Catalog, Id, Info.MaxOutputTokens, true, &ToolMs, &Error);
+        Ok = MdoApiModelProbeExecute(Context, Catalog, Id, MdoModelCatalogOutputBudget(Catalog,Id,NULL), true, &ToolMs, &Error);
     else if (ToolPhase) Ok = false;
     if (!Ok) {
         static char const ReplyFailure[] = "model_test_failed", ToolFailure[] = "model_tools_test_failed";

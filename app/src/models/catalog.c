@@ -6,6 +6,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/model_sampling.h"
+#include "../../include/mdo/model_policy.h"
 #include "../../include/mdo/secrets.h"
 #include "../../include/mdo/version.h"
 
@@ -46,6 +47,7 @@ typedef struct MdoModelEntry {
     bool HasTemperature;
     double Temperature;
     xvalue* Proxy;
+    xvalue* Policy;
     MdoModelProtocolFlags Protocols;
     MdoModelProtocol DefaultProtocol;
     xllm_capability_flags Capabilities;
@@ -256,6 +258,7 @@ static void MdoModelsModelUnit(MdoModelEntry* pModel)
     xrtFree(pModel->ReasoningEfforts);
     xrtFree(pModel->DefaultReasoningEffort);
     xrtValueRelease(pModel->Proxy);
+    xrtValueRelease(pModel->Policy);
     memset(pModel, 0, sizeof(*pModel));
 }
 
@@ -536,7 +539,9 @@ static bool MdoModelsParseModel(const xvalue* pValue,
          Summary > UINT32_MAX ) return false;
     pModel->ContextWindowTokens = Context;
     pModel->MaxInputTokens = MaxInput;
-    pModel->MaxOutputTokens = (uint32)MaxOutput;
+    pModel->MaxOutputTokens = MdoModelPolicyLimit(pValue);
+    pModel->Policy=xrtValueDeepClone(pValue);
+    if(!pModel->Policy)return false;
     pModel->OutputReserveTokens = (uint32)Reserve;
     pModel->SummaryTokens = (uint32)Summary;
     if ( !MdoModelsParseReasoningEfforts(xrtValueObjectGet(pValue,
@@ -545,6 +550,9 @@ static bool MdoModelsParseModel(const xvalue* pValue,
             &pModel->DefaultReasoningEffort, true) ||
          !MdoModelsParseAttachments(xrtValueObjectGet(pValue,
             MdoModelsKey("attachments")), &pModel->Attachments) ) return false;
+    if((pModel->Capabilities&XLLM_CAP_IMAGE_IN)||(pModel->Attachments&MDO_MODEL_ATTACHMENT_IMAGE)){
+        pModel->Capabilities|=XLLM_CAP_IMAGE_IN;pModel->Attachments|=MDO_MODEL_ATTACHMENT_IMAGE;
+    }
     const xvalue* Temperature=xrtValueObjectGet(pValue,MdoModelsKey("temperature"));
     pModel->HasTemperature=Temperature!=NULL;
     if(Temperature&&!MdoModelTemperatureRead(Temperature,&pModel->Temperature))return false;
@@ -1166,7 +1174,7 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
         return NULL;
     }
     MaxOutputTokens = pOptions->MaxOutputTokens != 0u ?
-        pOptions->MaxOutputTokens : pModel->MaxOutputTokens;
+        pOptions->MaxOutputTokens : (pModel->Policy?MdoModelPolicyBudget(pModel->Policy,ReasoningEffort):pModel->MaxOutputTokens);
     if ( MaxOutputTokens == 0u ||
          MaxOutputTokens > pModel->MaxOutputTokens ) {
         MdoModelProfileErrorInit(pError, "profile_output_limit",
@@ -1268,3 +1276,10 @@ done:
 }
 #include "completion.inc.c"
 #include "online_access.inc.c"
+
+uint32 MdoModelCatalogOutputBudget(const MdoModelCatalog* Catalog,cstr Id,cstr Effort){
+    if(!Catalog)return 0;
+    const MdoModelEntry* M=Id&&*Id?MdoModelsLookup(Catalog,Id):
+        Catalog->DefaultModelIndex<Catalog->ModelCount?&Catalog->Models[Catalog->DefaultModelIndex]:NULL;
+    return M?(M->Policy?MdoModelPolicyBudget(M->Policy,Effort&&*Effort?Effort:M->DefaultReasoningEffort):M->MaxOutputTokens):0;
+}

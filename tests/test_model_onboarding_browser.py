@@ -12,6 +12,12 @@ class BrowserSupplier(Supplier):
         self.send_header('Access-Control-Allow-Origin','*');self.end_headers();self.wfile.write(raw)
     def do_GET(self):
         if self.path=='/allow-beta':self.server.fail_beta=False;return self.send_json({'ok':True})
+        if self.path=='/upgrade-catalog':
+            Supplier.catalog['version']='wizard-browser-fixture-v2'
+            for row in Supplier.catalog['entries']:
+                row['fields']['input_modalities']=['text','image']
+                row['request_defaults']={'output_tokens':5120,'basis':'official-default'}
+            return self.send_json({'ok':True})
         if self.path=='/stats':
             return self.send_json({'models':self.server.model_reads,'calls':[{'model':c['model'],'tools':bool(c.get('tools'))} for c in self.calls],
                 'catalog_credentials':any('authorization' in {k.lower() for k in h} for h in self.catalog_headers)})
@@ -48,7 +54,7 @@ def check(host,node,browser,evidence):
 <main><h2>模型管理</h2><div id="panel"></div></main><pre id="result"></pre><script type="module">
 import {api} from '/js/api/client.js';import {loadLocale} from '/js/i18n.js';import {createModelConfigPanel} from '/js/features/settings/model-config-panel.js';
 await loadLocale('zh-CN');await api.get('/project-purge-intent');const panel=createModelConfigPanel(document.querySelector('#panel'));await panel.ensureLoaded();
-window.__qaReady=true;window.__qaSupplier='''+json.dumps(origin)+''';</script></html>''',encoding='utf-8')
+window.__qaPanel=panel;window.__qaReady=true;window.__qaSupplier='''+json.dumps(origin)+''';</script></html>''',encoding='utf-8')
         with (evidence/'browser-host.log').open('wb') as log:
             process=subprocess.Popen([str(host),str(config)],cwd=ROOT/'app',env={**os.environ,'USE_WEBVIEW':'0','MDO_HOME':str(evidence/'home')},
                 stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))

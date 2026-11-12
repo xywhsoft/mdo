@@ -37,9 +37,9 @@ class Supplier(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(raw)))
             self.end_headers(); self.wfile.write(raw); return
         rows = [{'id': 'gpt-5.4', 'context_length': 32000},
-            {'id': 'metadata-false', 'max_input_tokens': 12345, 'max_tokens': 4096,
+            {'id': 'metadata-false', 'input_modalities':['text','image'], 'max_input_tokens': 12345, 'max_tokens': 4096,
              'capabilities': {'thinking': {'supported': False}, 'tool_calling': False}},
-            {'id': 'metadata-effort', 'context_length': 64000, 'max_tokens': 16000,
+            {'id': 'metadata-effort', 'architecture':{'input_modalities':['text']}, 'context_length': 64000, 'max_tokens': 16000,
              'capabilities': {'effort': {'supported': True, 'low': True, 'high': True, 'max': False}}}]
         raw = json.dumps({'data': rows}).encode()
         self.send_response(200); self.send_header('Content-Type', 'application/json')
@@ -274,6 +274,8 @@ def main():
                     'refresh_catalog': False, 'protocol': 'openai-responses', 'models': ['gpt-5.4', 'metadata-false', 'metadata-effort', 'unknown-gpt-5.4']})
                 assert status == 200, result
                 rows = {row['id']: row for row in result['data']['items']}
+                assert rows['metadata-false']['fields']['input_modalities']['value']==['text','image'],rows
+                assert rows['metadata-effort']['fields']['input_modalities']['value']==['text'],rows
                 fields = rows['gpt-5.4']['fields']
                 assert fields['context_tokens']['value'] == 32000 and fields['context_tokens']['source'] == 'api', rows
                 assert fields['max_output_tokens']['source'] == 'upstream-recommendation', rows

@@ -79,6 +79,36 @@ static xvalue* MdoParameterApiFields(const xvalue* Row)
     const xvalue* Tools = xrtValueObjectGet(Caps, XRT_STR_LITERAL("tool_calling"));
     if (xrtValueType(Tools) == XVALUE_OBJECT) Tools = xrtValueObjectGet(Tools, XRT_STR_LITERAL("supported"));
     if (xrtValueGetBool(Tools, &Supported)) xrtValueObjectSet(Fields, XRT_STR_LITERAL("tools"), (xvalue*)Tools);
+    const xvalue* Modalities=xrtValueObjectGet(Row,XRT_STR_LITERAL("input_modalities"));
+    if(!Modalities)Modalities=xrtValueObjectGet(xrtValueObjectGet(Row,XRT_STR_LITERAL("architecture")),XRT_STR_LITERAL("input_modalities"));
+    if(xrtValueType(Modalities)==XVALUE_ARRAY&&xrtValueCount(Modalities)<=5){
+        bool Valid=true;const char* Allowed[]={"text","image","audio","video","file"};
+        for(size_t I=0;I<xrtValueCount(Modalities);I++){
+            bool Found=false;for(size_t J=0;J<5;J++)if(MdoParameterTextEqual(xrtValueArrayGet(Modalities,I),Allowed[J]))Found=true;
+            if(!Found)Valid=false;
+        }
+        if(Valid)xrtValueObjectSet(Fields,XRT_STR_LITERAL("input_modalities"),(xvalue*)Modalities);
+    } else {
+        const xvalue* Image=xrtValueObjectGet(xrtValueObjectGet(Caps,XRT_STR_LITERAL("image_input")),XRT_STR_LITERAL("supported"));
+        bool Enabled;
+        if(xrtValueGetBool(Image,&Enabled)){
+            xvalue* List=xrtValueArray();MdoApiValueAppendString(List,"text");if(Enabled)MdoApiValueAppendString(List,"image");
+            xrtValueObjectSet(Fields,XRT_STR_LITERAL("input_modalities"),List);xrtValueRelease(List);
+        }
+    }
+    /* DeepSeek declares effort at the top level, unlike Anthropic's flags. */
+    const xvalue* Declared=xrtValueObjectGet(Row,XRT_STR_LITERAL("effort"));
+    const xvalue* Levels=xrtValueObjectGet(Declared,XRT_STR_LITERAL("supported_levels"));
+    if(xrtValueType(Levels)==XVALUE_ARRAY&&xrtValueCount(Levels)>0&&xrtValueCount(Levels)<=7){
+        bool Valid=true;const char* Allowed[]={"none","minimal","low","medium","high","xhigh","max"};
+        for(size_t I=0;I<xrtValueCount(Levels);I++){bool Found=false;for(size_t J=0;J<7;J++)if(MdoParameterTextEqual(xrtValueArrayGet(Levels,I),Allowed[J]))Found=true;if(!Found)Valid=false;}
+        if(Valid){
+            xvalue* R=xrtValueObject();MdoApiValueSetString(R,"kind","effort");xrtValueObjectSet(R,XRT_STR_LITERAL("efforts"),(xvalue*)Levels);
+            const xvalue* Default=xrtValueObjectGet(Declared,XRT_STR_LITERAL("default_level"));
+            if(Default&&MdoParameterContains(Levels,MdoApiModelText(Declared,"default_level",16)))xrtValueObjectSet(R,XRT_STR_LITERAL("default"),(xvalue*)Default);
+            xrtValueObjectSet(Fields,XRT_STR_LITERAL("reasoning"),R);xrtValueRelease(R);
+        }
+    }
     /* A parameter name alone does not enumerate supported effort values. */
     return Fields;
 }
@@ -118,6 +148,12 @@ static xvalue* MdoParameterResolve(const xvalue* Registry, cstr Endpoint, cstr P
         }
     }
     bool Recommendation = !Match && !KnownHost && !Ambiguous; if (Recommendation) Match = Upstream;
+    const xvalue* Defaults = xrtValueObjectGet(Match, XRT_STR_LITERAL("fields"));
+    /* DeepSeek /models lists effort levels for thinking-on only. Its exact
+     * service recommendation also declares the separate thinking-off mode. */
+    if(Match && !Recommendation && !strncmp(Endpoint,"https://api.deepseek.com/",strlen("https://api.deepseek.com/")) &&
+       xrtValueObjectHas(Defaults,XRT_STR_LITERAL("reasoning")))
+        xrtValueObjectRemove(Api,XRT_STR_LITERAL("reasoning"));
     bool Ok = Result && Fields && Api && Now;
     for (size_t i = 0; Ok && i < xrtValueCount(Api); ++i) {
         xstrview K; const xvalue* V = xrtValueObjectAt(Api, i, &K); char Name[64];
@@ -125,7 +161,6 @@ static xvalue* MdoParameterResolve(const xvalue* Registry, cstr Endpoint, cstr P
         memcpy(Name, K.Data, K.Size); Name[K.Size] = 0;
         Ok = MdoParameterSet(Fields, Name, V, "api", Endpoint, Now);
     }
-    const xvalue* Defaults = xrtValueObjectGet(Match, XRT_STR_LITERAL("fields"));
     cstr Url = MdoApiModelText(Match, "source_url", 2048);
     for (size_t i = 0; Ok && i < xrtValueCount(Defaults); ++i) {
         xstrview K; const xvalue* V = xrtValueObjectAt(Defaults, i, &K); char Name[64];

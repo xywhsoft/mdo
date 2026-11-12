@@ -76,6 +76,13 @@ def check(host,packed=False,work_root=None,environment_credential=False):
             Supplier.mode='ok';body=draft('first-success');body['make_default']=True
             body['model'].update(wire_model='deepseek-flash',temperature=0.35,reasoning_efforts=['default','none','high'],default_reasoning_effort='high')
             body['model']['capabilities']=list(dict.fromkeys(body['model']['capabilities']+['reasoning-control','reasoning-output']))
+            body['model']['window'].update(context_tokens=1048576,max_input_tokens=1040384,max_output_tokens=393216)
+            body['model']['output_budget']={'mode':'recommended','tokens':65536}
+            body['model']['attachments']=['image'] # Configuration normalizes the native capability as well.
+            body['model']['parameters']={'schema_version':1,'fields':{
+                'context_tokens':{'value':1048576,'source':'server'},'max_output_tokens':{'value':393216,'source':'server'},
+                'reasoning':{'value':{'kind':'effort','efforts':['none','high','max'],'default':'high'},'source':'server'}},
+                'request_defaults':{'output_tokens':65536,'output_tokens_by_effort':{'max':131072}}}
             sample_start=len(Supplier.calls)
             status,_,data=call('POST','models/add',body,etag);assert status==201,data
             assert data['data']['added'] and data['data']['verification_saved'],data
@@ -84,6 +91,11 @@ def check(host,packed=False,work_root=None,environment_credential=False):
             samples=Supplier.calls[sample_start:];assert len(samples)==3
             assert all(r.get('temperature')==0.35 and r.get('reasoning_effort')=='high' for r in samples),samples
             assert samples[1]['tool_choice']=='auto'
+            assert all(r.get('max_tokens')==65536 for r in samples),samples
+            installed=next(m for m in saved['items'] if m['id']=='first-success')
+            assert installed['window']['max_output_tokens']==393216 and installed['output_budget']['tokens']==65536
+            assert 'media-input' in installed['capabilities'] and 'image' in installed['attachments']
+            checks.append('real wire request uses 64K budget independently of 384K capacity and normalizes image support')
             checks.append('reply, automatic tool call and tool replay share configured temperature and reasoning')
             p=next(p for p in saved['providers'] if p['id']=='onboarding')
             assert p['credential']['secret_ref'].startswith('env:' if environment_credential else 'vault:') and 'onboarding-fixture-only' not in json.dumps(saved)
@@ -101,8 +113,24 @@ def check(host,packed=False,work_root=None,environment_credential=False):
             assert done['data']['state']=='succeeded',done
             normal=[r for r in Supplier.calls[normal_start:] if r.get('model')=='deepseek-flash'];assert normal
             assert all(r.get('temperature')==0.35 and r.get('reasoning_effort')=='high' for r in normal),normal
+            assert all(r.get('max_tokens')==65536 for r in normal),normal
             checks.append('normal Agent conversation uses the same per-model sampling defaults as verification')
             saved,etag=current()
+            original_policy=copy.deepcopy(next(m for m in saved['items'] if m['id']=='first-success'))
+            for policy,expected in [('recommended',131072),('custom',4096),('legacy',2048)]:
+                candidate=copy.deepcopy(original_policy);candidate['reasoning_efforts'].append('max');candidate['default_reasoning_effort']='max'
+                if policy=='recommended':candidate['output_budget']={'mode':policy,'tokens':131072}
+                elif policy=='custom':candidate['output_budget']={'mode':policy,'tokens':expected}
+                else:
+                    candidate.pop('output_budget');candidate['window'].update(max_output_tokens=2048,output_reserve_tokens=1024,summary_tokens=512)
+                saved['items']=[candidate if m['id']==candidate['id'] else m for m in saved['items']]
+                status,_,data=call('PUT','settings/models',{'schema_version':1,'patch':{k:saved[k] for k in ('providers','items','default_model')}},etag);assert status==200,data
+                start_calls=len(Supplier.calls)
+                status,_,data=call('POST','models/test',{'model_id':'first-success','tools':False});assert status==200,data
+                assert Supplier.calls[start_calls:][0].get('max_tokens')==expected,(policy,Supplier.calls[start_calls:])
+                assert Supplier.calls[start_calls:][0].get('reasoning_effort')=='max'
+                saved,etag=current()
+            checks.append('real requests follow max-effort recommendations, explicit custom limits and legacy budgets independently')
             before_calls=len(Supplier.calls)
             status,_,data=call('POST','models/add',body,etag);assert status==409,data
             assert len(Supplier.calls)==before_calls

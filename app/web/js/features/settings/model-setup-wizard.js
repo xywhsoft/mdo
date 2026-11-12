@@ -68,7 +68,7 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
       for(const record of result.data.parameters||[]){
         const value=normalized(record),old=records.get(record.id);
         for(const [name,field]of Object.entries(old?.record.fields||{}))if(field.source==="manual")value.record.fields[name]=clone(field);
-        if(old?.budgetEdited){value.output=old.output;value.budgetEdited=true;}
+        if(old?.budgetEdited){value.output=old.output;value.budgetEdited=true;value.budgetMode=old.budgetMode;}
         if(old?.effortEdited){value.effort=old.effort;value.effortEdited=true;}
         if(old?.temperatureEdited){value.temperature=old.temperature;value.temperatureEdited=true;}
         records.set(record.id,value);
@@ -100,7 +100,7 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
           // Compute an automatic budget from the effective merged limits, not
           // the catalog's larger limits before the API fields take precedence.
           const merged=normalized(record);
-          if(old?.budgetEdited) {merged.output=old.output;merged.budgetEdited=true;}
+          if(old?.budgetEdited) {merged.output=old.output;merged.budgetEdited=true;merged.budgetMode=old.budgetMode;}
           if(old?.effortEdited){merged.effort=old.effort;merged.effortEdited=true;}
           if(old?.temperatureEdited){merged.temperature=old.temperature;merged.temperatureEdited=true;}
           records.set(row.id,merged);parameterLoading.delete(row.id);
@@ -241,7 +241,7 @@ export function createModelSetupWizard({preset,choice,provider=null,config,etag,
       row.append(element("label",{className:"model-wizard-model"},[check,element("strong",{text:id})]));
       if(parameterLoading.has(id))row.append(element("p",{className:"model-config-status",text:text("identifying","正在自动识别参数…") }));
       const value=records.get(id),editor=createParameterEditor(value,{index,onChange:()=>{
-        value.budgetEdited=true;value.effortEdited=true;errors.delete(id);updatePrimary();
+        value.budgetEdited=true;value.budgetMode=old.budgetMode;value.effortEdited=true;errors.delete(id);updatePrimary();
       }});toggleEditor();row.append(editor);
       if(errors.has(id))row.append(element("p",{className:"resource-error",text:errors.get(id),attrs:{role:"status"}}));
       body.append(row);

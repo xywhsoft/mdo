@@ -6,6 +6,8 @@
 #include "../../include/mdo/http_url.h"
 #include "../../include/mdo/home.h"
 
+#include "../../include/mdo/model_policy.h"
+
 #define MDO_CONFIG_ERROR_DOMAIN "mdo.config"
 #define MDO_CONFIG_MAX_FILE (1024u * 1024u)
 
@@ -716,7 +718,7 @@ static bool MdoConfigModelParametersValid(const xvalue* Parameters)
         !MdoConfigUnsigned(xrtValueObjectGet(Parameters, MdoConfigKey("schema_version")), &Schema) || Schema != 1u)
         return false;
     const xvalue* Fields = xrtValueObjectGet(Parameters, MdoConfigKey("fields"));
-    if (xrtValueType(Fields) != XVALUE_OBJECT || xrtValueCount(Fields) > 8u) return false;
+    if (xrtValueType(Fields) != XVALUE_OBJECT || xrtValueCount(Fields) > 16u) return false;
     for (size_t I = 0; I < xrtValueCount(Fields); ++I) {
         xstrview Key; const xvalue* Field = xrtValueObjectAt(Fields, I, &Key);
         if (xrtValueType(Field) != XVALUE_OBJECT || !xrtValueObjectGet(Field, MdoConfigKey("value")) ||
@@ -728,6 +730,10 @@ static bool MdoConfigModelParametersValid(const xvalue* Parameters)
         if (MdoConfigViewEqual(Key,"context_tokens") || MdoConfigViewEqual(Key,"max_input_tokens") || MdoConfigViewEqual(Key,"max_output_tokens")) {
             uint64 Limit; if (!MdoConfigUnsigned(xrtValueObjectGet(Field,MdoConfigKey("value")),&Limit) || !Limit || Limit > UINT32_MAX) return false;
         } else if (MdoConfigViewEqual(Key,"temperature")) {double N;if(!MdoModelTemperatureRead(xrtValueObjectGet(Field,MdoConfigKey("value")),&N))return false;}
+        else if (MdoConfigViewEqual(Key,"input_modalities")) {
+            const char* Allowed[]={"text","image","audio","video","file"};
+            if(!MdoConfigStringListValidate(xrtValueObjectGet(Field,MdoConfigKey("value")),Allowed,5,0,5,NULL))return false;
+        } else if ((MdoConfigViewEqual(Key,"native_files") || MdoConfigViewEqual(Key,"max_completion_tokens"))) {bool B;if(!xrtValueGetBool(xrtValueObjectGet(Field,MdoConfigKey("value")),&B))return false;}
         else if (!MdoConfigViewEqual(Key,"reasoning") && !MdoConfigViewEqual(Key,"tools") && !MdoConfigViewEqual(Key,"window_mode")) return false;
     }
     char* Json = xrtJsonStringify(Parameters, false, &Size);
@@ -846,6 +852,15 @@ static bool MdoConfigModelItemValidate(const xvalue* pItem,
     if ( !MdoConfigStringListValidate(pAttachments, Attachments,
             sizeof(Attachments) / sizeof(Attachments[0]), 0u,
             sizeof(Attachments) / sizeof(Attachments[0]), NULL) ) return false;
+    const xvalue* Budget=xrtValueObjectGet(pItem,MdoConfigKey("output_budget"));
+    if(Budget){
+        xstrview Mode;uint64 Tokens;
+        if(xrtValueType(Budget)!=XVALUE_OBJECT||xrtValueCount(Budget)!=2||
+            !MdoConfigString(xrtValueObjectGet(Budget,MdoConfigKey("mode")),&Mode)||
+            (!MdoConfigViewEqual(Mode,"recommended")&&!MdoConfigViewEqual(Mode,"custom")&&!MdoConfigViewEqual(Mode,"legacy"))||
+            !MdoConfigUnsigned(xrtValueObjectGet(Budget,MdoConfigKey("tokens")),&Tokens)||!Tokens||Tokens>MaxOutput||
+            (MdoModelPolicyText(xrtValueObjectGet(pWindow,MdoConfigKey("mode")),"shared-context")&&Tokens>=Context))return false;
+    }
     return MdoConfigModelProxyValid(xrtValueObjectGet(pItem, MdoConfigKey("proxy")), true);
 }
 
@@ -1057,6 +1072,7 @@ static xvalue* MdoConfigNormalizePatch(MdoConfigDomain Domain,
 
     if ( pCandidate == NULL || !MdoConfigMergeObject(pCandidate, pPatch) ||
          (Domain == MDO_CONFIG_SETTINGS && !MdoConfigUpgradeSearch(pCandidate)) ||
+         (Domain == MDO_CONFIG_MODELS && !MdoModelPoliciesNormalize(pCandidate)) ||
          !MdoConfigDiff(pBase, pCandidate, &pNormalized, &bEqual) ) {
         xrtValueRelease(pCandidate);
         xrtValueRelease(pNormalized);
@@ -1090,7 +1106,8 @@ static xvalue* MdoConfigBuildEffective(xvalue* const* ppPatches)
         xrtValueRelease(pRoot);
         return NULL;
     }
-    if ( !MdoConfigUpgradeSearch(xrtValueObjectGet(pRoot, MdoConfigKey("settings"))) ||
+    if ( !MdoModelPoliciesNormalize((xvalue*)xrtValueObjectGet(pRoot,MdoConfigKey("models"))) ||
+         !MdoConfigUpgradeSearch(xrtValueObjectGet(pRoot, MdoConfigKey("settings"))) ||
          !MdoConfigEffectiveValidate(pRoot) ) {
         xrtValueRelease(pRoot);
         return NULL;

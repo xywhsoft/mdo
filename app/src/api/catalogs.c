@@ -173,6 +173,7 @@ bool MdoApiModelsRoute(MdoApiContext* Context)
                 Info.ContextWindowTokens) &&
             MdoApiValueSetUInt(Item, "max_input_tokens", Info.MaxInputTokens) &&
             MdoApiValueSetUInt(Item, "max_output_tokens", Info.MaxOutputTokens) &&
+            MdoApiValueSetUInt(Item, "default_output_tokens", MdoModelCatalogOutputBudget(Catalog,Info.Id,NULL)) &&
             MdoApiValueSetUInt(Item, "output_reserve_tokens",
                 Info.OutputReserveTokens) &&
             MdoApiValueSetUInt(Item, "summary_tokens", Info.SummaryTokens) &&
