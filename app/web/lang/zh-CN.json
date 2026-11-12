@@ -3665,7 +3665,6 @@
   "ui.pluginPrompts.reason.plugin_unavailable": "插件或依赖当前不可用",
   "modelConfig.inputSupport": "输入支持",
   "modelConfig.imageUnderstanding": "图片理解",
-  "modelConfig.fileHandling": "普通文件由墨斗解析或工具读取，无需媒体输入开关。音频、视频及原生文档输入仅在对应协议适配器支持后可用。",
   "modelParameters.budgetMode": "默认输出预算",
   "modelParameters.followRecommended": "使用推荐预算",
   "modelParameters.customBudget": "自定义预算",

@@ -474,7 +474,6 @@ export function createAdvancedModelConfigPanel(container, options = {}) {
         checks(uiText("schedule.reasoning", {}, "思考强度"), "effort", item.reasoning_efforts,
           efforts.map((value) => [value, value])),
         checks(uiText("modelConfig.inputSupport", {}, "输入支持"), "attachment", item.attachments, [["image",uiText("modelConfig.imageUnderstanding",{},"图片理解")]]),
-        copy("p","modelConfig.fileHandling","普通文件由墨斗解析或工具读取，无需媒体输入开关。音频、视频及原生文档输入仅在对应协议适配器支持后可用。",{},{className:"model-config-status"}),
         input(uiText("modelParameters.budgetMode",{},"默认输出预算"),"output_budget_mode",outputPolicy(item).mode,{kind:"select",choices:[["recommended",uiText("modelParameters.followRecommended",{},"使用推荐预算")],["custom",uiText("modelParameters.customBudget",{},"自定义预算")],["legacy",uiText("modelParameters.legacyBudgetMode",{},"保留旧预算（来源未确认）")]]}),
         input(uiText("modelParameters.budget",{},"每次请求输出预算（tokens）"),"output_budget_tokens",outputPolicy(item).tokens,{type:"number",min:1,max:outputLimit(item),required:true}),
         element("div", { className: "model-form-grid" }, [

@@ -3665,7 +3665,6 @@
   "ui.pluginPrompts.reason.plugin_unavailable": "Plugin or dependency unavailable",
   "modelConfig.inputSupport": "Input support",
   "modelConfig.imageUnderstanding": "Image understanding",
-  "modelConfig.fileHandling": "Ordinary files are parsed by mdo or read with tools. Audio, video and native document inputs require a supporting protocol adapter.",
   "modelParameters.budgetMode": "Default output budget",
   "modelParameters.followRecommended": "Use recommended budget",
   "modelParameters.customBudget": "Custom budget",

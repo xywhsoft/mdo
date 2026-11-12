@@ -3665,7 +3665,6 @@
   "ui.pluginPrompts.reason.plugin_unavailable": "Плагин или зависимость недоступны",
   "modelConfig.inputSupport": "Поддержка ввода",
   "modelConfig.imageUnderstanding": "Понимание изображений",
-  "modelConfig.fileHandling": "Обычные файлы обрабатывает mdo или инструменты. Для аудио, видео и прямого ввода документов требуется поддержка адаптера протокола.",
   "modelParameters.budgetMode": "Бюджет вывода по умолчанию",
   "modelParameters.followRecommended": "Использовать рекомендуемый бюджет",
   "modelParameters.customBudget": "Свой бюджет",
