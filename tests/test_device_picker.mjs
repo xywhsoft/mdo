@@ -72,7 +72,9 @@ test("slow actions show row progress, reject double clicks and survive close/reo
   const original=action(id,"revoke");original.click();original.click();await flush();
   assert(row(id).textContent.includes("正在撤销"));assert.equal(action(id,"revoke").getAttribute("aria-busy"),"true");assert(action(other,"revoke").disabled);
   named("关闭").click();await flush();await picker.open();await flush();assert(row(id).textContent.includes("正在撤销"));
-  model.hold.resolve();await flush();assert(action(id,"remove"));assert.equal(model.posts.filter(p=>p.action==="revoke").length,1);
+  model.hold.resolve();await flush();assert(action(id,"remove"));assert(!action(id,"remove").disabled);
+  assert.equal(model.posts.filter(p=>p.action==="revoke").length,1);
+  action(id,"remove").click();await flush();assert(!row(id));
 });
 
 test("confirmed success remains visible when full-list synchronization fails",async t=>{

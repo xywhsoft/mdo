@@ -23,7 +23,7 @@ def headers():
     folder = ROOT / 'app/include/mdo'
     def inline(name):
         text = (folder / name).read_text(encoding='utf-8')
-        for child in ('extension_manifest.h', 'extension_zip.h', 'extension_path.h', 'extension_casefold.h', 'extension_identity.h'):
+        for child in ('extension_manifest.h', 'extension_zip.h', 'extension_path.h', 'extension_casefold.h', 'extension_identity.h', 'extension_settings_form.h'):
             if '#include "' + child + '"' in text:
                 text = text.replace('#include "' + child + '"', inline(child))
         return text
@@ -153,6 +153,7 @@ MDO_EXPORT mdo_result mdoCommandRun(const mdo_command_context_v1* C,const xvalue
     from native_extension_runner import run
     encoded = source.encode('utf-8')
     result = run(args,ident,source,{'cases':cases,'writer_input':str(source_file),'writer_output':str(written)},out/'native-result.json')
+    assert not result.get('compile_error'), result
     assert result['directory_contract'], result
     by_name = {r['name']: r for r in result['cases']}
     for case in cases:

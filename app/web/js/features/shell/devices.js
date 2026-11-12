@@ -298,10 +298,11 @@ export function createDevices() {
         if (disposed) return;
         layer = openLayer({ title: copy("choose", {}, "选择设备"), icon: "monitor", width: "48rem", height: "75%",
           onClosed() {
-            layer = null; clearTimeout(timer); generation++;
+            layer = null; clearTimeout(timer);
             // Discard listing reads and detached actions without cancelling a
             // submitted remote mutation, whose receipt still needs reconciliation.
             if (!operation) {
+              generation++;
               lifetime.abort(); lifetime = new AbortController(); busy = false; selection = null;
             }
           } });
