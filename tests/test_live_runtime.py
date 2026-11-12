@@ -205,6 +205,8 @@ def probe(host: Path | None, packed: Path | None):
                 return {p.relative_to(home).as_posix(): p.read_bytes() if p.is_file() else None
                         for p in home.rglob("*") if p.name not in (".mdo.lock", ".writer.lock")
                         and not p.is_relative_to(home / "data/cache")
+                        and not (p.parent in (home / "data/notifications", home / "data/update")
+                                 and p.name.startswith(".mdo-tmp-"))
                         and p.relative_to(home).as_posix() not in {"data/notifications",
                             "data/notifications/catalog.json", "data/update", "data/update/policy.json"}}
             before_connections = home_inventory()
