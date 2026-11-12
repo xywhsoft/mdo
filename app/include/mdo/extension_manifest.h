@@ -132,7 +132,8 @@ static xvalue* MdoExtensionZipManifest(MdoZip* Z,xcancel* Cancel)
         int64 Index=MdoZipFind(Z,Form);xvalue* Definition=NULL;MdoExtensionManifestBuffer F={0};
         bool Good=Index>=0&&!Z->Entries[Index].Directory&&Z->Entries[Index].Bytes&&Z->Entries[Index].Bytes<=MDO_ES_FORM_BYTES;
         if(Good){F.Capacity=(size_t)Z->Entries[Index].Bytes;F.Data=xrtMalloc(F.Capacity+1);Good=F.Data&&MdoZipEntryRead(Z,(size_t)Index,MdoExtensionManifestSink,&F,Cancel,NULL)&&F.Used==F.Capacity&&!memchr(F.Data,0,F.Used);}
-        if(Good)Definition=xrtJsonParse(xrtStrViewN((cstr)F.Data,F.Used));xrtFree(F.Data);
+        if(Good){Definition=xrtJsonParse(xrtStrViewN((cstr)F.Data,F.Used));}
+        xrtFree(F.Data);
         Good=Good&&Definition&&MdoExtensionSettingsFormValid(Definition,Z->Error,sizeof(Z->Error));
         const xvalue* Env=MdoEsGet(Settings,"environment");for(size_t I=0;Good&&I<xrtValueCount(Env);I++){xstrview Field={0};xrtValueGetString(xrtValueObjectAt(Env,I,NULL),&Field);const xvalue* Fld=MdoEsFind(Definition,Field.Data);cstr T=MdoEsText(Fld,"type");Good=Fld&&strcmp(T,"multiselect");}
         const xvalue* Templates=MdoEsGet(Settings,"templates");for(size_t I=0;Good&&I<xrtValueCount(Templates);I++){xstrview P={0};xrtValueGetString(xrtValueArrayGet(Templates,I),&P);int64 At=MdoZipFind(Z,P.Data);Good=At>=0&&!Z->Entries[At].Directory&&Z->Entries[At].Bytes&&Z->Entries[At].Bytes<=128u*1024u;}

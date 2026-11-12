@@ -28,6 +28,7 @@ static bool MdoAgentsPluginTool(MdoAgentOwner* Owner,xwork_tool_catalog* Catalog
     return false;
 }
 static bool MdoAgentsPluginCanonicalize(MdoAgentOwner* Owner,MdoAgentInstance* Instance,xwork_agent_extension_context* Native,xvalue* Group){
+    (void)Instance;
     const xvalue* Registry=MdoModuleCatalogPromptContributions(Owner->Modules),*Controls=MdoAgentConfigGet(Group,"items");
     if(xrtValueCount(Controls)>32u*MDO_PLUGIN_PROMPT_COUNT)return false;
     xvalue* Items=xrtValueArray();bool Ok=Items!=NULL;

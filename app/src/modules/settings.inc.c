@@ -16,10 +16,12 @@ xvalue* MdoModuleAgentSettings(xwork_agent* Agent,uint64 AgentId,uint64 RunId,cs
  xrtMutexLock(g_MdoModules.Lock);
  for(MdoModuleAgentScope* S=g_MdoModules.Scopes;S;S=S->Next)if((Agent&&S->Agent==Agent)||(AgentId&&S->AgentId==AgentId)){
   
-  if(!S->Settings)S->Settings=xrtValueObject();const xvalue* Found=MdoEsGet(S->Settings,Ref);
+  if(!S->Settings){S->Settings=xrtValueObject();}
+  const xvalue* Found=MdoEsGet(S->Settings,Ref);
   if(Found)Result=xrtValueClone(Found);else if(S->Settings&&xrtValueObjectSet(S->Settings,xrtStrView(Ref),Loaded))Result=xrtValueClone(Loaded);break;
  }xrtMutexUnlock(g_MdoModules.Lock);
- if(!Result)Result=xrtValueClone(Loaded);xrtValueRelease(Loaded);return Result;
+ if(!Result){Result=xrtValueClone(Loaded);}
+ xrtValueRelease(Loaded);return Result;
 }
 
 void MdoModuleAgentSettingsBegin(xwork_agent* Agent){

@@ -64,15 +64,19 @@ static bool MdoEsTemplatePreview(const MdoEsDocument* D,const xvalue* Stored,xva
   char* Rendered=Source?MdoExtensionSettingsRender(Ref,File.Data,Source,Snapshot,Why):NULL;
   if(Rendered&&strlen(Rendered)>256u*1024u-Total){xrtFree(Rendered);Rendered=NULL;}
   xvalue* Row=xrtValueObject();Ok=Row&&MdoExtPut(Row,"file",File.Data)&&MdoExtPut(Row,Rendered?"text":"error",Rendered?Rendered:"extension_template_invalid")&&xrtValueArrayAppend(Rows,Row);
-  if(Rendered)Total+=strlen(Rendered);xrtValueRelease(Row);xrtFree(Rendered);xrtFree(Source);xrtFree(Path);
+  if(Rendered){Total+=strlen(Rendered);}
+  xrtValueRelease(Row);xrtFree(Rendered);xrtFree(Source);xrtFree(Path);
  }
  Ok=Ok&&MdoEsPut(Result,"templates",Rows);xrtValueRelease(Values);xrtValueRelease(Prompt);xrtValueRelease(Meta);xrtValueRelease(Rows);xrtValueRelease(Snapshot);return Ok;
 }
 xvalue* MdoExtensionSettingsRead(cstr Kind,cstr Directory,char Error[512]){
- if(Error)Error[0]=0;if(!MdoExtLock)return NULL;xrtMutexLock(MdoExtLock);MdoEsDocument D;bool Ok=MdoEsLoad(Kind,Directory,&D,Error);xvalue* Out=Ok?MdoEsReadResult(&D,D.Stored):NULL;MdoEsDocumentUnit(&D);xrtMutexUnlock(MdoExtLock);return Out;
+ if(Error){Error[0]=0;}
+ if(!MdoExtLock){return NULL;}
+ xrtMutexLock(MdoExtLock);MdoEsDocument D;bool Ok=MdoEsLoad(Kind,Directory,&D,Error);xvalue* Out=Ok?MdoEsReadResult(&D,D.Stored):NULL;MdoEsDocumentUnit(&D);xrtMutexUnlock(MdoExtLock);return Out;
 }
 bool MdoExtensionSettingsSave(cstr Kind,cstr Directory,const xvalue* Input,bool Preview,xvalue** Result,char Error[512]){
- *Result=NULL;if(Error)Error[0]=0;if(!MdoExtLock||!MdoEsKeys(Input,"|revision||schema_digest||values||secrets||reset||clear_secrets|"))return MdoExtError(Error,"extension_settings_invalid: Invalid settings mutation");
+ *Result=NULL;if(Error){Error[0]=0;}
+ if(!MdoExtLock||!MdoEsKeys(Input,"|revision||schema_digest||values||secrets||reset||clear_secrets|"))return MdoExtError(Error,"extension_settings_invalid: Invalid settings mutation");
  const xvalue* InputValues=MdoEsGet(Input,"values"),*Secrets=MdoEsGet(Input,"secrets");bool Flag;
  if((InputValues&&xrtValueType(InputValues)!=XVALUE_OBJECT)||(Secrets&&xrtValueType(Secrets)!=XVALUE_OBJECT)||(MdoEsGet(Input,"reset")&&!xrtValueGetBool(MdoEsGet(Input,"reset"),&Flag))||(MdoEsGet(Input,"clear_secrets")&&!xrtValueGetBool(MdoEsGet(Input,"clear_secrets"),&Flag)))return MdoExtError(Error,"extension_settings_invalid: Use object values and explicit boolean reset options");
  xrtMutexLock(MdoExtLock);MdoEsDocument D;bool Ok=MdoEsLoad(Kind,Directory,&D,Error);xvalue *Next=Ok?xrtValueClone(D.Stored):NULL,*Saved=Next&&MdoEsGet(Next,"values")?xrtValueObjectEdit(Next,XRT_STR_LITERAL("values")):NULL,*Created=xrtValueArray(),*Retired=xrtValueArray();
@@ -112,8 +116,10 @@ bool MdoExtensionSettingsSave(cstr Kind,cstr Directory,const xvalue* Input,bool 
  return Ok&&*Result;
 }
 xvalue* MdoExtensionSettingsSnapshot(cstr Ref,bool Secrets,char Error[512]){
- if(Error)Error[0]=0;xvalue* Row=MdoExtensionsResolve(Ref,Error);cstr Kind=MdoEsText(Row,"kind"),Directory=MdoEsText(Row,"directory_id");
- if(!Row)return NULL;if(!MdoEsText(MdoEsGet(Row,"settings"),"form")){xrtValueRelease(Row);return xrtValueObject();}
+ if(Error){Error[0]=0;}
+ xvalue* Row=MdoExtensionsResolve(Ref,Error);cstr Kind=MdoEsText(Row,"kind"),Directory=MdoEsText(Row,"directory_id");
+ if(!Row){return NULL;}
+ if(!MdoEsText(MdoEsGet(Row,"settings"),"form")){xrtValueRelease(Row);return xrtValueObject();}
  xrtMutexLock(MdoExtLock);MdoEsDocument D;bool Ok=MdoEsLoad(Kind,Directory,&D,Error);xvalue* Values=Ok?MdoEsEffective(D.Form,D.Stored):NULL,*Issues=Values?MdoEsIssues(D.Form,Values):NULL,*Prompt=xrtValueObject(),*Meta=xrtValueObject();Ok=Ok&&Values&&Issues&&!xrtValueCount(Issues)&&Prompt&&Meta;
  for(size_t I=0;Ok&&I<xrtValueCount(Values);I++){xstrview K;const xvalue* V=xrtValueObjectAt(Values,I,&K),*F=MdoEsFind(D.Form,K.Data);
   if(!MdoEsSecret(F)&&MdoEsBool(F,"expose_to_prompt"))Ok=xrtValueObjectSet(Prompt,K,V);
@@ -130,7 +136,9 @@ xvalue* MdoExtensionSettingsSnapshot(cstr Ref,bool Secrets,char Error[512]){
  xrtValueRelease(Prompt);xrtValueRelease(Meta);xrtValueRelease(Issues);MdoEsDocumentUnit(&D);xrtMutexUnlock(MdoExtLock);xrtValueRelease(Row);return Values;
 }
 xvalue* MdoExtensionSettingsAt(cstr Root,bool Secrets,char Error[512]){
- if(Error)Error[0]=0;if(!Root||!MdoExtensionRelativePath(Root))return xrtValueObject();char* Path=xrtFormat("%s/extension.json",Root);xvalue* Meta=Path?MdoExtReadJson(Path,MDO_EXTENSION_MANIFEST_BYTES,false):NULL;xrtFree(Path);
+ if(Error){Error[0]=0;}
+ if(!Root||!MdoExtensionRelativePath(Root)){return xrtValueObject();}
+ char* Path=xrtFormat("%s/extension.json",Root);xvalue* Meta=Path?MdoExtReadJson(Path,MDO_EXTENSION_MANIFEST_BYTES,false):NULL;xrtFree(Path);
  cstr Ref=MdoEsText(Meta,"id");xvalue* Result=NULL;
  if(!Meta)return xrtValueObject();
  if(!MdoExtensionRefValid(Ref)){MdoExtError(Error,"Invalid extension settings owner");goto done;}
@@ -142,9 +150,11 @@ bool MdoExtensionSettingsForget(cstr Kind,cstr Directory,char Error[512]){
 }
 
 char* MdoExtensionSettingsRender(cstr Ref,cstr File,cstr Text,const xvalue* Snapshot,char Error[512]){
- if(Error)Error[0]=0;if(!Text)return NULL;
+ if(Error){Error[0]=0;}
+ if(!Text)return NULL;
  xvalue* Owned=Snapshot?NULL:MdoExtensionSettingsSnapshot(Ref,false,Error);const xvalue* Settings=Snapshot?Snapshot:Owned,*Meta=MdoEsGet(Settings,"$mdo"),*Templates=MdoEsGet(Meta,"templates");
- if(!Settings)return NULL;bool Selected=false;
+ if(!Settings){return NULL;}
+ bool Selected=false;
  for(size_t I=0;File&&I<xrtValueCount(Templates);I++){xstrview P={0};if(xrtValueGetString(xrtValueArrayGet(Templates,I),&P)&&!strcmp(P.Data,File))Selected=true;}
  if(!Selected){xrtValueRelease(Owned);return xrtStrDup(Text);}
  if(!Ref||!MdoEsText(Meta,"id")||strcmp(Ref,MdoEsText(Meta,"id"))){xrtValueRelease(Owned);MdoExtError(Error,"Settings template identity does not match its extension");return NULL;}
@@ -153,10 +163,12 @@ char* MdoExtensionSettingsRender(cstr Ref,cstr File,cstr Text,const xvalue* Snap
  xtemplaterenderconfig Render;xrtTemplateRenderConfigInit(&Render);Render.Root=Root;Render.Current=Root;Render.Flags=XTEMPLATE_STRICT_UNDEFINED;Render.MaxOutputBytes=128u*1024u;Render.MaxSteps=65536;Render.MaxLoopIterations=1024;Render.MaxDepth=32;
  xstrbuf Buffer;xrtStrBufInit(&Buffer);if(Ok)Ok=xrtTemplateRenderTo(Template,&Render,&Buffer);char* Output=Ok?xrtStrBufTake(&Buffer):NULL;
  xrtStrBufFree(&Buffer);xrtTemplateRelease(Template);xrtValueRelease(Root);xrtValueRelease(Owned);
- if(!Output)MdoExtError(Error,"extension_template_invalid: An exposed setting is missing, or the template is invalid or exceeds its limits");return Output;
+ if(!Output){MdoExtError(Error,"extension_template_invalid: An exposed setting is missing, or the template is invalid or exceeds its limits");}
+ return Output;
 }
 xvalue* MdoExtensionSettingsEnvironment(const xvalue* Snapshot,char Error[512]){
- if(Error)Error[0]=0;xvalue* Env=xrtValueObject();const xvalue* Bindings=MdoEsGet(MdoEsGet(Snapshot,"$mdo"),"environment");bool Ok=Env!=NULL;
+ if(Error){Error[0]=0;}
+ xvalue* Env=xrtValueObject();const xvalue* Bindings=MdoEsGet(MdoEsGet(Snapshot,"$mdo"),"environment");bool Ok=Env!=NULL;
  for(size_t I=0;Ok&&I<xrtValueCount(Bindings);I++){xstrview K={0},Field={0};const xvalue* Binding=xrtValueObjectAt(Bindings,I,&K);Ok=xrtValueGetString(Binding,&Field);const xvalue* V=Ok?MdoEsGet(Snapshot,Field.Data):NULL;xstrview Text={0};
   if(V&&xrtValueGetString(V,&Text))Ok=xrtValueObjectSet(Env,K,V);else if(V&&(xrtValueType(V)==XVALUE_INT||xrtValueType(V)==XVALUE_UINT||xrtValueType(V)==XVALUE_FLOAT||xrtValueType(V)==XVALUE_BOOL)){char* S=xrtJsonStringify(V,false,NULL);Ok=S&&MdoExtPut(Env,K.Data,S);xrtFree(S);}else Ok=false;
  }if(!Ok){xrtValueRelease(Env);MdoExtError(Error,"extension_settings_environment: A bound setting is missing or is not a scalar value");return NULL;}return Env;
