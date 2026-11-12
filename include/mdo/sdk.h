@@ -74,6 +74,7 @@ struct mdo_sdk_context_v1 {
     /* Host-resolved physical installation, independent of its callable alias.
      * Root is a native directory. Per-device mutable state stays in storage.*. */
     const char *ExtensionKind,*DirectoryId,*ExtensionRoot;
+    const xvalue* ExtensionSettings; /* Host-owned invocation snapshot, never request JSON. */
 };
 /* Provenance describes who initiated the call, not a permission grant. Native
  * plugins are trusted code. Legacy contexts remain readable by Size. */
@@ -94,6 +95,9 @@ static inline mdo_result mdoCall(const mdo_sdk_context_v1* C,const char* M,
 }
 static inline mdo_result mdoServices(const mdo_sdk_context_v1* C,xvalue** R,mdo_error_v1* E)
 {return mdoCall(C,"sdk.services",NULL,R,E);}
+/* Root dictionary only. Field access uses XRT; the returned value is owned. */
+static inline mdo_result mdoReadExtensionSettings(const mdo_sdk_context_v1* C,xvalue** R,mdo_error_v1* E)
+{return mdoCall(C,"extension.settings.current",NULL,R,E);}
 /* Convenience requests use the same described service contract. Body/Path/Query
  * are borrowed; the temporary envelope is released before returning. */
 static inline mdo_result mdoRequest(const mdo_sdk_context_v1* C,const char* Method,

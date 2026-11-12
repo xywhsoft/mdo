@@ -1,6 +1,6 @@
 # 扩展自定义设置
 
-所有客户端扩展类型共用设置协议。本机、商店和内置来源均可声明表单，配置属于当前连接设备，不写入扩展目录或发布 ZIP。后续阶段的运行期、模板和界面契约在本文件继续补充。
+所有客户端扩展类型共用设置协议。本机、商店和内置来源均可声明表单，配置属于当前连接设备，不写入扩展目录或发布 ZIP。原生运行期、模板和界面共用同一份表单。
 
 ```json
 {"settings":{"form":"settings.form.json","templates":["prompts/role.md"],"environment":{"SERVICE_API_KEY":"api_key"}}}
@@ -30,3 +30,17 @@
 九类本机扩展行在更多操作前显示“配置”，只对声明 form 的扩展出现，停用仍可配置。所有窗口使用相同主题和公共弹层，手机全屏。前端保留配置输入直到得到成功回执；412 冲突支持读取最新表单、只保留用户实际修改的仍存在字段，再由用户检查并提交。默认值、远端修改、密钥保留/清除不会被未编辑的空控件覆盖。切换连接设备会销毁窗口、取消请求并清空密钥输入，不将原设备的配置提交到新设备。
 
 `node --test tests/test_extension_settings.mjs` 通过 4 项状态/本地化检查。`python tests/test_extension_settings_runtime.py --browser "C:/Program Files/Google/Chrome/Application/chrome.exe"` 通过接口检查及英文 1400px、俄文 390px、中文 1400px 三组真实 DOM 保存、校验、冲突合并、取消、重开、按钮顺序和布局检查。截图和回执只保存到忽略的 `.build/extension-settings-browser`。
+
+## 运行期字典与模板
+
+C 工具/Agent 的 context 尾部新增只读 ExtensionSettings；可使用 `<mdo/agent.h>` 的 mdoToolSettings / mdoAgentSettings 获取 `const xvalue*`，字段直接使用 XRT 读取。按 Size 检查尾字段，旧 ABI 调用方不受影响。SDK 的 mdoReadExtensionSettings 适用于命令和原生插件；身份由宿主绑定，不允许通过参数选择别的扩展。没有原生私有上下文的调用只返回非密钥视图。
+
+原生工具、Agent 生命周期和插件提示词，按当前 Agent 一轮内首次使用固定各自配置；下一轮重新读取，子 Agent 有独立作用域。常驻原生插件在注册时取得的配置固定到模块重载；命令固定到该次调用。Skill 在每次加载正文时读取最新配置，不缓存渲染结果。需要立即换配置时，应先完成当前流程再启动新流程；运行中的 MCP 服务重新连接后应用环境变量。
+
+模板只针对 settings.templates 明确列出的 `.md` / `.txt`。支持 Agent Markdown 正文、Agent context 引用的文本文件、插件 prompts.file、Skill 正文。配置字典在模板中的名称为 `$settings`，例如 `{{$settings.character_name}}`。只有 expose_to_prompt=true 的非密钥字段可用，未暴露/不存在的字段严格报错；替换值只渲染一次。不同扩展使用自身身份。插件模板失败只跳过其片段，并在上下文检查器标记 settings_template_invalid。
+
+“预览提示词”使用当前未保存输入，不创建凭据、不执行扩展代码。每个模板最多 128 KiB，预览合计最多 256 KiB；模板有步数、循环、深度限制。预览和配置查询均不返回密钥。Agent 的原有上下文变量模板继续使用原有协议。
+
+settings.environment 在 MCP stdio 启动时直接构建进程环境；同名普通连接变量由设置覆盖，MDO_* 宿主变量保留。密钥不写入生成的连接 JSON、启动命令或列表。其他原生程序可使用 MdoExtensionSettingsEnvironment 将自己的私有快照转为环境字典，再通过进程 API 传递；全局 PATH 启动的外部工具不会把密钥写入包装脚本。
+
+宿主精简配置需要 TEMPLATE_CORE；源码构建已纳入该模块。验证：原目录产品 API/浏览器回归、`tests/test_extension_settings_native.py` 的密钥隔离、作用域固定、模板及 SDK 自身身份检查。不需要复制 app 或 SDK。

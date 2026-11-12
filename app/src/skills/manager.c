@@ -1,3 +1,4 @@
+#include "../../include/mdo/extension_settings.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1496,9 +1497,11 @@ bool MdoSkillCatalogLoadBody(const MdoSkillCatalog* pCatalog,
     pContent->External = pEntry->External;
     pContent->Trust = pEntry->External ?
         MDO_SKILL_TRUST_EXTERNAL_REFERENCE : MDO_SKILL_TRUST_BUILTIN;
-    pContent->Text = Text;
-    pContent->Bytes = pEntry->BodyBytes;
-    pContent->EstimatedTokens = pEntry->EstimatedTokens;
+    char Why[512]={0};char* Rendered=MdoExtensionSettingsText(pEntry->RelativeDirectory,pEntry->EntryFile,Text,Why);xrtFree(Text);
+    if(!Rendered)return false;
+    pContent->Text = Rendered;
+    pContent->Bytes = strlen(Rendered);
+    pContent->EstimatedTokens = (pContent->Bytes+3u)/4u;
     return true;
 }
 

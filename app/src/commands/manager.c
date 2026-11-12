@@ -1,3 +1,4 @@
+#include "../../include/mdo/extension_settings.h"
 #include "../../include/mdo/commands.h"
 #include "../../include/mdo/application.h"
 #include "../../include/mdo/project_lifecycle.h"
@@ -12,7 +13,7 @@
 typedef struct CommandJob {
     char Id[37],Hash[65],Directory[128];
     char* Workspace;
-    xvalue *Input,*Info,*Actions;
+    xvalue *Input,*Info,*Actions,*ExtensionSettings;
     xthread* Thread;
     xprocess* Process;
     xcancel* Cancel;
@@ -73,7 +74,7 @@ static CommandJob* CommandFind(cstr Id) {
 }
 static void CommandDispose(CommandJob* J) {
     if(J->Thread){xrtThreadWait(J->Thread);xrtThreadDestroy(J->Thread);}
-    xrtValueRelease(J->Input);xrtValueRelease(J->Info);xrtValueRelease(J->Actions);
+    xrtValueRelease(J->ExtensionSettings);xrtValueRelease(J->Input);xrtValueRelease(J->Info);xrtValueRelease(J->Actions);
     xrtCancelDestroy(J->Cancel);xrtFree(J->Workspace);MdoProjectLeaseRelease(J->Lease);MdoExtensionsRelease(J->ExtensionLease);memset(J,0,sizeof(*J));
 }
 static void CommandCleanup(CommandJob* J,unsigned Count) {
@@ -150,6 +151,10 @@ static xvalue* CommandHostCall(CommandJob* J,const xvalue* Q,char Error[512]) {
         if(!xrtValueGetUInt(Source,&Origin)&&xrtValueGetInt(Source,&SignedOrigin)&&SignedOrigin>=0)Origin=(uint64)SignedOrigin;
         C.Origin=Origin<=MDO_ORIGIN_EXTENSION?(uint32)Origin:MDO_ORIGIN_UNKNOWN;
         mdo_error_v1 E={0};xvalue* Result=NULL;cstr Service=CommandText(Params,"method");
+        if(Service&&!strcmp(Service,"extension.settings.current")&&!J->ExtensionSettings){
+            J->ExtensionSettings=MdoExtensionSettingsAt(C.ExtensionRoot,true,Error);
+        }
+        C.ExtensionSettings=J->ExtensionSettings;
         mdo_result Code=MdoApplicationCall(&C,Service,xrtValueObjectGet(Params,XRT_STR_LITERAL("params")),&Result,&E);
         xvalue* Frame=xrtValueObject(),*Failure=xrtValueObject();
         xrtValueObjectSetNew(Frame,XRT_STR_LITERAL("code"),xrtValueInt(Code));

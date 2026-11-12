@@ -51,6 +51,8 @@ static MdoAgentInstance* MdoAgentsInstance(MdoAgentOwner* Owner,xwork_agent_exte
     if(Instance){
         Instance->Configuration=Instance->Definition.ConfigurationJson?xrtJsonParse(xrtStrView(Instance->Definition.ConfigurationJson)):xrtValueObject();
         Instance->State=xrtValueObject();
+        char SettingsError[512]={0};
+        Instance->ExtensionSettings=MdoModuleAgentSettings(Native->pAgent,0,0,Instance->Definition.ExtensionId,SettingsError);
         /* Preserve recovered pre-v1 pinned contexts, while all new v1 roles
          * rebuild from their independently addressable sources. */
         if(!Instance->Definition.HasProgram && !MdoAgentConfigGet(Instance->Configuration,"schema") &&
@@ -60,7 +62,7 @@ static MdoAgentInstance* MdoAgentsInstance(MdoAgentOwner* Owner,xwork_agent_exte
             /* The base context remains pinned. Replace our last live MCP
              * block on recovery, so restarts cannot accumulate stale copies. */
         }
-        if(!Instance->Configuration||!Instance->State){xrtValueRelease(Instance->Configuration);xrtValueRelease(Instance->State);xrtFree(Instance->LegacyPrompt);xrtFree(Instance);Instance=NULL;}
+        if(!Instance->Configuration||!Instance->State||!Instance->ExtensionSettings){xrtValueRelease(Instance->Configuration);xrtValueRelease(Instance->State);xrtValueRelease(Instance->ExtensionSettings);xrtFree(Instance->LegacyPrompt);xrtFree(Instance);Instance=NULL;if(SettingsError[0])MdoAgentsError(Error,XWORK_ERROR_CONTEXT,SettingsError);}
     }
     if(Instance){Instance->Next=Owner->Instances;Owner->Instances=Instance;}
     xrtMutexUnlock(Owner->InstanceLock);
@@ -127,6 +129,10 @@ static void MdoAgentsLifecycleRuntime(MdoAgentOwner* Owner,const xwork_event* Ev
 static xwork_result MdoAgentsLifecycleRun(MdoAgentOwner* Owner,MdoAgentInstance* Instance,xwork_agent_extension_context* Native,xwork_error* Error){
     MdoAgentActiveFrame Active={0};Active.Instance=Instance;Active.Native=Native;Active.Thread=xrtThreadCurrentId();Active.Error=Error;
     xrtMutexLock(Owner->InstanceLock);Active.Next=Owner->ActiveFrames;Owner->ActiveFrames=&Active;xrtMutexUnlock(Owner->InstanceLock);
+    if(!MdoModuleAgentBindContext(Native->pAgent,Owner->ProductProject,Owner->ProductSession)){MdoAgentsError(Error,XWORK_ERROR_OUT_OF_MEMORY,"cannot bind the Agent configuration scope");return XWORK_RESULT_ERROR;}
+    MdoModuleAgentSetMemberContext(Native->pAgent,NULL,0,Owner->Namespace,Owner->MemberId);
+    MdoModuleAgentSettingsBegin(Native->pAgent);
+    xrtValueRelease(Instance->ExtensionSettings);Instance->ExtensionSettings=NULL;
     Native->bHandled=true;Instance->RunModelCalls=0;xwork_result Status=XWORK_RESULT_ERROR;
     if(MdoAgentsProgramEvent(Owner,Instance,Native,Instance->Plan,MDO_AGENT_RUN_PREPARE,Error)&&
         MdoAgentsHistoryConfigure(Instance,Native,true)&&MdoAgentsRefreshContext(Owner,Instance,Native,true,Error)){
@@ -314,7 +320,8 @@ static xwork_result MdoAgentsExtension(void* Data,xwork_agent_extension_context*
         while(*At && *At!=Instance)At=&(*At)->Next;
         if(*At)*At=Instance->Next;
         xrtMutexUnlock(Owner->InstanceLock);
-        xrtValueRelease(Instance->Configuration);xrtValueRelease(Instance->Plan);xrtValueRelease(Instance->SourcePlan);xrtValueRelease(Instance->State);xrtValueRelease(Instance->RequestPreview);xrtFree(Instance->LegacyPrompt);xrtFree(Instance);
+        MdoModuleAgentUnbindContext(Native->pAgent);
+        xrtValueRelease(Instance->ExtensionSettings);xrtValueRelease(Instance->Configuration);xrtValueRelease(Instance->Plan);xrtValueRelease(Instance->SourcePlan);xrtValueRelease(Instance->State);xrtValueRelease(Instance->RequestPreview);xrtFree(Instance->LegacyPrompt);xrtFree(Instance);
         return XWORK_RESULT_OK;
     }
     if(Native->ePhase==XWORK_AGENT_EXTENSION_RUN)return MdoAgentsLifecycleRun(Owner,Instance,Native,Error);

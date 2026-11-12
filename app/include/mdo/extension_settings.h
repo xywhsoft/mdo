@@ -10,5 +10,9 @@ bool MdoExtensionSettingsSave(cstr Kind,cstr Directory,const xvalue* Input,
 xvalue* MdoExtensionSettingsSnapshot(cstr Ref,bool Secrets,char Error[512]);
 /* Identity comes from an anchored, verified extension directory. */
 xvalue* MdoExtensionSettingsAt(cstr Root,bool Secrets,char Error[512]);
+/* Explicit text resources only; output is owned, never recursively rendered. */
+char* MdoExtensionSettingsText(cstr Root,cstr File,cstr Text,char Error[512]);
+char* MdoExtensionSettingsRender(cstr Ref,cstr File,cstr Text,const xvalue* Snapshot,char Error[512]);
+xvalue* MdoExtensionSettingsEnvironment(const xvalue* Snapshot,char Error[512]);
 bool MdoExtensionSettingsForget(cstr Kind,cstr Directory,char Error[512]);
 #endif

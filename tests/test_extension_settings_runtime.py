@@ -83,6 +83,8 @@ def run(host, browser=None):
             initial = current["revision"]
             preview, _ = call("POST", body=mutation(current, values={"endpoint": "https://example.invalid/v1"}, secrets={"api_key": "fixture-key-never-export"}), preview=True)
             check(preview["valid"] and preview["secrets"]["api_key"] is True, preview)
+            check(preview["templates"] == [{"file": "role.md", "text": "Name: Mira"}], preview)
+            check("fixture-key-never-export" not in json.dumps(preview) and "vault:" not in json.dumps(preview), preview)
             check(not list((home / "config/extensions").glob("*.json")), "Preview wrote configuration")
             current, _ = call("GET"); check(current["revision"] == initial, current)
             saved, _ = call("PUT", body=mutation(current, values={"endpoint": "https://example.invalid/v1", "count": 0, "enabled": False}, secrets={"api_key": "fixture-key-never-export"}))

@@ -10,6 +10,10 @@
  * of xrt/xwork layout dependencies. All returned pointers are callback-local. */
 static inline xvalue* mdoAgentState(const mdo_agent_context_v1* Context)
 { return Context ? (xvalue*)Context->State : NULL; }
+static inline const xvalue* mdoAgentSettings(const mdo_agent_context_v1* Context)
+{ return Context && Context->Size >= offsetof(mdo_agent_context_v1,ExtensionSettings)+sizeof(Context->ExtensionSettings) ? (const xvalue*)Context->ExtensionSettings : NULL; }
+static inline const xvalue* mdoToolSettings(const mdo_tool_context_v1* Context)
+{ return Context && Context->Size >= offsetof(mdo_tool_context_v1,ExtensionSettings)+sizeof(Context->ExtensionSettings) ? (const xvalue*)Context->ExtensionSettings : NULL; }
 static inline xvalue* mdoAgentContextPlan(const mdo_agent_context_v1* Context)
 { return Context ? (xvalue*)Context->ContextPlan : NULL; }
 static inline xwork_agent_extension_context* mdoAgentNative(const mdo_agent_context_v1* Context)

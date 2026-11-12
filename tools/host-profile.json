@@ -62,6 +62,7 @@
     "SEM",
     "STRING",
     "TASK_POOL",
+    "TEMPLATE_CORE",
     "THREAD",
     "TIME",
     "TIME_LOCAL",

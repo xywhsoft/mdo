@@ -94,6 +94,7 @@ typedef struct mdo_tool_context_v1 {
     uint64_t Deadline;
     const void* CancelToken;
     const struct mdo_sdk_context_v1* Application;
+    const void* ExtensionSettings; /* Optional tail: callback-local xvalue object. */
 } mdo_tool_context_v1;
 
 typedef struct mdo_permission_writer_v1 {
@@ -231,6 +232,7 @@ typedef struct mdo_agent_context_v1 {
     mdo_result Outcome;
     const void* Error; /* callback-local xwork_error after a complete run */
     const char *Namespace,*MemberId;
+    const void* ExtensionSettings; /* Private immutable xvalue snapshot; not ContextPlan. */
 } mdo_agent_context_v1;
 
 typedef mdo_result (*mdo_agent_event_v1)(void* UserData,

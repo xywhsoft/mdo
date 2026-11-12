@@ -58,6 +58,7 @@ typedef struct MdoAgentInstance {
     MdoAgentResolvedModel Model;
     const xllm_request* CurrentRequest;
     xvalue* Configuration;
+    xvalue* ExtensionSettings;
     xvalue* Plan;
     xvalue* SourcePlan;
     xvalue* State;
@@ -387,7 +388,7 @@ static void MdoAgentOwnerRelease(MdoAgentOwner* Owner)
     if ( Previous == 0u ) abort();
     MdoModuleAgentIdentityEnd(Owner,0);
     MdoAgentsProgressUnit(Owner);
-    while(Owner->Instances){MdoAgentInstance* I=Owner->Instances;Owner->Instances=I->Next;xrtValueRelease(I->Configuration);xrtValueRelease(I->Plan);xrtValueRelease(I->SourcePlan);xrtValueRelease(I->State);xrtValueRelease(I->RequestPreview);xrtFree(I->LegacyPrompt);xrtFree(I);}
+    while(Owner->Instances){MdoAgentInstance* I=Owner->Instances;Owner->Instances=I->Next;xrtValueRelease(I->ExtensionSettings);xrtValueRelease(I->Configuration);xrtValueRelease(I->Plan);xrtValueRelease(I->SourcePlan);xrtValueRelease(I->State);xrtValueRelease(I->RequestPreview);xrtFree(I->LegacyPrompt);xrtFree(I);}
     if(Owner->InstanceLock)xrtMutexDestroy(Owner->InstanceLock);
     if(Owner->LifecycleLock)xrtMutexDestroy(Owner->LifecycleLock);
     xrtFree(Owner->Workspace);xworkToolCatalogRelease(Owner->DelegationTools);
@@ -1441,7 +1442,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         Draft.Definition=AgentInfo;Draft.Configuration=AgentInfo.ConfigurationJson?xrtJsonParse(xrtStrView(AgentInfo.ConfigurationJson)):xrtValueObject();
         bool Collected=Draft.Configuration && MdoAgentsContextCollect(Owner,&Draft,&AgentInfo,&Native,&Plan,Error);
         Prompt=Collected?MdoAgentsContextRenderBase(Plan,"system",Error):NULL;
-        xrtValueRelease(Plan);xrtValueRelease(Draft.Configuration);MemoryGeneration=MdoMemoryManagerGeneration();
+        xrtValueRelease(Plan);xrtValueRelease(Draft.ExtensionSettings);xrtValueRelease(Draft.Configuration);MemoryGeneration=MdoMemoryManagerGeneration();
         if(!Prompt)goto fail;
         if(Options->Recover && !xllmSessionSetSystemPrompt(Owner->LlmSession,Prompt,&ModelError)){
             MdoAgentsModelError(Error,&ModelError,"cannot restore the role context");goto fail;

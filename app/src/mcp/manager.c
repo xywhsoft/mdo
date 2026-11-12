@@ -1,3 +1,4 @@
+#include "../../include/mdo/extension_settings.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -519,6 +520,26 @@ static bool MdoMcpReadSource(MdoMcpSource* Source,char** Text,size_t* Size,char 
 static bool McpDirectoryBindRuntime(MdoMcpServerEntry* Entry,const MdoMcpSource* Source)
 {
     if(Entry->Transport!=MDO_MCP_TRANSPORT_STDIO)return true;
+    if(Entry->Enabled){
+        char Why[512]={0};cstr Ref=MdoExtensionText(Source->Directory,"id",192);
+        xvalue* Settings=Ref?MdoExtensionSettingsSnapshot(Ref,true,Why):xrtValueObject();
+        xvalue* Env=Settings?MdoExtensionSettingsEnvironment(Settings,Why):NULL;
+        bool Bound=Env!=NULL;
+        for(size_t I=0;Bound&&I<xrtValueCount(Env);I++){
+            xstrview Name={0},Value={0};xrtValueGetString(xrtValueObjectAt(Env,I,&Name),&Value);
+            if(!strncmp(Name.Data,"MDO_",4)){Bound=false;break;}
+            size_t At=0;for(;At<Entry->EnvironmentCount;At++)if(!strcmp(Entry->Environment[At].Name,Name.Data))break;
+            if(At==Entry->EnvironmentCount){
+                if(At>=MDO_MCP_ENVIRONMENT_LIMIT){Bound=false;break;}
+                MdoMcpEnvironmentEntry* Next=xrtRealloc(Entry->Environment,(At+1)*sizeof(*Next));if(!Next){Bound=false;break;}
+                Entry->Environment=Next;memset(&Next[At],0,sizeof(*Next));Entry->EnvironmentCount++;
+                Next[At].Name=xrtStrDup(Name.Data);
+            }
+            MdoMcpEnvironmentEntry* E=&Entry->Environment[At];if(E->Value){xrtSecureZero(E->Value,strlen(E->Value));xrtFree(E->Value);}
+            E->Value=xrtStrDup(Value.Data);Bound=E->Name&&E->Value;
+        }
+        xrtValueRelease(Env);xrtValueRelease(Settings);if(!Bound)return false;
+    }
     cstr Id=MdoExtensionText(Source->Directory,"directory_id",96),Root=MdoExtensionText(Source->Directory,"root",MDO_EXTENSION_PATH_BYTES);
     char* Native=Root?MdoHomeExternalPath(Root):NULL;
     char *Relative=MdoExtensionDirectoryId(Entry->Id)?xrtFormat("data/mcp/runtime/%s",Entry->Id):NULL;

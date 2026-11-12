@@ -90,6 +90,7 @@ def native_contracts():
     add('runtime.env.set','Set an environment variable; omit value to remove it',{'name':string,'value':string},('name',))
     add('system.open','Ask the OS to open a native file or URL',{'target':string},('target',))
     add('extension.current','Read the host-bound extension manifest, physical directory identity and native resource root')
+    add('extension.settings.current','Read this invocation\'s own configuration dictionary; credentials remain private to native code')
     add('extension.list','List the installed directories of one of the nine extension types',{'kind':string},('kind',),arr)
     for action in ('read','fingerprint'):
         add('extension.'+action,'Read or verify a whole directory; omitted kind/id use the host-bound current extension',{'kind':string,'id':string})

@@ -7,6 +7,8 @@
 #include "../../generated/module-sdk/mdo/module.h"
 
 typedef struct MdoModuleCatalog MdoModuleCatalog;
+xvalue* MdoModuleAgentSettings(xwork_agent* Agent,uint64 AgentId,uint64 RunId,const char* ExtensionId,char Error[512]);
+void MdoModuleAgentSettingsBegin(xwork_agent* Agent);
 struct mdo_application_v1;
 void MdoModuleManagerAttachApplication(const struct mdo_application_v1* Api);
 bool MdoModuleAgentBindContext(xwork_agent*,const char* Project,const char* Session);

@@ -33,7 +33,7 @@ xvalue* MdoAgentDefinitionInspect(cstr Id,cstr Text,bool Main,cstr Workspace,
         xrtValueObjectSetNew(Plan,XRT_STR_LITERAL("code_callbacks_executed"),xrtValueBool(false)) &&
         xrtValueObjectSetNew(Plan,XRT_STR_LITERAL("has_program"),xrtValueBool(Instance.Definition.HasProgram||File.UseCode)) &&
         xrtValueObjectSetNew(Plan,XRT_STR_LITERAL("module_generation"),xrtValueUInt(MdoModuleManagerGeneration()));
-    xrtFree(System);xrtFree(User);xrtValueRelease(Instance.Configuration);MdoAgentFileUnit(&File);
+    xrtFree(System);xrtFree(User);xrtValueRelease(Instance.ExtensionSettings);xrtValueRelease(Instance.Configuration);MdoAgentFileUnit(&File);
     MdoModuleCatalogRelease(Owner.Modules);MdoSkillCatalogRelease(Owner.Skills);xrtFree(Owner.Workspace);
     if(!Ok){xrtValueRelease(Plan);if(Error && Error->eCode==XWORK_ERROR_NONE)MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"role definition is unavailable");return NULL;}
     return Plan;

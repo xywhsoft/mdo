@@ -6,12 +6,14 @@
 #include "../../include/mdo/time.h"
 #include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/extensions.h"
+#include "../../include/mdo/extension_settings.h"
 #include "../../include/mdo/distribution.h"
 #include "../../include/mdo/extension_path.h"
 
 static const struct {cstr Id,Description;} SdkRuntimeMethods[]={
     {"markdown.parse","Parse CommonMark/GFM into bounded structural nodes without executing HTML"},
     {"extension.current","Read this invocation's physical extension directory and native resource root"},
+    {"extension.settings.current","Read this invocation's private extension settings dictionary"},
     {"extension.list","List installed directories of one extension type"},
     {"extension.read","Read one directory manifest and its host-owned installation state"},
     {"extension.files","List all portable paths owned by one installed directory"},
@@ -133,6 +135,13 @@ bad:MdoApplicationError(E,"sdk_arguments_invalid","A valid path and resource spa
 static bool SdkExtensionCall(const mdo_sdk_context_v1* C,cstr Method,const xvalue* P,xvalue** R,mdo_error_v1* E)
 {
     cstr Kind=SdkField(P,"kind"),Id=SdkField(P,"id");char Why[512]={0};
+    if(!strcmp(Method,"extension.settings.current")){
+        if(xrtValueCount(P))return MdoApplicationError(E,"sdk_arguments_invalid","Self settings do not accept another extension identity","extension-settings",400,false);
+        if(C->Size>=offsetof(mdo_sdk_context_v1,ExtensionSettings)+sizeof(C->ExtensionSettings)&&C->ExtensionSettings){*R=xrtValueClone(C->ExtensionSettings);return *R!=NULL;}
+        if(!C->ExtensionKind||!C->DirectoryId)return MdoApplicationError(E,"sdk_extension_unbound","No extension owns this invocation","extension-settings",403,false);
+        xvalue* Owner=MdoExtensionsRead(C->ExtensionKind,C->DirectoryId,Why);cstr Ref=SdkField(Owner,"id");*R=Ref?MdoExtensionSettingsSnapshot(Ref,false,Why):NULL;xrtValueRelease(Owner);
+        return *R!=NULL||MdoApplicationError(E,"extension_settings_required",Why[0]?Why:"Complete this extension's settings","extension-settings",409,false);
+    }
     if(!strcmp(Method,"extension.current")){Kind=C->ExtensionKind;Id=C->DirectoryId;}
     else {if(!Kind)Kind=C->ExtensionKind;if(!Id)Id=C->DirectoryId;}
     if(!strcmp(Method,"extension.list"))*R=MdoExtensionsList(Kind,Why);

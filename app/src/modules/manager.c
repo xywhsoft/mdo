@@ -99,6 +99,7 @@ struct MdoModuleGeneration {
     char* Version;
     char* SourcePath;
     xvalue* Directory;
+    xvalue* ExtensionSettings;
     char* DirectoryNative;
     char DirectoryDigest[65];
     MdoExtensionLease* DirectoryLease;
@@ -175,7 +176,7 @@ typedef struct MdoModuleRegistrarContext {
     char Message[MDO_MODULE_ERROR_LIMIT];
 } MdoModuleRegistrarContext;
 
-typedef struct MdoModuleAgentScope {xwork_agent* Agent;void* Owner;uint64 AgentId;char Project[128],Session[128],Namespace[129],MemberId[65];struct MdoModuleAgentScope* Next;} MdoModuleAgentScope;
+typedef struct MdoModuleAgentScope {xwork_agent* Agent;void* Owner;uint64 AgentId,SettingsRun;xvalue* Settings;char Project[128],Session[128],Namespace[129],MemberId[65];struct MdoModuleAgentScope* Next;} MdoModuleAgentScope;
 typedef struct MdoModuleState {
     xmutex* Lock;
     xmutex* ReloadLock;
@@ -188,29 +189,32 @@ typedef struct MdoModuleState {
 } MdoModuleState;
 
 static MdoModuleState g_MdoModules;
+#include "settings.inc.c"
 bool MdoModuleAgentIdentityBegin(void* Owner,uint64 AgentId,cstr Project,cstr Session){
     if(!g_MdoModules.Lock||!Owner||!AgentId)return false;
     MdoModuleAgentScope* Scope=xrtCalloc(1,sizeof(*Scope));if(!Scope)return false;
     Scope->Owner=Owner;Scope->AgentId=AgentId;snprintf(Scope->Project,sizeof(Scope->Project),"%s",Project?Project:"");snprintf(Scope->Session,sizeof(Scope->Session),"%s",Session?Session:"");
-    xrtMutexLock(g_MdoModules.Lock);for(MdoModuleAgentScope* S=g_MdoModules.Scopes;S;S=S->Next)if(S->Owner==Owner&&S->AgentId==AgentId){xrtMutexUnlock(g_MdoModules.Lock);xrtFree(Scope);return true;}
+    xrtMutexLock(g_MdoModules.Lock);for(MdoModuleAgentScope* S=g_MdoModules.Scopes;S;S=S->Next)if(S->Owner==Owner&&S->AgentId==AgentId){xrtMutexUnlock(g_MdoModules.Lock);xrtValueRelease(Scope->Settings);xrtFree(Scope);return true;}
     Scope->Next=g_MdoModules.Scopes;g_MdoModules.Scopes=Scope;xrtMutexUnlock(g_MdoModules.Lock);return true;
 }
 void MdoModuleAgentIdentityEnd(void* Owner,uint64 AgentId){
     if(!g_MdoModules.Lock||!Owner)return;
     xrtMutexLock(g_MdoModules.Lock);MdoModuleAgentScope** At=&g_MdoModules.Scopes;
-    while(*At){MdoModuleAgentScope* Scope=*At;if(Scope->Owner==Owner&&(!AgentId||Scope->AgentId==AgentId)){*At=Scope->Next;xrtFree(Scope);}else At=&Scope->Next;}
+    while(*At){MdoModuleAgentScope* Scope=*At;if(Scope->Owner==Owner&&(!AgentId||Scope->AgentId==AgentId)){*At=Scope->Next;xrtValueRelease(Scope->Settings);xrtFree(Scope);}else At=&Scope->Next;}
     xrtMutexUnlock(g_MdoModules.Lock);
 }
 bool MdoModuleAgentBindContext(xwork_agent* Agent,cstr Project,cstr Session){
     if(!Agent||!g_MdoModules.Lock)return false;
     MdoModuleAgentScope* Scope=xrtCalloc(1,sizeof(*Scope));if(!Scope)return false;Scope->Agent=Agent;
     snprintf(Scope->Project,sizeof(Scope->Project),"%s",Project?Project:"");snprintf(Scope->Session,sizeof(Scope->Session),"%s",Session?Session:"");
-    xrtMutexLock(g_MdoModules.Lock);Scope->Next=g_MdoModules.Scopes;g_MdoModules.Scopes=Scope;xrtMutexUnlock(g_MdoModules.Lock);return true;
+    xrtMutexLock(g_MdoModules.Lock);
+    for(MdoModuleAgentScope* S=g_MdoModules.Scopes;S;S=S->Next)if(S->Agent==Agent){xrtMutexUnlock(g_MdoModules.Lock);xrtFree(Scope);return true;}
+    Scope->Next=g_MdoModules.Scopes;g_MdoModules.Scopes=Scope;xrtMutexUnlock(g_MdoModules.Lock);return true;
 }
 void MdoModuleAgentUnbindContext(xwork_agent* Agent){
     if(!g_MdoModules.Lock)return;
     xrtMutexLock(g_MdoModules.Lock);MdoModuleAgentScope** At=&g_MdoModules.Scopes;
-    while(*At){if((*At)->Agent==Agent){MdoModuleAgentScope* Scope=*At;*At=Scope->Next;xrtFree(Scope);break;}At=&(*At)->Next;}
+    while(*At){if((*At)->Agent==Agent){MdoModuleAgentScope* Scope=*At;*At=Scope->Next;xrtValueRelease(Scope->Settings);xrtFree(Scope);break;}At=&(*At)->Next;}
     xrtMutexUnlock(g_MdoModules.Lock);
 }
 char* MdoModuleAgentProject(xwork_agent* Agent,uint64 AgentId){
@@ -391,7 +395,7 @@ static void MdoModulesGenerationRelease(MdoModuleGeneration* pGeneration)
     xrtFree(pGeneration->Description);
     xrtFree(pGeneration->Version);
     xrtFree(pGeneration->SourcePath);
-    xrtFree(pGeneration->DirectoryNative);xrtValueRelease(pGeneration->Directory);MdoExtensionsRelease(pGeneration->DirectoryLease);
+    xrtFree(pGeneration->DirectoryNative);xrtValueRelease(pGeneration->ExtensionSettings);xrtValueRelease(pGeneration->Directory);MdoExtensionsRelease(pGeneration->DirectoryLease);
     memset(pGeneration, 0, sizeof(*pGeneration));
     xrtFree(pGeneration);
 }
@@ -809,6 +813,9 @@ static bool MdoModulesCopyDescriptor(MdoModuleGeneration* pGeneration,
     pGeneration->Application.ExtensionKind=MdoExtensionText(pGeneration->Directory,"kind",32);
     pGeneration->Application.DirectoryId=MdoExtensionText(pGeneration->Directory,"directory_id",96);
     pGeneration->Application.ExtensionRoot=pGeneration->DirectoryNative;
+    char SettingsWhy[512]={0};cstr SettingsRef=MdoExtensionText(pGeneration->Directory,"id",192);
+    pGeneration->ExtensionSettings=SettingsRef?MdoExtensionSettingsSnapshot(SettingsRef,true,SettingsWhy):xrtValueObject();
+    pGeneration->Application.ExtensionSettings=pGeneration->ExtensionSettings;
     pGeneration->HostServices.Application=&pGeneration->Application;
     return true;
 }
@@ -1618,7 +1625,7 @@ static xwork_result MdoModulesResult(mdo_result Result)
     }
 }
 
-typedef struct MdoModuleCallScope {mdo_sdk_context_v1 Application;MdoApplicationInvocation Invocation;char Run[32],Project[128],Session[128],Namespace[129],MemberId[65];} MdoModuleCallScope;
+typedef struct MdoModuleCallScope {mdo_sdk_context_v1 Application;MdoApplicationInvocation Invocation;char Run[32],Project[128],Session[128],Namespace[129],MemberId[65];xvalue* Settings;} MdoModuleCallScope;
 static void MdoModulesToolContext(mdo_tool_context_v1* pTarget,
     const MdoModuleToolBinding* pTool, const xwork_tool_context* pSource,MdoModuleCallScope* Scope)
 {
@@ -1736,6 +1743,9 @@ static xwork_result MdoModulesDescribePermissions(void* pUserData,
     if(Reference&&!MdoExtensionsRuntimeCheck(Reference,pContext->sWorkspaceRoot,Scope.Project,pContext->pAgent,true,DependencyError)){
         MdoModulesXworkError(pError,XWORK_ERROR_CONTEXT,DependencyError);return XWORK_RESULT_ERROR;
     }
+    Scope.Settings=MdoModuleAgentSettings(pContext->pAgent,pContext->uAgentId,pContext->uRunId,Reference,DependencyError);
+    if(!Scope.Settings){MdoModulesXworkError(pError,XWORK_ERROR_CONTEXT,DependencyError);return XWORK_RESULT_ERROR;}
+    Context.ExtensionSettings=Scope.Settings;Scope.Application.ExtensionSettings=Scope.Settings;
     memset(&Writer, 0, sizeof(Writer));
     Writer.Size = sizeof(Writer);
     Writer.AbiVersion = MDO_MODULE_ABI_VERSION;
@@ -1750,6 +1760,7 @@ static xwork_result MdoModulesDescribePermissions(void* pUserData,
             (Result == MDO_RESULT_CANCELLED ? XWORK_ERROR_CANCELLED :
             (Result == MDO_RESULT_TIMEOUT ? XWORK_ERROR_TIMEOUT :
             XWORK_ERROR_TOOL)), sError);
+    xrtValueRelease(Scope.Settings);
     return MdoModulesResult(Result);
 }
 
@@ -1775,6 +1786,9 @@ static xwork_result MdoModulesExecute(void* pUserData,
     if(Reference&&!MdoExtensionsRuntimeCheck(Reference,pContext->sWorkspaceRoot,Scope.Project,pContext->pAgent,true,DependencyError)){
         MdoModulesXworkError(pError,XWORK_ERROR_CONTEXT,DependencyError);return XWORK_RESULT_ERROR;
     }
+    Scope.Settings=MdoModuleAgentSettings(pContext->pAgent,pContext->uAgentId,pContext->uRunId,Reference,DependencyError);
+    if(!Scope.Settings){MdoModulesXworkError(pError,XWORK_ERROR_CONTEXT,DependencyError);return XWORK_RESULT_ERROR;}
+    Context.ExtensionSettings=Scope.Settings;Scope.Application.ExtensionSettings=Scope.Settings;
     memset(&Writer, 0, sizeof(Writer));
     Writer.Size = sizeof(Writer);
     Writer.AbiVersion = MDO_MODULE_ABI_VERSION;
@@ -1792,6 +1806,7 @@ static xwork_result MdoModulesExecute(void* pUserData,
             (Result == MDO_RESULT_CANCELLED ? XWORK_ERROR_CANCELLED :
             (Result == MDO_RESULT_TIMEOUT ? XWORK_ERROR_TIMEOUT :
             XWORK_ERROR_TOOL)), sError);
+    xrtValueRelease(Scope.Settings);
     return MdoModulesResult(Result);
 }
 
@@ -2217,7 +2232,7 @@ void MdoModuleManagerUnit(void)
     MdoModuleCatalogRelease(pCatalog);
     MdoModuleDiagnosticsRelease(pDiagnostics);
     xworkRuntimeRelease(pRuntime);
-    while(g_MdoModules.Scopes){MdoModuleAgentScope* Scope=g_MdoModules.Scopes;g_MdoModules.Scopes=Scope->Next;xrtFree(Scope);}
+    while(g_MdoModules.Scopes){MdoModuleAgentScope* Scope=g_MdoModules.Scopes;g_MdoModules.Scopes=Scope->Next;xrtValueRelease(Scope->Settings);xrtFree(Scope);}
     if ( pLock != NULL ) (void)xrtMutexDestroy(pLock);
     if(Reload){xrtMutexUnlock(Reload);xrtMutexDestroy(Reload);}
     memset(&g_MdoModules, 0, sizeof(g_MdoModules));
@@ -2439,7 +2454,7 @@ bool MdoModuleDiagnosticsAt(const MdoModuleDiagnostics* pDiagnostics,
     return true;
 }
 
-static void MdoModulesAgentApplication(MdoModuleAgentBinding* Binding,mdo_agent_context_v1* Frame,
+static bool MdoModulesAgentApplication(MdoModuleAgentBinding* Binding,mdo_agent_context_v1* Frame,
     mdo_sdk_context_v1* Application,MdoApplicationInvocation* Invocation,const MdoModuleCatalog* Catalog)
 {
     *Application=Binding->Owner->Application;memset(Invocation,0,sizeof(*Invocation));
@@ -2449,6 +2464,11 @@ static void MdoModulesAgentApplication(MdoModuleAgentBinding* Binding,mdo_agent_
     Application->Namespace=Frame->Namespace;Application->MemberId=Frame->MemberId;
     Application->Deadline=Frame->Deadline;Frame->Application=Application;
     Application->Origin=MDO_ORIGIN_AGENT;
+    xwork_agent_extension_context* Native=(xwork_agent_extension_context*)Frame->Native;char Why[512]={0};
+    cstr Ref=MdoExtensionText(Binding->Owner->Directory,"id",MDO_EXTENSION_REF_BYTES);
+    Application->ExtensionSettings=MdoModuleAgentSettings(Native?Native->pAgent:NULL,0,0,Ref,Why);
+    Frame->ExtensionSettings=Application->ExtensionSettings;
+    return Application->ExtensionSettings!=NULL;
 }
 bool MdoModuleCatalogAgentEvent(const MdoModuleCatalog* Catalog,cstr Id,mdo_agent_phase Phase,
     mdo_agent_context_v1* Frame,xwork_error* Error)
@@ -2459,12 +2479,15 @@ bool MdoModuleCatalogAgentEvent(const MdoModuleCatalog* Catalog,cstr Id,mdo_agen
     if(!MdoModuleCatalogLifecycle(Catalog,Phase,Frame,Notification,Error))return false;
     if(!Binding->Program.OnEvent)return true;
     mdo_sdk_context_v1 Application;MdoApplicationInvocation Invocation;
-    MdoModulesAgentApplication(Binding,Frame,&Application,&Invocation,Catalog);
+    if(!MdoModulesAgentApplication(Binding,Frame,&Application,&Invocation,Catalog)){
+        MdoModulesXworkError(Error,XWORK_ERROR_CONTEXT,"extension_settings_required: Complete this extension's configuration before running");return false;
+    }
     char Message[1024]={0};mdo_result Result;uint32 Attempt=0;
     do{Result=Binding->Program.OnEvent(Binding->UserData,Phase,Frame,Message,sizeof(Message));
         if(Notification||Phase==MDO_AGENT_INSTANCE_RELEASE||
             !MdoModulesCallbackRecover(Frame,Result,++Attempt,Error,Message))break;
     }while(true);
+    xrtValueRelease((xvalue*)Application.ExtensionSettings);Frame->ExtensionSettings=NULL;
     Frame->Application=NULL;
     if(Result==MDO_RESULT_OK){xworkErrorInit(Error);return true;}
     if(MdoModulesCallbackStopped(Result,Error))return false;
@@ -2478,11 +2501,14 @@ xwork_result MdoModuleCatalogAgentDrive(const MdoModuleCatalog* Catalog,cstr Id,
     MdoModuleAgentBinding* Binding=MdoModulesFindAgent(Catalog,Id);
     if(!Binding || !Binding->Program.Run)return XWORK_RESULT_ERROR;
     mdo_sdk_context_v1 Application;MdoApplicationInvocation Invocation;
-    MdoModulesAgentApplication(Binding,Frame,&Application,&Invocation,Catalog);
+    if(!MdoModulesAgentApplication(Binding,Frame,&Application,&Invocation,Catalog)){
+        MdoModulesXworkError(Error,XWORK_ERROR_CONTEXT,"extension_settings_required: Complete this extension's configuration before running");return false;
+    }
     char Message[1024]={0};mdo_result Result;uint32 Attempt=0;
     do{Result=Binding->Program.Run(Binding->UserData,Frame,Message,sizeof(Message));
         if(!MdoModulesCallbackRecover(Frame,Result,++Attempt,Error,Message))break;
     }while(true);
+    xrtValueRelease((xvalue*)Application.ExtensionSettings);Frame->ExtensionSettings=NULL;
     Frame->Application=NULL;
     if(MdoModulesCallbackStopped(Result,Error))return Error->eCode==XWORK_ERROR_CANCELLED?XWORK_RESULT_CANCELLED:XWORK_RESULT_TIMEOUT;
     if(Result==MDO_RESULT_OK)xworkErrorInit(Error);

@@ -27,7 +27,7 @@ static bool MdoAgentsPluginTool(MdoAgentOwner* Owner,xwork_tool_catalog* Catalog
     for(size_t I=0;I<Request->iToolCount;I++)if(!strcmp(Request->pTools[I].sName,Name))return true;
     return false;
 }
-static bool MdoAgentsPluginCanonicalize(MdoAgentOwner* Owner,xvalue* Group){
+static bool MdoAgentsPluginCanonicalize(MdoAgentOwner* Owner,MdoAgentInstance* Instance,xwork_agent_extension_context* Native,xvalue* Group){
     const xvalue* Registry=MdoModuleCatalogPromptContributions(Owner->Modules),*Controls=MdoAgentConfigGet(Group,"items");
     if(xrtValueCount(Controls)>32u*MDO_PLUGIN_PROMPT_COUNT)return false;
     xvalue* Items=xrtValueArray();bool Ok=Items!=NULL;
@@ -38,7 +38,15 @@ static bool MdoAgentsPluginCanonicalize(MdoAgentOwner* Owner,xvalue* Group){
         }
         xvalue* Row=xrtValueClone(Original);bool Enabled=Control&&MdoAgentConfigBool(Control,"enabled",true);
         uint64 Priority=100;if(Control&&MdoAgentConfigNumber(Control,"priority",100,10000,&Priority))Ok=Row&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("priority"),xrtValueUInt(Priority));
-        cstr Text=MdoAgentConfigText(Control,"text"),Before=MdoAgentConfigText(Original,"text");
+        cstr Text=MdoAgentConfigText(Control,"text"),Before=MdoAgentConfigText(Control,"settings_generated");
+        if(!Before)Before=MdoAgentConfigText(Original,"text");
+        cstr File=MdoAgentConfigText(Original,"resource"),Plugin=MdoAgentConfigText(Original,"plugin");
+        if(File){char Why[512]={0};xvalue* Settings=MdoModuleAgentSettings(Native?Native->pAgent:NULL,0,0,Plugin,Why);
+            char* Rendered=Settings?MdoExtensionSettingsRender(Plugin,File,MdoAgentConfigText(Original,"text"),Settings,Why):NULL;
+            if(Rendered){Ok=Ok&&MdoAgentsPlanPut(Row,"text",Rendered)&&MdoAgentsPlanPut(Row,"settings_generated",Rendered);}
+            else{Enabled=false;Ok=Ok&&MdoAgentsPlanPut(Row,"settings_error","settings_template_invalid");}
+            xrtFree(Rendered);xrtValueRelease(Settings);
+        }
         if(Text&&strcmp(Text,Before)){
             char Hash[65];bool Valid=strlen(Text)<=MDO_PLUGIN_PROMPT_BYTES&&MdoExtensionHash(Text,Hash);
             if(!Valid)Enabled=false;
@@ -54,7 +62,7 @@ static bool MdoAgentsPluginSelect(MdoAgentOwner* Owner,MdoAgentInstance* Instanc
     const xllm_request* Request,xvalue* Group,xwork_error* Error){
     const xvalue* Spec=MdoAgentsSourceSpec(Instance->Configuration,"plugins.instructions");
     if(xrtValueCount(MdoAgentConfigGet(Group,"items"))>32u*MDO_PLUGIN_PROMPT_COUNT){MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"too many role plugin prompt controls");return false;}
-    if(!MdoAgentsPluginCanonicalize(Owner,Group))return false;
+    if(!MdoAgentsPluginCanonicalize(Owner,Instance,Native,Group))return false;
     xvalue* Items=(xvalue*)MdoAgentConfigGet(Group,"items");size_t Count=xrtValueCount(Items);
     if(Count>32u*MDO_PLUGIN_PROMPT_COUNT){MdoAgentsError(Error,XWORK_ERROR_CONTEXT,"too many plugin prompt contributions");return false;}
     const xvalue* Sorted[32u*MDO_PLUGIN_PROMPT_COUNT];for(size_t I=0;I<Count;I++)Sorted[I]=xrtValueArrayGet(Items,I);
@@ -74,6 +82,7 @@ static bool MdoAgentsPluginSelect(MdoAgentOwner* Owner,MdoAgentInstance* Instanc
         bool Explicit=MdoAgentConfigGet(Spec,"include")&&Include;
         cstr Scope=MdoAgentConfigText(MdoAgentConfigGet(Group,"scope"),Plugin);
         if(!MdoAgentConfigBool(Group,"enabled",true))Why="source_disabled";
+        else if(MdoAgentConfigText(Row,"settings_error"))Why="settings_template_invalid";
         else if(!MdoAgentConfigBool(Row,"enabled",true))Why="agent_disabled";
         else if(Scope&&Scope[0])Why=Scope;
         else if(Runtime&&!Targets)Why="role_target";
