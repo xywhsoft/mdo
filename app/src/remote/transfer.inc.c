@@ -1,4 +1,5 @@
 #include "../../include/mdo/download_network.h"
+#include "../../include/mdo/version.h"
 #include "../../include/mdo/update.h"
 #include "../../include/mdo/time.h"
 #include "../../include/mdo/distribution.h"
@@ -15,7 +16,9 @@ static bool MdoTransferRootWrite(xroot Root,cstr Path,cstr Text){
  char* Id=xrtXidMakeString(),*Temp=Id?xrtFormat("partial/%s.tmp",Id):NULL;xrtFree(Id);
  xfile F=Temp?MdoTransferRootOpen(Root,Temp,XFILE_WRITE|XFILE_CREATE|XFILE_EXCLUSIVE):NULL;
  bool Ok=F&&xrtWriteFull(F,Text,strlen(Text),NULL)&&xrtFlush(F);if(F&&!xrtClose(F))Ok=false;
- if(Ok)Ok=xrtRootFileRename(Root,Temp,Path,true);if(!Ok&&Temp)xrtRootRemove(Root,Temp);xrtFree(Temp);return Ok;
+ if(Ok)Ok=xrtRootFileRename(Root,Temp,Path,true);
+ if(!Ok&&Temp)xrtRootRemove(Root,Temp);
+ xrtFree(Temp);return Ok;
 }
 static bool MdoTransferRootRemove(xroot Root,cstr Path){return Root?xrtRootRemove(Root,Path):MdoHomeRemove(Path,false);}
 static char* MdoTransferResumePath(cstr Relative){return xrtFormat("%s.resume.json",Relative);}
@@ -103,7 +106,9 @@ static bool MdoTransferAttempt(xnetengine* Engine,cstr Path,cstr Relative,uint64
     xllm_error Error={0};S.Code="network";S.Detail="Unable to establish download connection; check proxy and certificate settings";
     Client=Url?MdoDownloadClientCreate(Engine,Url,UINT64_C(86400000000),&Error):NULL;Request=Client?xrtHttpRequestCreate(XRT_STR_LITERAL("GET"),xrtStrView(Url)):NULL;
     if(!Client){S.Code="network_config";S.Detail="Unable to initialize download proxy or certificate settings";goto done;}
-    bool Prepared=Request&&xrtHttpRequestSetHeader(Request,XRT_STR_LITERAL("Accept-Encoding"),XRT_STR_LITERAL("identity"));
+    /* Public artifact CDNs may reject requests without a User-Agent. Use the
+     * actual product identity on every redirect hop, without impersonation. */
+    bool Prepared=Request&&xrtHttpRequestSetHeader(Request,XRT_STR_LITERAL("User-Agent"),XRT_STR_LITERAL("mdo/" MDO_VERSION_TEXT))&&xrtHttpRequestSetHeader(Request,XRT_STR_LITERAL("Accept-Encoding"),XRT_STR_LITERAL("identity"));
     if(Prepared&&S.Total){char Range[80];snprintf(Range,sizeof(Range),"bytes=%llu-",(unsigned long long)S.Total);Prepared=xrtHttpRequestSetHeader(Request,XRT_STR_LITERAL("Range"),xrtStrView(Range));
         if(Prepared&&S.Validator[0])Prepared=xrtHttpRequestSetHeader(Request,XRT_STR_LITERAL("If-Range"),xrtStrView(S.Validator));}
     xhttpcalloptions Options;xrtHttpCallOptionsInit(&Options);Options.Cancel=Cancel;Options.ResponseBodyLimit=Size;Options.Events.Headers=MdoTransferHeaders;Options.Events.Body=MdoTransferBody;Options.Events.Data=&S;
@@ -203,6 +208,6 @@ bool MdoTransferDownloadManaged(xnetengine* Engine,const MdoDownloadSource* Sour
    if(Ok||strcmp(Report->Code,"redirect")||Hop==5)break;
    char* Next=NULL;if(Redirect[0]=='/'&&Redirect[1]!='/'){cstr A=strstr(Effective,"://");size_t N=A?(size_t)(A+3-Effective)+strcspn(A+3,"/?"):0;Next=N?xrtFormat("%.*s%s",(int)N,Effective,Redirect):NULL;}else Next=xrtStrDup(Redirect);
    bool Allowed=Next&&MdoHttpUrlValid(xrtStrView(Next),false)&&MdoTransferRedirectAllowed(Source->Url,Next,Hosts);xrtFree(Effective);Effective=Allowed?Next:NULL;if(!Allowed)xrtFree(Next);
-  }xrtFree(Effective);if(Ok||strcmp(Report->Code,"network")&&strcmp(Report->Code,"download")&&strcmp(Report->Code,"range"))break;
+  }xrtFree(Effective);if(Ok||(strcmp(Report->Code,"network")&&strcmp(Report->Code,"download")&&strcmp(Report->Code,"range")))break;
  }xrtValueRelease(Hosts);return Ok;
 }

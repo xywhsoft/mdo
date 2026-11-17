@@ -14,7 +14,7 @@ void MdoApiLiveChanged(void* Data);
 #define LM_LIMIT 128u
 typedef struct LmStoreLock {char Id[33];char* Path;xfile File;} LmStoreLock;
 typedef struct LmPin {char Id[33];MdoExtensionLease *Recipe,*Runtime;} LmPin;
-static struct {xmutex *Lock,*Writer;xthread* Thread;xcancel *Stop,*ActiveCancel;xnetengine* Engine;xvalue* State;bool Fault,Stopping,ServicesReady;char Active[33],Owner[33];LmPin Pins[LM_LIMIT];LmStoreLock Stores[LM_LIMIT];} g_Lm;
+static struct {xmutex *Lock,*Writer,*Configurations;xthread* Thread;xcancel *Stop,*ActiveCancel;xnetengine* Engine;xvalue* State;bool Fault,Stopping,ServicesReady;char Active[33],Owner[33];LmPin Pins[LM_LIMIT];LmStoreLock Stores[LM_LIMIT];} g_Lm;
 static const xvalue* LmGet(const xvalue* V,cstr K){return xrtValueObjectGet(V,xrtStrView(K));}
 static cstr LmStr(const xvalue* V,cstr K){cstr S=MdoExtensionText(V,K,4096);return S?S:"";}
 static bool LmPut(xvalue* V,cstr K,cstr S){return xrtValueObjectSetNew(V,xrtStrView(K),xrtValueString(xrtStrView(S?S:"")));}
@@ -63,7 +63,7 @@ static bool LmNewStore(cstr Path,xvalue** Result,char E[512]){
  if(Ok)*Result=Store;else{xrtValueRelease(Store);if(!E[0])LmFail(E,"Use an empty directory or an existing mdo model resource store");}xrtRootClose(R);xrtFree(Stored);xrtFree(Id);xrtFree(Native);return Ok;
 }
 static bool LmPins(cstr Id,const xvalue* Job,char E[512]){
- const xvalue* Plan=LmGet(Job,"plan"),*P=LmGet(Plan,"profile"),*D=LmGet(Plan,"document"),*R=LmFind(LmGet(D,"runtimes"),LmStr(P,"runtime")),*Recipe=LmGet(Plan,"recipe");
+ const xvalue* Plan=LmGet(Job,"plan"),*P=LmGet(Plan,"profile"),*D=LmGet(Plan,"document"),*R=LmFind(LmGet(D,"runtimes"),LmStr(P,"runtime"));
  if(!Plan)return true;
  xvalue* RuntimeRow=MdoExtensionsResolve(LmStr(R,"ref"),E);
  bool Match=RuntimeRow&&!strcmp(LmStr(LmGet(RuntimeRow,"installation"),"version_id"),LmStr(R,"version_id"))&&!strcmp(LmStr(LmGet(RuntimeRow,"installation"),"sha256"),LmStr(R,"sha256"));
@@ -71,13 +71,15 @@ static bool LmPins(cstr Id,const xvalue* Job,char E[512]){
  /* Recipes contain no executable code. Each receipt retains a fully validated
   * immutable plan; updating the displayed recipe must not mutate old models. */
  for(size_t I=0;I<LM_LIMIT;I++)if(!strcmp(g_Lm.Pins[I].Id,Id))return true;
- for(size_t I=0;I<LM_LIMIT;I++)if(!g_Lm.Pins[I].Id[0]){LmPin* Pin=&g_Lm.Pins[I];char* Dir=MdoExtensionsDirectoryId("external-tools",LmStr(R,"ref"),E);Pin->Runtime=Dir?MdoExtensionsAcquire("external-tools",Dir,E):NULL;xrtFree(Dir);if(!Pin->Runtime){MdoExtensionsRelease(Pin->Runtime);MdoExtensionsRelease(Pin->Recipe);memset(Pin,0,sizeof(*Pin));return false;}snprintf(Pin->Id,33,"%s",Id);return true;}return LmFail(E,"Too many pinned deployments");
+ for(size_t I=0;I<LM_LIMIT;I++)if(!g_Lm.Pins[I].Id[0]){LmPin* Pin=&g_Lm.Pins[I];char* Dir=MdoExtensionsDirectoryId("external-tools",LmStr(R,"ref"),E);Pin->Runtime=Dir?MdoExtensionsAcquire("external-tools",Dir,E):NULL;xrtFree(Dir);if(!Pin->Runtime){MdoExtensionsRelease(Pin->Runtime);MdoExtensionsRelease(Pin->Recipe);memset(Pin,0,sizeof(*Pin));return false;}snprintf(Pin->Id,33,"%s",Id);return true;}
+ return LmFail(E,"Too many pinned deployments");
 }
 static void LmUnpin(cstr Id){for(size_t I=0;I<LM_LIMIT;I++)if(!strcmp(g_Lm.Pins[I].Id,Id)){MdoExtensionsRelease(g_Lm.Pins[I].Recipe);MdoExtensionsRelease(g_Lm.Pins[I].Runtime);memset(&g_Lm.Pins[I],0,sizeof(g_Lm.Pins[I]));}}
 static bool LmRuntime(const xvalue* J,xcancel* Cancel,char E[512]){
  const xvalue* P=LmGet(J,"plan"),*Profile=LmGet(P,"profile"),*D=LmGet(P,"document"),*R=LmFind(LmGet(D,"runtimes"),LmStr(Profile,"runtime"));
  xvalue* Row=MdoExtensionsResolve(LmStr(R,"ref"),E);const xvalue* Installation=LmGet(Row,"installation");bool Same=Row&&!strcmp(LmStr(Installation,"version_id"),LmStr(R,"version_id"))&&!strcmp(LmStr(Installation,"sha256"),LmStr(R,"sha256"));xrtValueRelease(Row);
- if(Same)return true;E[0]=0;const xvalue* Native=LmGet(J,"runtime_plan");xvalue* Request=xrtValueObject(),*Receipt=NULL;bool Ok=Request&&LmPut(Request,"plan_id",LmStr(Native,"id"))&&LmPut(Request,"revision",LmStr(Native,"revision"))&&xrtValueObjectSetNew(Request,XRT_STR_LITERAL("trust_code"),xrtValueBool(true))&&MdoExtensionServiceApplyPlan(Request,Cancel,&Receipt,E);xrtValueRelease(Request);xrtValueRelease(Receipt);return Ok;
+ if(Same)return true;
+ E[0]=0;const xvalue* Native=LmGet(J,"runtime_plan");xvalue* Request=xrtValueObject(),*Receipt=NULL;bool Ok=Request&&LmPut(Request,"plan_id",LmStr(Native,"id"))&&LmPut(Request,"revision",LmStr(Native,"revision"))&&xrtValueObjectSetNew(Request,XRT_STR_LITERAL("trust_code"),xrtValueBool(true))&&MdoExtensionServiceApplyPlan(Request,Cancel,&Receipt,E);xrtValueRelease(Request);xrtValueRelease(Receipt);return Ok;
 }
 static bool LmRecipe(const xvalue* J,xcancel* Cancel,char E[512]){
  const xvalue* Recipe=LmGet(LmGet(J,"plan"),"recipe");xvalue* Row=MdoExtensionsResolve(LmStr(Recipe,"id"),E);char Expected[65]={0};
@@ -92,8 +94,10 @@ static bool LmAsset(cstr Id,const xvalue* F,xroot Root,cstr Native,cstr StoreId,
  MdoNativeDownload* Task=Ok?MdoDownloadsBegin("transfer",First.Data,LmStr(F,"path"),Hash,Bytes,Context,Cancel,E):NULL;xrtValueRelease(Context);Ok=Task!=NULL;MdoTransferReport Report={0};
  bool Done=false;for(size_t I=0;Ok&&!Done&&I<xrtValueCount(Urls);I++){xstrview Url={0};xrtValueGetString(xrtValueArrayGet(Urls,I),&Url);MdoDownloadSource Source={Url.Data,Partial,Hash,Bytes,Allowed,xrtValueCount(Hosts)};Done=MdoTransferDownloadManaged(g_Lm.Engine,&Source,Root,Native,Task,MdoDownloadsCancelToken(Task,Cancel),&Report);if(xrtCancelRequested(Cancel)||MdoDownloadsCancelled(Task))break;}
  if(Task&&MdoDownloadsCancelled(Task))xrtCancelRequest(Cancel);
- if(Task)Ok=MdoDownloadsEnd(Task,Done,Report.Code,Report.Detail,Cancel);char* Blob=xrtFormat("blobs/%s",Hash);
- if(Ok)Ok=LmBlob(Root,Hash,Bytes,Cancel)||xrtRootFileRename(Root,Partial,Blob,false);if(!Ok)LmFail(E,Report.Detail[0]?Report.Detail:"Cannot commit the verified model resource");
+ if(Task)Ok=MdoDownloadsEnd(Task,Done,Report.Code,Report.Detail,Cancel);
+ char* Blob=xrtFormat("blobs/%s",Hash);
+ if(Ok)Ok=LmBlob(Root,Hash,Bytes,Cancel)||xrtRootFileRename(Root,Partial,Blob,false);
+ if(!Ok)LmFail(E,Report.Detail[0]?Report.Detail:"Cannot commit the verified model resource");
  if(Ok){char* Resume=xrtFormat("%s.resume.json",Partial);if(Resume)xrtRootRemove(Root,Resume);xrtFree(Resume);}xrtFree(Blob);xrtFree(Partial);xrtFree(Ledger);return Ok;
 }
 static bool LmImport(cstr Id,const xvalue* J,xroot Root,cstr Native,xcancel* Cancel,char E[512]){
@@ -121,8 +125,9 @@ static bool LmImport(cstr Id,const xvalue* J,xroot Root,cstr Native,xcancel* Can
    xrtFree(R);xrtFree(Blob);if(Same){snprintf(ReferencedStore,33,"%s",K.Data);break;}
   }xrtValueRelease(Roots);
  }
- if(Ok){xrtMutexLock(g_Lm.Lock);xvalue* Before=xrtValueClone(g_Lm.State),*Job=LmEdit("installations",Id),*File=xrtValueObject(),*Assets=xrtValueArray();Ok=Before&&Job&&File&&Assets&&(!ReferencedStore[0]||LmPut(Job,"store",ReferencedStore))&&LmPut(File,"sha256",Hash)&&xrtValueObjectSetNew(File,XRT_STR_LITERAL("bytes"),xrtValueUInt(Size))&&LmPut(File,"path",Copy?"model.gguf":Path)&&xrtValueObjectSetNew(File,XRT_STR_LITERAL("owned"),xrtValueBool(Copy))&&xrtValueArrayAppend(Assets,File)&&xrtValueObjectSet(Job,XRT_STR_LITERAL("assets"),Assets);Ok=LmCommit(Before,Ok);xrtValueRelease(File);xrtValueRelease(Assets);xrtMutexUnlock(g_Lm.Lock);}
- if(!Ok)LmFail(E,"Import failed: expected a readable GGUF v2/v3 file, sufficient free space and an unchanged source");return Ok;
+ if(Ok){xrtMutexLock(g_Lm.Lock);xvalue* Before=xrtValueClone(g_Lm.State),*Job=LmEdit("installations",Id),*File=xrtValueObject(),*Assets=xrtValueArray();Ok=Before&&Job&&File&&Assets&&(Copy||LmPut(Job,"source_store",ReferencedStore))&&(!ReferencedStore[0]||LmPut(Job,"store",ReferencedStore))&&LmPut(File,"sha256",Hash)&&xrtValueObjectSetNew(File,XRT_STR_LITERAL("bytes"),xrtValueUInt(Size))&&LmPut(File,"path",Copy?"model.gguf":Path)&&xrtValueObjectSetNew(File,XRT_STR_LITERAL("owned"),xrtValueBool(Copy))&&xrtValueArrayAppend(Assets,File)&&xrtValueObjectSet(Job,XRT_STR_LITERAL("assets"),Assets);Ok=LmCommit(Before,Ok);xrtValueRelease(File);xrtValueRelease(Assets);xrtMutexUnlock(g_Lm.Lock);}
+ if(!Ok)LmFail(E,"Import failed: expected a readable GGUF v2/v3 file, sufficient free space and an unchanged source");
+ return Ok;
 }
 #include "services.inc.c"
 static bool LmRun(cstr Id,xcancel* Cancel,bool QueuedOnly,char E[512]){
@@ -142,7 +147,8 @@ static int32 LmWorker(void* Data){(void)Data;while(!xrtCancelRequested(g_Lm.Stop
  char E[512]={0};LmRun(Id,g_Lm.Stop,true,E);MdoApiWriteReleaseBackground();
  }return 0;}
 bool MdoLocalModelsInit(xnetengine* Engine){
- if(g_Lm.Lock)return true;g_Lm.Lock=xrtMutexCreate();g_Lm.Writer=xrtMutexCreate();g_Lm.Stop=xrtCancelCreate();g_Lm.Engine=Engine;if(!g_Lm.Lock||!g_Lm.Writer||!g_Lm.Stop)return false;
+ if(g_Lm.Lock)return true;
+ g_Lm.Lock=xrtMutexCreate();g_Lm.Writer=xrtMutexCreate();g_Lm.Configurations=xrtMutexCreate();g_Lm.Stop=xrtCancelCreate();g_Lm.Engine=Engine;if(!g_Lm.Lock||!g_Lm.Writer||!g_Lm.Configurations||!g_Lm.Stop)return false;
  bool Exists=false;xfileinfo Info;if(!MdoHomeExternalStat(LM_STATE,&Exists,&Info))g_Lm.Fault=true;g_Lm.State=Exists?LmReadJson(LM_STATE):xrtJsonParse(XRT_STR_LITERAL("{\"schema\":\"mdo.local-model-state.v1\",\"roots\":{},\"installations\":{}}"));
  if(!Exists&&g_Lm.State){char* Owner=xrtXidMakeString();if(!Owner||!LmPut(g_Lm.State,"owner",Owner))g_Lm.Fault=true;xrtFree(Owner);}
  if(!LmStateValid(g_Lm.State)){g_Lm.Fault=true;xrtValueRelease(g_Lm.State);g_Lm.State=xrtValueObject();}
@@ -150,10 +156,11 @@ bool MdoLocalModelsInit(xnetengine* Engine){
  if(!LmGet(g_Lm.State,"deployments"))xrtValueObjectSetNew(g_Lm.State,XRT_STR_LITERAL("deployments"),xrtValueObject());
  snprintf(g_Lm.Owner,33,"%s",LmStr(g_Lm.State,"owner"));if(!Exists&&!g_Lm.Fault&&!LmSave())g_Lm.Fault=true;
  xvalue* Jobs=xrtValueObjectEdit(g_Lm.State,XRT_STR_LITERAL("installations"));bool Changed=false;for(size_t I=0;I<xrtValueCount(Jobs);I++){xstrview Key={0};xrtValueObjectAt(Jobs,I,&Key);xvalue* J=xrtValueObjectEdit(Jobs,Key);cstr State=LmStr(J,"state");if(!strcmp(State,"queued")||!strcmp(State,"installing")||!strcmp(State,"removing")){LmPut(J,"state",!strcmp(State,"removing")?"cleanup_pending":"interrupted");Changed=true;}if(LmGet(J,"plan")){char E[512]={0};if(!LmPins(Key.Data,J,E)){LmPut(J,"state","attention");LmPut(J,"error",E);Changed=true;}}}
- if(Changed&&!LmSave())g_Lm.Fault=true;g_Lm.Thread=xrtThreadCreate(LmWorker,NULL,0);const MdoModelLocalAuthority Authority={MdoLocalModelCatalog,MdoLocalModelOwned,MdoLocalModelResolve,MdoLocalModelEnsure,MdoLocalModelCallBegin,MdoLocalModelCallEnd};MdoModelManagerSetLocalAuthority(&Authority);return g_Lm.Thread!=NULL;
+ if(Changed&&!LmSave())g_Lm.Fault=true;
+ g_Lm.Thread=xrtThreadCreate(LmWorker,NULL,0);const MdoModelLocalAuthority Authority={MdoLocalModelCatalog,MdoLocalModelOwned,MdoLocalModelResolve,MdoLocalModelEnsure,MdoLocalModelCallBegin,MdoLocalModelCallEnd};MdoModelManagerSetLocalAuthority(&Authority);return g_Lm.Thread!=NULL;
 }
 void MdoLocalModelsStop(void){if(!g_Lm.Lock)return;xrtMutexLock(g_Lm.Lock);g_Lm.Stopping=true;xcancel* Active=xrtCancelRef(g_Lm.ActiveCancel),*Stop=xrtCancelRef(g_Lm.Stop);xrtMutexUnlock(g_Lm.Lock);xrtCancelRequest(Stop);xrtCancelRequest(Active);xrtCancelDestroy(Active);xrtCancelDestroy(Stop);}
-void MdoLocalModelsUnit(void){if(!g_Lm.Lock)return;MdoLocalModelsStop();if(g_Lm.Thread){xrtThreadWait(g_Lm.Thread);xrtThreadDestroy(g_Lm.Thread);}/* A download-center resume can own the writer on its dispatcher thread. */xrtMutexLock(g_Lm.Writer);xrtMutexUnlock(g_Lm.Writer);LmsUnit();for(size_t I=0;I<LM_LIMIT;I++){xrtClose(g_Lm.Stores[I].File);xrtFree(g_Lm.Stores[I].Path);MdoExtensionsRelease(g_Lm.Pins[I].Recipe);MdoExtensionsRelease(g_Lm.Pins[I].Runtime);}xrtValueRelease(g_Lm.State);xrtCancelDestroy(g_Lm.Stop);xrtMutexDestroy(g_Lm.Writer);xrtMutexDestroy(g_Lm.Lock);memset(&g_Lm,0,sizeof(g_Lm));}
+void MdoLocalModelsUnit(void){if(!g_Lm.Lock)return;MdoLocalModelsStop();if(g_Lm.Thread){xrtThreadWait(g_Lm.Thread);xrtThreadDestroy(g_Lm.Thread);}/* A download-center resume can own the writer on its dispatcher thread. */xrtMutexLock(g_Lm.Writer);xrtMutexUnlock(g_Lm.Writer);xrtMutexLock(g_Lm.Configurations);xrtMutexUnlock(g_Lm.Configurations);LmsUnit();for(size_t I=0;I<LM_LIMIT;I++){xrtClose(g_Lm.Stores[I].File);xrtFree(g_Lm.Stores[I].Path);MdoExtensionsRelease(g_Lm.Pins[I].Recipe);MdoExtensionsRelease(g_Lm.Pins[I].Runtime);}xrtValueRelease(g_Lm.State);xrtCancelDestroy(g_Lm.Stop);xrtMutexDestroy(g_Lm.Writer);xrtMutexDestroy(g_Lm.Configurations);xrtMutexDestroy(g_Lm.Lock);memset(&g_Lm,0,sizeof(g_Lm));}
 xvalue* MdoLocalModelsSnapshot(char E[512]){(void)E;if(!g_Lm.Lock)return NULL;xrtMutexLock(g_Lm.Lock);xvalue* Out=xrtValueDeepClone(g_Lm.State);if(Out){LmPut(Out,"platform",MdoExtensionRuntimePlatform());xrtValueObjectSetNew(Out,XRT_STR_LITERAL("read_only"),xrtValueBool(g_Lm.Fault));xvalue* Jobs=xrtValueObjectGet(Out,XRT_STR_LITERAL("installations"));for(size_t I=0;I<xrtValueCount(Jobs);I++){xvalue* J=xrtValueObjectAt(Jobs,I,NULL);const xvalue* Doc=LmGet(LmGet(J,"plan"),"document");if(Doc){const xvalue* Plan=LmGet(J,"plan"),*Recipe=LmGet(Plan,"recipe");LmPut(J,"recipe_ref",LmStr(Recipe,"id"));LmPut(J,"recipe_version_id",LmStr(Recipe,"version_id"));LmPut(J,"profile_id",LmStr(LmGet(Plan,"profile"),"id"));xvalue* Labels=xrtValueObject();const cstr Fields[]={"default_locale","i18n","tags"};for(size_t K=0;Labels&&K<3;K++){const xvalue* V=LmGet(Doc,Fields[K]);if(V)xrtValueObjectSet(Labels,xrtStrView(Fields[K]),V);}if(Labels)xrtValueObjectSetNew(J,XRT_STR_LITERAL("local_model"),Labels);}xrtValueObjectRemove(J,XRT_STR_LITERAL("runtime_plan"));xrtValueObjectRemove(J,XRT_STR_LITERAL("plan"));}}const xvalue* Ds=LmGet(g_Lm.State,"deployments");xvalue* Public=xrtValueObject();for(size_t K=0;Public&&K<xrtValueCount(Ds);K++){xstrview Key={0};const xvalue* D=xrtValueObjectAt(Ds,K,&Key);xrtValueObjectSetNew(Public,Key,LmsSnapshotLocked(D));}if(Out)xrtValueObjectSetNew(Out,XRT_STR_LITERAL("deployments"),Public);else xrtValueRelease(Public);xrtMutexUnlock(g_Lm.Lock);return Out;}
 
 #include "operations.inc.c"

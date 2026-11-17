@@ -107,7 +107,9 @@ ${tr("unknownVram")}`; } catch(e) { if (epoch === generation) text.textContent =
       if (!profiles.length) throw Error(tr("unavailable"));
       for (const profile of profiles) select.append(element("option", { text: localModelLabel(profile.label), attrs: { value: profile.id } }));
       function show() { const p = doc.profiles.find(p => p.id === select.value), runtime = doc.runtimes.find(r => r.id === p.runtime), weight = doc.weights.find(w => w.id === p.weight);
-        requirements.textContent = `${weight.quantization} · ${runtime.engine} ${runtime.build} · ${runtime.backend}\n${tr("ram")}: ${bytes(p.requirements.ram_bytes)} · ${tr("vram")}: ${bytes(p.requirements.vram_bytes)}\n${tr("disk")}: ${bytes(p.requirements.disk_bytes)}\n${tr("context")}: ${p.context_tokens} · ${tr("output")}: ${p.output_tokens}\n${localModelLabel(p.requirements.notes)}`;
+        requirements.textContent = `${runtime.platform} · ${runtime.min_os}
+${tr("cpuFeatures")}: ${(runtime.cpu_features || []).join(" · ")}
+${runtime.min_driver ? `${tr("driver")}: ${runtime.min_driver}\n` : ""}${weight.quantization} · ${runtime.engine} ${runtime.build} · ${runtime.backend}\n${tr("ram")}: ${bytes(p.requirements.ram_bytes)} · ${tr("vram")}: ${bytes(p.requirements.vram_bytes)}\n${tr("disk")}: ${bytes(p.requirements.disk_bytes)} · ${tr("margin")}: ${bytes(p.requirements.margin_bytes)}\n${tr("context")}: ${p.context_tokens} · ${tr("output")}: ${p.output_tokens}\n${localModelLabel(p.requirements.notes)}`;
       } select.addEventListener("change", show); show(); view.body.append(select, requirements);
       const planInfo = element("pre", { className: "local-model-requirements" }); view.body.append(planInfo);
       const approval = element("div", { className: "extension-settings-form" }), trust = toggle(approval, "trustRuntime", false); approval.hidden = true; view.body.append(approval);

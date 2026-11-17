@@ -31,7 +31,8 @@ static xvalue* LmHardware(void){
 #if defined(_WIN32)
  char* System=xrtEnvGet("SystemRoot");char* Program=System?xrtFormat("%s/System32/WindowsPowerShell/v1.0/powershell.exe",System):NULL;
  const cstr Args[]={"-NoLogo","-NoProfile","-NonInteractive","-Command","$ErrorActionPreference='Stop';$o=Get-CimInstance Win32_OperatingSystem;$g=@(Get-CimInstance Win32_VideoController | ForEach-Object { @{name=$_.Name;capacity_bytes=[uint64]$_.AdapterRAM;available_known=$false} });@{ram_bytes=[uint64]$o.TotalVisibleMemorySize*1024;available_ram_bytes=[uint64]$o.FreePhysicalMemory*1024;os_version=$o.Version;gpus=$g} | ConvertTo-Json -Compress -Depth 4"};
- if(Program)Out=LmHardwareRun(Program,Args,sizeof(Args)/sizeof(*Args));xrtFree(Program);xrtFree(System);
+ if(Program)Out=LmHardwareRun(Program,Args,sizeof(Args)/sizeof(*Args));
+ xrtFree(Program);xrtFree(System);
 #elif defined(__linux__)
  xfile F=xrtFileOpen("/proc/meminfo",XFILE_READ);char Buffer[32768]={0};int64 N=F?xrtRead(F,Buffer,sizeof(Buffer)-1):0;xrtClose(F);uint64 Total=0,Available=0;
  if(N>0){cstr T=strstr(Buffer,"MemTotal:"),A=strstr(Buffer,"MemAvailable:");unsigned long long X=0,Y=0;if(T&&A&&sscanf(T,"MemTotal: %llu",&X)==1&&sscanf(A,"MemAvailable: %llu",&Y)==1){Total=X*1024;Available=Y*1024;}}
@@ -40,7 +41,8 @@ static xvalue* LmHardware(void){
  const cstr Args[]={"-c","p=$(/usr/sbin/sysctl -n hw.pagesize);t=$(/usr/sbin/sysctl -n hw.memsize);f=$(/usr/bin/vm_stat | /usr/bin/awk '/Pages free|Pages inactive|Pages speculative/ {gsub(/[^0-9]/,\"\",$NF);s+=$NF} END {printf \"%.0f\",s}');printf '{\"ram_bytes\":%s,\"available_ram_bytes\":%s,\"unified_memory\":true}' \"$t\" \"$((p*f))\""};
  Out=LmHardwareRun("/bin/sh",Args,2);
 #endif
- if(!Out)Out=xrtValueObject();LmPut(Out,"platform",MdoExtensionRuntimePlatform());LmCpuFeatures(Out);
+ if(!Out)Out=xrtValueObject();
+ LmPut(Out,"platform",MdoExtensionRuntimePlatform());LmCpuFeatures(Out);
  xrtValueObjectSetNew(Out,XRT_STR_LITERAL("ram_known"),xrtValueBool(LmUInt(Out,"available_ram_bytes")>0));
  xrtValueObjectSetNew(Out,XRT_STR_LITERAL("vram_available_known"),xrtValueBool(false));return Out;
 }

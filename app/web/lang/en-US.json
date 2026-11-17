@@ -3790,5 +3790,8 @@
   "localModels.unknownVram": "Available VRAM cannot currently be measured accurately. Do not simply sum GPUs or count unified memory twice. Review the deployment requirements.",
   "localModels.resourceAttemptNotice": "Available VRAM is uncertain. Confirm that this deployment’s RAM and VRAM requirements are met before attempting startup. Loading failures retain logs.",
   "localModels.cache": "Clear model cache",
-  "localModels.cacheNotice": "Remove only model files and download fragments with no installation references in the selected store. Installed, resumable and rollback resources are retained."
+  "localModels.cacheNotice": "Remove only model files and download fragments with no installation references in the selected store. Installed, resumable and rollback resources are retained.",
+  "localModels.cpuFeatures": "CPU instruction sets",
+  "localModels.driver": "Driver requirements",
+  "localModels.margin": "Additional headroom"
 }

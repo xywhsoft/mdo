@@ -25,7 +25,8 @@ bool MdoLocalModelsRead(const xvalue* Input,xcancel* Cancel,xvalue** Result,char
 static bool LmQueue(const xvalue* Input,xvalue** Result,char E[512]){
  cstr Action=LmStr(Input,"action");bool Install=!strcmp(Action,"install");xvalue* Plan=NULL;
  if(Install){cstr Id=LmStr(Input,"plan_id");
-  if(!LmXid(Id))return LmFail(E,"Inspect an install plan first");char* Path=xrtFormat("data/local-models/plans/%s.json",Id);Plan=Path?LmReadJson(Path):NULL;xrtFree(Path);
+  if(!LmXid(Id))return LmFail(E,"Inspect an install plan first");
+  char* Path=xrtFormat("data/local-models/plans/%s.json",Id);Plan=Path?LmReadJson(Path):NULL;xrtFree(Path);
   bool Trust=false,Ready=false;if(!Plan||strcmp(LmStr(Plan,"revision"),LmStr(Input,"revision"))||!xrtValueGetBool(LmGet(Input,"trust_code"),&Trust)||!Trust||!xrtValueGetBool(LmGet(LmGet(Plan,"runtime_plan"),"ready"),&Ready)||!Ready||!MdoLocalModelPlanValid(LmGet(Plan,"model"),E)){xrtValueRelease(Plan);return LmFail(E,"Confirm the inspected runtime code and unchanged model plan");}
   xrtMutexLock(g_Lm.Lock);const xvalue* Existing=LmGet(g_Lm.State,"installations");for(size_t I=0;I<xrtValueCount(Existing);I++){const xvalue* J=xrtValueObjectAt(Existing,I,NULL);if(!strcmp(LmStr(J,"install_plan_id"),Id)){*Result=xrtValueClone(J);break;}}xrtMutexUnlock(g_Lm.Lock);if(*Result){xrtValueRelease(Plan);return true;}}
  xrtMutexLock(g_Lm.Lock);char Store[33];snprintf(Store,33,"%s",LmStr(g_Lm.State,"default_root"));size_t Count=xrtValueCount(LmGet(g_Lm.State,"installations"));xrtMutexUnlock(g_Lm.Lock);
@@ -38,11 +39,12 @@ static bool LmQueue(const xvalue* Input,xvalue** Result,char E[512]){
  if(Ok)*Result=xrtValueClone(Job);else LmFail(E,"Cannot queue this model installation");xrtValueRelease(Job);xrtValueRelease(Plan);xrtFree(Id);return Ok;
 }
 static bool LmReferenced(cstr Exclude,cstr Store,cstr Hash){
- const xvalue* Jobs=LmGet(g_Lm.State,"installations");for(size_t I=0;I<xrtValueCount(Jobs);I++){xstrview Key={0};const xvalue* J=xrtValueObjectAt(Jobs,I,&Key);if(!strcmp(Key.Data,Exclude)||strcmp(LmStr(J,"store"),Store))continue;const xvalue* Assets=LmGet(J,"assets");for(size_t K=0;K<xrtValueCount(Assets);K++)if(!strcmp(LmStr(xrtValueArrayGet(Assets,K),"sha256"),Hash))return true;}return false;
+ const xvalue* Jobs=LmGet(g_Lm.State,"installations");for(size_t I=0;I<xrtValueCount(Jobs);I++){xstrview Key={0};const xvalue* J=xrtValueObjectAt(Jobs,I,&Key);if(!strcmp(Key.Data,Exclude)||strcmp(LmStr(J,"store"),Store))continue;/* Legacy references keep their conservative pin until re-imported. */if(!strcmp(LmStr(J,"kind"),"reference")&&LmGet(J,"source_store")&&strcmp(LmStr(J,"source_store"),Store))continue;const xvalue* Assets=LmGet(J,"assets");for(size_t K=0;K<xrtValueCount(Assets);K++)if(!strcmp(LmStr(xrtValueArrayGet(Assets,K),"sha256"),Hash))return true;}return false;
 }
 static bool LmRemove(cstr Id,bool Files,xvalue** Result,char E[512]){
  if(!xrtMutexTryLock(g_Lm.Writer))return LmFail(E,"Finish or cancel the current model operation before uninstalling");
- xrtMutexLock(g_Lm.Lock);const xvalue* Ds=LmGet(g_Lm.State,"deployments");bool Used=false;for(size_t K=0;K<xrtValueCount(Ds);K++)if(!strcmp(LmStr(xrtValueObjectAt(Ds,K,NULL),"installation"),Id)||!strcmp(LmStr(LmGet(xrtValueObjectAt(Ds,K,NULL),"previous"),"installation"),Id))Used=true;xrtMutexUnlock(g_Lm.Lock);if(Used){xrtMutexUnlock(g_Lm.Writer);return LmFail(E,"Stop and remove this model's deployment configurations before uninstalling its weights");}
+ if(!xrtMutexTryLock(g_Lm.Configurations)){xrtMutexUnlock(g_Lm.Writer);return LmFail(E,"A deployment configuration is changing");}
+ xrtMutexLock(g_Lm.Lock);const xvalue* Ds=LmGet(g_Lm.State,"deployments");bool Used=false;for(size_t K=0;K<xrtValueCount(Ds);K++)if(!strcmp(LmStr(xrtValueObjectAt(Ds,K,NULL),"installation"),Id)||!strcmp(LmStr(LmGet(xrtValueObjectAt(Ds,K,NULL),"previous"),"installation"),Id))Used=true;xrtMutexUnlock(g_Lm.Lock);if(Used){xrtMutexUnlock(g_Lm.Configurations);xrtMutexUnlock(g_Lm.Writer);return LmFail(E,"Stop and remove this model's deployment configurations before uninstalling its weights");}
  xvalue* J=LmJob(Id);bool Ok=J&&LmJobState(Id,"removing","");
  xvalue* Store=J?LmStore(LmStr(J,"store")):NULL;char* Native=NULL;xroot Root=Files&&Store?LmRoot(Store,&Native,E):NULL;
  if(Ok&&Files&&strcmp(LmStr(J,"kind"),"reference")){
@@ -60,7 +62,7 @@ static bool LmRemove(cstr Id,bool Files,xvalue** Result,char E[512]){
  if(!Ok&&J){char Why[512]={0};LmPins(Id,J,Why);}
  if(!Ok&&J)LmJobState(Id,"cleanup_pending",E[0]?E:"Cannot remove the model's owned resources; other resources were retained");
  if(Ok&&LmXid(LmStr(J,"install_plan_id"))){char* P=xrtFormat("data/local-models/plans/%s.json",LmStr(J,"install_plan_id"));if(P)MdoHomeRemove(P,false);xrtFree(P);}
- xrtRootClose(Root);xrtFree(Native);xrtValueRelease(Store);xrtValueRelease(J);xrtMutexUnlock(g_Lm.Writer);if(Ok)*Result=xrtValueObject();return Ok;
+ xrtRootClose(Root);xrtFree(Native);xrtValueRelease(Store);xrtValueRelease(J);xrtMutexUnlock(g_Lm.Configurations);xrtMutexUnlock(g_Lm.Writer);if(Ok)*Result=xrtValueObject();return Ok;
 }
 /* A cache sweep never follows links or removes referenced resources. */
 static bool LmCache(const xvalue* Input,xvalue** Result,char E[512]){
@@ -88,24 +90,26 @@ bool MdoLocalModelsCommand(const xvalue* Input,xvalue** Result,char E[512]){
   xrtValueRelease(J);return *Result!=NULL;
  }
  if(!strcmp(Action,"web_access")){
-  if(!LmXid(Id))return LmFail(E,"Select a running deployment");xrtMutexLock(g_Lm.Lock);LmInstance* I=LmsFind(Id);Ok=I&&!strcmp(I->State,"ready")&&!I->Stop;
+  if(!LmXid(Id))return LmFail(E,"Select a running deployment");
+  xrtMutexLock(g_Lm.Lock);LmInstance* I=LmsFind(Id);Ok=I&&!strcmp(I->State,"ready")&&!I->Stop;
   if(Ok){*Result=xrtValueObject();Ok=*Result&&LmPut(*Result,"url",I->Url)&&LmPut(*Result,"key",I->Key);}xrtMutexUnlock(g_Lm.Lock);return Ok||LmFail(E,"Start the model before opening its runtime page");
  }
  if(!strcmp(Action,"cache")||!strcmp(Action,"prune_cache"))return LmCache(Input,Result,E);
  if(!strcmp(Action,"hardware")){*Result=LmHardware();return *Result!=NULL;}
- if(!strcmp(Action,"deployment_create")||!strcmp(Action,"deployment_update")||!strcmp(Action,"deployment_switch")){if(!xrtMutexTryLock(g_Lm.Writer))return LmFail(E,"Another model resource operation is running");Ok=LmDeploymentCommand(Input,Result,E);xrtMutexUnlock(g_Lm.Writer);if(Ok){MdoModelManagerReload();MdoApiLiveChanged(NULL);}return Ok;}
+ if(!strcmp(Action,"deployment_create")||!strcmp(Action,"deployment_update")||!strcmp(Action,"deployment_switch")){if(!xrtMutexTryLock(g_Lm.Configurations))return LmFail(E,"Another model resource operation is running");Ok=LmDeploymentCommand(Input,Result,E);xrtMutexUnlock(g_Lm.Configurations);if(Ok){MdoModelManagerReload();MdoApiLiveChanged(NULL);}return Ok;}
  if(!strcmp(Action,"start")||!strcmp(Action,"stop")){bool Flag=false;xrtValueGetBool(LmGet(Input,!strcmp(Action,"start")?"allow_unknown":"force"),&Flag);Ok=!strcmp(Action,"start")?LmsStart(Id,Flag,E):LmsStop(Id,Flag,E);if(Ok)*Result=xrtValueObject();return Ok;}
  if(!strcmp(Action,"logs")){xrtMutexLock(g_Lm.Lock);LmInstance* I=LmsFind(Id);*Result=xrtValueObject();if(I)LmPut(*Result,"text",I->Log);xrtMutexUnlock(g_Lm.Lock);
   if(!I&&LmXid(Id)){char* Path=xrtFormat("data/local-models/logs/%s.log",Id);xfile F=Path?MdoHomeOpenRead(Path):NULL;uint64 Size=0;char Text[LMS_LOG_BYTES]={0};if(F&&xrtFileSize(F,&Size)){uint64 Offset=Size>=sizeof(Text)?Size-sizeof(Text)+1:0;size_t N=(size_t)(Size-Offset);if(xrtReadAtFull(F,Offset,Text,N,NULL)){size_t Skip=0;while(Skip<N&&((unsigned char)Text[Skip]&0xc0)==0x80)Skip++;if(xrtUtf8Valid(xrtStrViewN(Text+Skip,N-Skip),NULL))LmPut(*Result,"text",Text+Skip);}}xrtClose(F);xrtFree(Path);}
   return *Result!=NULL;}
  if(!strcmp(Action,"deployment_delete")||!strcmp(Action,"deployment_rollback")){
-  if(!xrtMutexTryLock(g_Lm.Writer))return LmFail(E,"Another model operation is running");
-  xvalue* D=LmDeployment(Id);if(!D||LmDeploymentBusy(Id)||LmUInt(Input,"deployment_revision")!=LmUInt(D,"revision")){xrtValueRelease(D);xrtMutexUnlock(g_Lm.Writer);return LmFail(E,"Stop the deployment and reload its latest configuration first");}
-  xvalue* Previous=!strcmp(Action,"deployment_rollback")?xrtValueClone(LmGet(D,"previous")):NULL;if(!strcmp(Action,"deployment_rollback")&&!LmDeploymentValid(Previous)){xrtValueRelease(D);xrtValueRelease(Previous);xrtMutexUnlock(g_Lm.Writer);return LmFail(E,"No previous deployment configuration is available");}
+  if(!xrtMutexTryLock(g_Lm.Configurations))return LmFail(E,"Another model operation is running");
+  xvalue* D=LmDeployment(Id);if(!D||LmDeploymentBusy(Id)||LmUInt(Input,"deployment_revision")!=LmUInt(D,"revision")){xrtValueRelease(D);xrtMutexUnlock(g_Lm.Configurations);return LmFail(E,"Stop the deployment and reload its latest configuration first");}
+  if(!LmDeploymentClearViews(D,E)){xrtValueRelease(D);xrtMutexUnlock(g_Lm.Configurations);return false;}
+  xvalue* Previous=!strcmp(Action,"deployment_rollback")?xrtValueClone(LmGet(D,"previous")):NULL;if(!strcmp(Action,"deployment_rollback")&&!LmDeploymentValid(Previous)){xrtValueRelease(D);xrtValueRelease(Previous);xrtMutexUnlock(g_Lm.Configurations);return LmFail(E,"No previous deployment configuration is available");}
   if(Previous){xrtValueObjectSetNew(Previous,XRT_STR_LITERAL("revision"),xrtValueUInt(LmUInt(D,"revision")+1));xrtValueObjectRemove(D,XRT_STR_LITERAL("previous"));xrtValueObjectSet(Previous,XRT_STR_LITERAL("previous"),D);}
   xrtMutexLock(g_Lm.Lock);xvalue* Before=xrtValueClone(g_Lm.State),*Items=xrtValueObjectEdit(g_Lm.State,XRT_STR_LITERAL("deployments"));Ok=Before&&Items&&(Previous?xrtValueObjectSet(Items,xrtStrView(Id),Previous):xrtValueObjectRemove(Items,xrtStrView(Id)));Ok=LmCommit(Before,Ok);xrtMutexUnlock(g_Lm.Lock);
   if(Ok&&!Previous){xvalue* J=LmJob(LmStr(D,"installation")),*Store=J?LmStore(LmStr(J,"store")):NULL;char* Native=NULL;char Why[512]={0};xroot Root=Store?LmRoot(Store,&Native,Why):NULL;LmsClearViews(J,Id,Root);xrtRootClose(Root);xrtFree(Native);xrtValueRelease(Store);xrtValueRelease(J);char* Log=xrtFormat("data/local-models/logs/%s.log",Id);if(Log)MdoHomeRemove(Log,false);xrtFree(Log);}
-  xrtValueRelease(D);xrtValueRelease(Previous);xrtMutexUnlock(g_Lm.Writer);if(Ok){*Result=xrtValueObject();MdoModelManagerReload();}return Ok;
+  xrtValueRelease(D);xrtValueRelease(Previous);xrtMutexUnlock(g_Lm.Configurations);if(Ok){*Result=xrtValueObject();MdoModelManagerReload();}return Ok;
  }
  if(!strcmp(Action,"discard_plan")){Ok=LmDiscardPlan(Input,E);if(Ok)*Result=xrtValueObject();return Ok;}
  if(!strcmp(Action,"storage"))return LmNewStore(LmStr(Input,"path"),Result,E);

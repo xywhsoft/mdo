@@ -1,7 +1,8 @@
 /* Managed models have stable identities even while stopped. Endpoints and
  * credentials are resolved at client creation, never written to providers. */
 static bool MdoModelsMergeLocal(MdoModelCatalog* Catalog){
- if(!g_MdoModelsLocal.Catalog)return true;xvalue* Rows=g_MdoModelsLocal.Catalog();size_t Count=xrtValueCount(Rows);if(!Rows)return false;if(!Count){xrtValueRelease(Rows);return true;}
+ if(!g_MdoModelsLocal.Catalog)return true;
+ xvalue* Rows=g_MdoModelsLocal.Catalog();size_t Count=xrtValueCount(Rows);if(!Rows)return false;if(!Count){xrtValueRelease(Rows);return true;}
  char ProviderId[64]="mdo-local";for(size_t K=0;MdoModelsFindProvider(Catalog,ProviderId);K++)snprintf(ProviderId,sizeof(ProviderId),"mdo-local.managed.%llu",(unsigned long long)K);
  MdoProviderEntry* Providers=xrtRealloc(Catalog->Providers,(Catalog->ProviderCount+1)*sizeof(*Providers));if(!Providers){xrtValueRelease(Rows);return false;}Catalog->Providers=Providers;MdoProviderEntry* P=&Providers[Catalog->ProviderCount++];memset(P,0,sizeof(*P));
  P->Id=xrtStrDup(ProviderId);P->Name=xrtStrDup("mdo local");P->Builtin=true;P->Protocols=1;P->TimeoutMilliseconds=600000;P->Endpoints[0]=xrtStrDup("managed:local");P->Proxy=xrtJsonParse(XRT_STR_LITERAL("{\"kind\":\"none\"}"));

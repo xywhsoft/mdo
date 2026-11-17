@@ -3790,5 +3790,8 @@
   "localModels.unknownVram": "暂不能准确读取可用显存。多 GPU 不能直接累加，统一内存也不能重复计算。请参考具体部署要求。",
   "localModels.resourceAttemptNotice": "当前无法精确判断可用显存。请确认满足此部署的内存与显存要求；确认后尝试启动，加载失败会保留日志。",
   "localModels.cache": "清理模型缓存",
-  "localModels.cacheNotice": "仅清理所选资源目录中没有安装收据引用的模型文件和下载片段。已安装、待恢复及回滚中的资源会保留。"
+  "localModels.cacheNotice": "仅清理所选资源目录中没有安装收据引用的模型文件和下载片段。已安装、待恢复及回滚中的资源会保留。",
+  "localModels.cpuFeatures": "CPU 指令集",
+  "localModels.driver": "驱动要求",
+  "localModels.margin": "额外预留"
 }

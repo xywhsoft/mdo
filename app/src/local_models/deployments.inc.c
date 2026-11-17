@@ -27,20 +27,23 @@ static xvalue* LmDefaultConfig(const xvalue* Profile){
  xrtValueObjectSetNew(C,XRT_STR_LITERAL("threads"),xrtValueUInt(0));xrtValueObjectSetNew(C,XRT_STR_LITERAL("auto_start"),xrtValueBool(false));xrtValueObjectSetNew(C,XRT_STR_LITERAL("auto_start_on_use"),xrtValueBool(false));xrtValueObjectSetNew(C,XRT_STR_LITERAL("allow_uncertain_resources"),xrtValueBool(false));xrtValueObjectSetNew(C,XRT_STR_LITERAL("idle_seconds"),xrtValueUInt(0));LmPut(C,"reasoning_mode",Profile&&LmOneOf(LmStr(LmGet(Profile,"reasoning"),"kind"),"none toggle")?"off":"default");return C;
 }
 static bool LmDeploymentBusy(cstr Id);
+static bool LmDeploymentClearViews(const xvalue* D,char E[512]);
 static bool LmDeploymentCommand(const xvalue* Input,xvalue** Result,char E[512]){
  bool Create=!strcmp(LmStr(Input,"action"),"deployment_create"),Switch=!strcmp(LmStr(Input,"action"),"deployment_switch");cstr Id=LmStr(Input,"id");xvalue* D=Create?xrtValueObject():LmDeployment(Id);xvalue* J=NULL;char* NewId=Create?xrtXidMakeString():NULL;bool Ok=D!=NULL;
  if(Switch&&(!D||LmUInt(Input,"deployment_revision")!=LmUInt(D,"revision")||LmDeploymentBusy(Id)))Ok=LmFail(E,"Stop the deployment and reload its latest configuration before switching");
  uint64 Revision=Create?1:LmUInt(D,"revision");
  if(Create||Switch){if(Create)Id=NewId;J=LmJob(LmStr(Input,"installation"));const xvalue* Plan=LmGet(J,"plan"),*P=LmGet(Plan,"profile"),*Doc=LmGet(Plan,"document"),*Runtime=LmFind(LmGet(Doc,"runtimes"),LmStr(P,"runtime"));xvalue* R=Runtime?xrtValueClone(Runtime):NULL;
   if(!R){xvalue* Meta=MdoExtensionsResolve(LmStr(Input,"runtime_ref"),E);const xvalue* Receipt=LmGet(Meta,"installation");R=xrtValueObject();Ok=Ok&&Meta&&LmPut(R,"ref",LmStr(Input,"runtime_ref"))&&LmPut(R,"version_id",LmStr(Receipt,"version_id"))&&LmPut(R,"sha256",LmStr(Receipt,"sha256"))&&LmPut(R,"engine","llama.cpp")&&LmPut(R,"backend",LmStr(Input,"backend")[0]?LmStr(Input,"backend"):"cpu")&&LmPut(R,"platform",MdoExtensionRuntimePlatform())&&LmPut(R,"build",LmStr(Meta,"version"));xrtValueRelease(Meta);}
-  if(R)xrtValueObjectRemove(R,XRT_STR_LITERAL("id"));xvalue* C=LmDefaultConfig(P),*Caps=P?xrtValueClone(LmGet(P,"capabilities")):xrtJsonParse(XRT_STR_LITERAL("[\"text\"]"));
+  if(R)xrtValueObjectRemove(R,XRT_STR_LITERAL("id"));
+  xvalue* C=LmDefaultConfig(P),*Caps=P?xrtValueClone(LmGet(P,"capabilities")):xrtJsonParse(XRT_STR_LITERAL("[\"text\"]"));
   Ok=Ok&&Id&&J&&!strcmp(LmStr(J,"state"),"installed")&&LmPut(D,"id",Id)&&LmPut(D,"installation",LmStr(J,"id"))&&LmPut(D,"name",LmStr(Input,"name")[0]?LmStr(Input,"name"):LmStr(J,"name"))&&xrtValueObjectSetNew(D,XRT_STR_LITERAL("revision"),xrtValueUInt(Revision))&&xrtValueObjectSet(D,XRT_STR_LITERAL("runtime"),R)&&xrtValueObjectSet(D,XRT_STR_LITERAL("config"),C)&&xrtValueObjectSet(D,XRT_STR_LITERAL("capabilities"),Caps);
   if(Switch){xvalue* Old=LmDeployment(Id),*OldJob=Old?LmJob(LmStr(Old,"installation")):NULL;const xvalue* OldRecipe=LmGet(LmGet(OldJob,"plan"),"recipe"),*NewRecipe=LmGet(Plan,"recipe");Ok=Ok&&OldRecipe&&NewRecipe&&!strcmp(LmStr(OldRecipe,"id"),LmStr(NewRecipe,"id"));xrtValueRelease(Old);xrtValueRelease(OldJob);xrtValueObjectRemove(D,XRT_STR_LITERAL("verification"));}
   if(P){Ok=Ok&&xrtValueObjectSet(D,XRT_STR_LITERAL("requirements"),LmGet(P,"requirements"))&&LmPut(D,"profile_id",LmStr(P,"id"));}xrtValueRelease(R);xrtValueRelease(C);xrtValueRelease(Caps);
  }else{J=D?LmJob(LmStr(D,"installation")):NULL;if(!LmXid(Id)||!D||LmUInt(Input,"deployment_revision")!=LmUInt(D,"revision")||LmDeploymentBusy(Id))Ok=LmFail(E,"Stop the deployment and reload its latest configuration before editing it");}
  const xvalue* Config=LmGet(Input,"config"),*Caps=LmGet(Input,"capabilities");
- if(Ok&&Config)Ok=xrtValueObjectSet(D,XRT_STR_LITERAL("config"),Config);if(Ok&&Caps)Ok=xrtValueObjectSet(D,XRT_STR_LITERAL("capabilities"),Caps);
- if(Ok&&!Create){xvalue* Previous=LmDeployment(Id);if(Previous){xrtValueObjectRemove(Previous,XRT_STR_LITERAL("previous"));xrtValueObjectSet(D,XRT_STR_LITERAL("previous"),Previous);}xrtValueRelease(Previous);xrtValueObjectSetNew(D,XRT_STR_LITERAL("revision"),xrtValueUInt(LmUInt(D,"revision")+1));if(LmStr(Input,"name")[0])Ok=LmPut(D,"name",LmStr(Input,"name"));}
+ if(Ok&&Config)Ok=xrtValueObjectSet(D,XRT_STR_LITERAL("config"),Config);
+ if(Ok&&Caps)Ok=xrtValueObjectSet(D,XRT_STR_LITERAL("capabilities"),Caps);
+ if(Ok&&!Create){xvalue* Previous=LmDeployment(Id);if(Previous){Ok=LmDeploymentClearViews(Previous,E);xrtValueObjectRemove(Previous,XRT_STR_LITERAL("previous"));xrtValueObjectSet(D,XRT_STR_LITERAL("previous"),Previous);}xrtValueRelease(Previous);xrtValueObjectSetNew(D,XRT_STR_LITERAL("revision"),xrtValueUInt(LmUInt(D,"revision")+1));if(LmStr(Input,"name")[0])Ok=LmPut(D,"name",LmStr(Input,"name"));}
  if(Ok)Ok=J&&LmDeploymentFingerprint(D,J)&&LmDeploymentValid(D);
  if(Ok&&!Create){const xvalue* V=LmGet(D,"verification");if(V&&strcmp(LmStr(V,"fingerprint"),LmStr(D,"fingerprint")))xrtValueObjectRemove(D,XRT_STR_LITERAL("verification"));}
  if(Ok){xrtMutexLock(g_Lm.Lock);xvalue* Before=xrtValueClone(g_Lm.State),*Items=xrtValueObjectEdit(g_Lm.State,XRT_STR_LITERAL("deployments"));Ok=Before&&Items&&(!Create||xrtValueCount(Items)<LM_LIMIT)&&xrtValueObjectSet(Items,xrtStrView(Id),D);Ok=LmCommit(Before,Ok);xrtMutexUnlock(g_Lm.Lock);}

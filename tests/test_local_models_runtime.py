@@ -41,6 +41,7 @@ def main():
             stop_host(process);process=None;start();check(second['id'] in call()['installations'],'installation lost across restart')
             call(dict(action='uninstall',id=second['id'],delete_files=True));check(not blob.exists() and source.exists(),'wrong copy ownership')
             reference=call(dict(action='import',path=str(source),mode='reference',name='Reference'));item=wait(reference['id']);check(item['state']=='installed',item)
+            stop_host(process);process=None;start();check(call()['installations'][reference['id']]['state']=='installed' and not call()['read_only'],'external reference did not survive restart')
             call(dict(action='uninstall',id=reference['id'],delete_files=True));check(source.read_bytes()==payload,'reference original was changed')
             other=base/'other';other.mkdir();(other/'user.txt').write_text('keep');call(dict(action='storage',path=str(other)),status=422);check((other/'user.txt').read_text()=='keep','foreign directory was modified')
             bad=base/'bad.gguf';bad.write_bytes(b'not model weights');invalid=call(dict(action='import',path=str(bad),mode='copy'));item=wait(invalid['id']);check(item['state']=='failed','invalid GGUF accepted')

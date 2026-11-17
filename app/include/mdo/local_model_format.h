@@ -22,7 +22,9 @@ static bool LmHost(cstr S){
 static bool LmUrl(cstr S){
  if(!S||strlen(S)>2048||strncmp(S,"https://",8)||strpbrk(S,"?#@\\"))return false;
  cstr P=S+8;size_t N=strcspn(P,"/");char Host[254];if(N>=sizeof(Host))return false;memcpy(Host,P,N);Host[N]=0;
- if(!LmHost(Host))return false;for(;*P;P++)if((unsigned char)*P<=32||(unsigned char)*P>=127)return false;return true;
+ if(!LmHost(Host))return false;
+ for(;*P;P++)if((unsigned char)*P<=32||(unsigned char)*P>=127)return false;
+ return true;
 }
 static bool LmLocale(cstr S){size_t N=S?strlen(S):0;if(N<2||N>35||S[0]=='-'||S[N-1]=='-'||strstr(S,"--"))return false;for(size_t I=0;I<N;I++)if(!((S[I]>='a'&&S[I]<='z')||(S[I]>='A'&&S[I]<='Z')||(S[I]>='0'&&S[I]<='9')||S[I]=='-'))return false;return true;}
 static bool LmLabels(const xvalue* Labels,size_t Max){
@@ -39,7 +41,8 @@ static bool LmOneOf(cstr S,cstr Choices){if(!S)return false;for(cstr P=Choices;*
 static bool LmStrings(const xvalue* A,size_t Min,size_t Max,cstr Choices){
  if(xrtValueType(A)!=XVALUE_ARRAY||xrtValueCount(A)<Min||xrtValueCount(A)>Max)return false;
  for(size_t I=0;I<xrtValueCount(A);I++){xstrview S={0};if(!xrtValueGetString(xrtValueArrayGet(A,I),&S)||!S.Size||S.Size>64||memchr(S.Data,0,S.Size))return false;
-  if(Choices?!LmOneOf(S.Data,Choices):!LmId(S.Data))return false;for(size_t J=0;J<I;J++)if(xrtValueEqual(xrtValueArrayGet(A,J),xrtValueArrayGet(A,I)))return false;}return true;
+  if(Choices?!LmOneOf(S.Data,Choices):!LmId(S.Data))return false;
+  for(size_t J=0;J<I;J++)if(xrtValueEqual(xrtValueArrayGet(A,J),xrtValueArrayGet(A,I)))return false;}return true;
 }
 static bool MdLocalModelValidate(const xvalue* D,const xvalue* Manifest,char Error[512]){
  cstr Why="Invalid local model recipe";
@@ -64,7 +67,8 @@ static bool MdLocalModelValidate(const xvalue* D,const xvalue* Manifest,char Err
    const xvalue* F=xrtValueArrayGet(Files,J);cstr Path=MdoExtensionText(F,"path",4096),Role=MdoExtensionText(F,"role",32);
    if(!LmFields(F,"id path role bytes sha256 urls redirect_hosts")||!MdoExtensionRelativePath(Path)||!LmOneOf(Role,"weights mmproj template tokenizer config")||!LmNumber(F,"bytes",1,MD_LOCAL_ASSET_BYTES)||!LmHex(MdoExtensionText(F,"sha256",64),64)){Why="Files require safe paths, roles, byte sizes and SHA-256";goto bad;}
    for(size_t K=0;K<J;K++){cstr Prior=MdoExtensionText(xrtValueArrayGet(Files,K),"path",4096);char* A=MdoExtensionPathKey(Prior),*B=MdoExtensionPathKey(Path);bool Same=A&&B&&!strcmp(A,B);xrtFree(A);xrtFree(B);if(Same){Why="Weight file paths must be unique on all platforms";goto bad;}}
-   if(!strcmp(Role,"weights"))HasWeight=true;int64 Bytes=0;MdoExtensionNumber(F,"bytes",&Bytes);if((uint64)Bytes>MD_LOCAL_ASSET_BYTES-Total)goto bad;Total+=(uint64)Bytes;
+   if(!strcmp(Role,"weights"))HasWeight=true;
+   int64 Bytes=0;MdoExtensionNumber(F,"bytes",&Bytes);if((uint64)Bytes>MD_LOCAL_ASSET_BYTES-Total)goto bad;Total+=(uint64)Bytes;
    const xvalue* Urls=xrtValueObjectGet(F,XRT_STR_LITERAL("urls")),*Hosts=xrtValueObjectGet(F,XRT_STR_LITERAL("redirect_hosts"));
    if(xrtValueType(Urls)!=XVALUE_ARRAY||!xrtValueCount(Urls)||xrtValueCount(Urls)>8){Why="Each file requires public HTTPS sources";goto bad;}
    for(size_t K=0;K<xrtValueCount(Urls);K++){xstrview Url={0};if(!xrtValueGetString(xrtValueArrayGet(Urls,K),&Url)||memchr(Url.Data,0,Url.Size)||!LmUrl(Url.Data)){Why="Sources must be canonical HTTPS URLs without credentials, queries or fragments";goto bad;}

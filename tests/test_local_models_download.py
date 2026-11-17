@@ -43,6 +43,7 @@ class Publisher(BaseHTTPRequestHandler):
     def do_GET(self):
         p=urlsplit(self.path);query=parse_qs(p.query)
         if p.path=='/model.gguf':
+            if not self.headers.get('User-Agent','').startswith('mdo/'):return self.send_error(403)
             type(self).hits+=1;start=int(self.headers.get('Range','bytes=0-').split('=')[1].split('-')[0]);type(self).ranges.append(start)
             data=PAYLOAD[start:];data=(b'x'+data[1:]) if type(self).bad and data else data
             self.send_response(206 if start else 200);self.send_header('Content-Length',str(len(data)));self.send_header('ETag','"fixture-v1"')
@@ -163,10 +164,23 @@ def main():
             call(dict(action='retry',id=failed));row=wait(failed);check(row['state']=='installed',row)
             completed=download();call({},path=f"/download-tasks/{completed['id']}/forget");check((store/'blobs'/HASH).read_bytes()==PAYLOAD,'forgetting download history removed installed weights')
             call(dict(action='uninstall',id=failed,delete_files=True))
+            standalone=None;standalone_deployment=None
+            if args.services:
+                source=base/'standalone.gguf';source.write_bytes(PAYLOAD);standalone=call(dict(action='import',path=str(source),mode='reference',name='Independent model'));check(wait(standalone['id'])['state']=='installed','independent import failed')
+                standalone_deployment=call(dict(action='deployment_create',installation=standalone['id'],runtime_ref=RUNTIME['id'],name='During download'))
             paused=install();task=partial();call({},path=f"/download-tasks/{task['id']}/pause");time.sleep(.25)
+            if standalone_deployment:
+                id=standalone_deployment['id'];call(dict(action='start',id=id,allow_unknown=True));end=time.monotonic()+15
+                while time.monotonic()<end and (row:=call()['deployments'][id])['service_state'] not in ('ready','failed'):time.sleep(.05)
+                check(row['service_state']=='ready','a paused large download blocked an installed model from starting: '+str(row))
+                call(dict(action='stop',id=id));end=time.monotonic()+10
+                while time.monotonic()<end and call()['deployments'][id]['service_state']!='stopped':time.sleep(.05)
+                call(dict(action='deployment_delete',id=id,deployment_revision=standalone_deployment['revision']))
+
             before=(store/'partial'/f'{HASH}.part').stat().st_size;time.sleep(.25);check((store/'partial'/f'{HASH}.part').stat().st_size==before,'paused producer continued writing')
             call({},path=f"/download-tasks/{task['id']}/resume");check(wait(paused)['state']=='installed','paused download did not finish')
             call(dict(action='uninstall',id=paused,delete_files=True))
+            if standalone:call(dict(action='uninstall',id=standalone['id'],delete_files=True))
             cancelled=install();partial();call(dict(action='cancel',id=cancelled));check(wait(cancelled)['state']=='interrupted','cancelled model did not retain a resumable receipt')
             call(dict(action='retry',id=cancelled));check(wait(cancelled)['state']=='installed','model-page retry did not resume cancelled weights')
             call(dict(action='uninstall',id=cancelled,delete_files=True))
@@ -205,12 +219,14 @@ def main():
                 call(dict(action='stop',id=did));check(service(('stopped',))['service_state']=='stopped','stop never finished')
                 # A stopped deployment remains selectable; no random closed port is saved.
                 check(any(m['id']==mid for m in call(path='/models')['models']),'stopped model disappeared')
+                orphan_view=store/'views'/did/'model.gguf';orphan_view.parent.mkdir(parents=True,exist_ok=True);os.link(store/'blobs'/HASH,orphan_view)
                 for _ in range(30):
                     try:
                         edited=call(dict(action='deployment_update',id=did,deployment_revision=deployment['revision'],config={**deployment['config'],'context_tokens':4096,'max_output_tokens':2048,'output_tokens':1024}))
                         break
                     except AssertionError:time.sleep(.05)
                 else:raise AssertionError('completed deployment remained locked')
+                check(not orphan_view.exists() and (store/'blobs'/HASH).exists(),'configuration edit leaked a split-file view left by a crashed runtime')
                 call(dict(action='start',id=did));row=service(('ready','failed'));check(row['service_state']=='ready',row)
                 call(dict(action='stop',id=did,force=True));service(('stopped',))
                 call(dict(action='deployment_rollback',id=did,deployment_revision=edited['revision']))

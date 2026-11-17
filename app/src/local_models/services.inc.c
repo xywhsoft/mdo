@@ -47,14 +47,21 @@ static bool LmsFiles(const xvalue* Job,cstr Deployment,xroot Root,cstr Native,xc
    else P=xrtFormat("%s/blobs/%s",Native,Hash);
   }
   if(Role[0]&&strcmp(Role,"weights")&&strcmp(Role,"mmproj")&&strcmp(Role,"template")){xrtFree(P);return LmFail(E,"This adapter cannot consume the declared model resource role");}
-  if(!P)return false;if((!Role[0]||!strcmp(Role,"weights"))&&!*Model)*Model=P;else if(!strcmp(Role,"mmproj")&&!*Projector)*Projector=P;else if(!strcmp(Role,"template")&&!*Template)*Template=P;else xrtFree(P);
+  if(!P)return false;
+  if((!Role[0]||!strcmp(Role,"weights"))&&!*Model)*Model=P;else if(!strcmp(Role,"mmproj")&&!*Projector)*Projector=P;else if(!strcmp(Role,"template")&&!*Template)*Template=P;else xrtFree(P);
  }return *Model!=NULL;
 }
-static void LmsClearViews(const xvalue* Job,cstr Deployment,xroot Root){
- if(!Root)return;const xvalue* Assets=LmGet(Job,"assets");for(size_t K=0;K<xrtValueCount(Assets);K++){cstr Path=LmStr(xrtValueArrayGet(Assets,K),"path");char* View=MdoExtensionRelativePath(Path)?xrtFormat("views/%s/%s",Deployment,Path):NULL;if(View){xrtRootRemove(Root,View);char* Parent=xrtPathParent(View);size_t Min=6+strlen(Deployment);while(Parent&&strlen(Parent)>=Min){if(!xrtRootRemove(Root,Parent))break;char* Next=xrtPathParent(Parent);xrtFree(Parent);Parent=Next;}xrtFree(Parent);}xrtFree(View);}
+static bool LmsClearViews(const xvalue* Job,cstr Deployment,xroot Root){
+ if(!Root)return false;
+ bool Ok=true;const xvalue* Assets=LmGet(Job,"assets");for(size_t K=0;K<xrtValueCount(Assets);K++){cstr Path=LmStr(xrtValueArrayGet(Assets,K),"path");char* View=MdoExtensionRelativePath(Path)?xrtFormat("views/%s/%s",Deployment,Path):NULL;if(View){xfileinfo Info;if(xrtRootStat(Root,View,false,&Info))Ok=(Info.Type==XFILE_TYPE_FILE&&xrtRootRemove(Root,View))&&Ok;char* Parent=xrtPathParent(View);size_t Min=6+strlen(Deployment);while(Parent&&strlen(Parent)>=Min){if(!xrtRootRemove(Root,Parent))break;char* Next=xrtPathParent(Parent);xrtFree(Parent);Parent=Next;}xrtFree(Parent);}xrtFree(View);}return Ok;
 }
+static bool LmDeploymentClearViews(const xvalue* D,char E[512]){
+ const xvalue* Rows[]={D,LmGet(D,"previous")};for(size_t K=0;K<2;K++){if(!Rows[K])continue;xvalue* Job=LmJob(LmStr(Rows[K],"installation")),*Store=Job?LmStore(LmStr(Job,"store")):NULL;char* Native=NULL;xroot Root=Store?LmRoot(Store,&Native,E):NULL;bool Ok=Root&&LmsClearViews(Job,LmStr(D,"id"),Root);xrtRootClose(Root);xrtFree(Native);xrtValueRelease(Store);xrtValueRelease(Job);if(!Ok)return LmFail(E,"Reconnect the model resource store and release its split-file views before changing this deployment");}return true;
+}
+
 static void LmsAppend(LmInstance* I,xfile File,const char* Text,size_t N){
- if(!xrtUtf8Valid(xrtStrViewN(Text,N),NULL))return;char Clean[8192];size_t At=0;for(size_t K=0;K<N&&At+12<sizeof(Clean);){size_t Key=strlen(I->Key);if(Key&&K+Key<=N&&!memcmp(Text+K,I->Key,Key)){memcpy(Clean+At,"[redacted]",10);At+=10;K+=Key;}else Clean[At++]=Text[K++];}Clean[At]=0;
+ if(!xrtUtf8Valid(xrtStrViewN(Text,N),NULL))return;
+ char Clean[8192];size_t At=0;for(size_t K=0;K<N&&At+12<sizeof(Clean);){size_t Key=strlen(I->Key);if(Key&&K+Key<=N&&!memcmp(Text+K,I->Key,Key)){memcpy(Clean+At,"[redacted]",10);At+=10;K+=Key;}else Clean[At++]=Text[K++];}Clean[At]=0;
  if(File){uint64 Size=0;if(xrtFileSize(File,&Size)&&Size+At>4u*1024u*1024u){xrtFileResize(File,0);xrtSeek(File,0,XSEEK_START,NULL);}xrtWriteFull(File,Clean,At,NULL);xrtFlush(File);}
  xrtMutexLock(g_Lm.Lock);size_t Old=strlen(I->Log);if(Old+At>=sizeof(I->Log)){size_t Drop=Old+At-sizeof(I->Log)+1;while(Drop<Old&&((unsigned char)I->Log[Drop]&0xc0)==0x80)Drop++;memmove(I->Log,I->Log+Drop,Old-Drop+1);Old-=Drop;}memcpy(I->Log+Old,Clean,At+1);xrtMutexUnlock(g_Lm.Lock);
 }
@@ -62,7 +69,8 @@ static int32 LmsOutput(void* Data){
  LmInstance* I=Data;char* Path=xrtFormat("data/local-models/logs/%s.log",I->Id);xfile File=Path?MdoHomeOpenWrite(Path,XFILE_WRITE|XFILE_CREATE):NULL;xrtFree(Path);if(File)xrtSeek(File,0,XSEEK_END,NULL);
  char Input[1024],Line[8192];size_t N=0;bool Overflow=false;int64 Read;
  while((Read=xrtProcessRead(I->Process,XPROCESS_STDOUT,Input,sizeof(Input)))>0)for(int64 K=0;K<Read;K++){if(N+1<sizeof(Line))Line[N++]=Input[K];else Overflow=true;if(Input[K]=='\n'){if(!Overflow)LmsAppend(I,File,Line,N);N=0;Overflow=false;}}
- if(N&&!Overflow)LmsAppend(I,File,Line,N);xrtClose(File);return 0;
+ if(N&&!Overflow)LmsAppend(I,File,Line,N);
+ xrtClose(File);return 0;
 }
 static xvalue* LmsGet(LmInstance* I,cstr Path,uint16* Status){
  char Url[256],Authorization[128];snprintf(Url,sizeof(Url),"%s%s",I->Url,Path);snprintf(Authorization,sizeof(Authorization),"Bearer %s",I->Key);XS_FetchHeader H={"Authorization",Authorization};XS_FetchRequest Q={0};XS_FetchResponse R={0};Q.Size=sizeof(Q);Q.Version=XS_FETCH_REQUEST_VERSION;Q.Url=Url;Q.Method="GET";Q.Headers=&H;Q.HeaderCount=1;Q.MaxBodyBytes=262144;Q.Timeout=1000000;Q.IdleTimeout=1000000;Q.Cancel=I->Cancel;R.Size=sizeof(R);
@@ -76,15 +84,21 @@ static bool LmsReady(LmInstance* I,const xvalue* C,char E[512]){
 static bool LmsPreflight(const xvalue* D,bool AllowUnknown,char E[512]){
  bool Allowed=false;xrtValueGetBool(LmGet(LmGet(D,"config"),"allow_uncertain_resources"),&Allowed);AllowUnknown=AllowUnknown||Allowed;
  const xvalue* R=LmGet(D,"runtime");if(strcmp(LmStr(R,"platform"),MdoExtensionRuntimePlatform())||strcmp(LmStr(R,"engine"),"llama.cpp")||!LmOneOf(LmStr(R,"backend"),"cpu cuda vulkan metal"))return LmFail(E,"This runtime adapter or platform is unavailable");
+#if !defined(__APPLE__)
+ if(!strcmp(LmStr(R,"backend"),"metal"))return LmFail(E,"The Metal backend requires macOS");
+#endif
  xvalue* H=LmHardware();const xvalue* Needs=LmGet(D,"requirements"),*Features=LmGet(R,"cpu_features");bool Known=false; xrtValueGetBool(LmGet(H,"cpu_features_known"),&Known);bool Ok=true;
  for(size_t K=0;Ok&&Known&&K<xrtValueCount(Features);K++){xstrview F={0};xrtValueGetString(xrtValueArrayGet(Features,K),&F);bool Found=false;const xvalue* Current=LmGet(H,"cpu_features");for(size_t N=0;N<xrtValueCount(Current);N++)if(xrtValueEqual(xrtValueArrayGet(Current,N),xrtValueArrayGet(Features,K)))Found=true;if(!Found)Ok=LmFail(E,"The CPU or operating system lacks an instruction set required by this runtime build");}
  uint64 Available=LmUInt(H,"available_ram_bytes"),Required=LmUInt(Needs,"ram_bytes")+LmUInt(Needs,"margin_bytes");if(Ok&&Available&&Required>Available)Ok=LmFail(E,"Available system memory is below the deployment requirement; lower the configuration or free memory");
- if(Ok&&!AllowUnknown&&(!Available||(!Needs)||strcmp(LmStr(R,"backend"),"cpu")))Ok=LmFail(E,"Resource availability is uncertain. Review RAM/VRAM requirements and explicitly allow an attempted start");xrtValueRelease(H);return Ok;
+ if(Ok&&!AllowUnknown&&(!Available||(!Needs)||strcmp(LmStr(R,"backend"),"cpu")))Ok=LmFail(E,"Resource availability is uncertain. Review RAM/VRAM requirements and explicitly allow an attempted start");
+ xrtValueRelease(H);return Ok;
 }
 static int32 LmsRun(void* Data){
  LmInstance* I=Data;char E[512]={0};xvalue* D=LmDeployment(I->Id),*Job=D?LmJob(LmStr(D,"installation")):NULL,*Store=Job?LmStore(LmStr(Job,"store")):NULL;char *Native=NULL,*Model=NULL,*Projector=NULL,*Template=NULL,*Program=NULL,*Supervisor=NULL; xroot Root=NULL;
  bool Ok=D&&Job&&!strcmp(LmStr(Job,"state"),"installed")&&LmsPreflight(D,I->AllowUnknown,E);if(Ok)Root=LmRoot(Store,&Native,E);Ok=Ok&&Root;
- if(Ok){bool Acquired=false;while(!xrtCancelRequested(I->Cancel)&&!(Acquired=xrtMutexTryLock(g_Lm.Writer)))xrtSleep(25);Ok=Acquired&&LmsFiles(Job,I->Id,Root,Native,I->Cancel,&Model,&Projector,&Template,E);if(Acquired)xrtMutexUnlock(g_Lm.Writer);}
+ /* Installed blobs are immutable and referenced by this deployment. Its
+  * private split-file view cannot overlap the download producer. */
+ if(Ok)Ok=LmsFiles(Job,I->Id,Root,Native,I->Cancel,&Model,&Projector,&Template,E);
  const xvalue* C=LmGet(D,"config"),*R=LmGet(D,"runtime");
  if(Ok){char* Dir=MdoExtensionsDirectoryId("external-tools",LmStr(R,"ref"),E);I->RuntimeLease=Dir?MdoExtensionsAcquire("external-tools",Dir,E):NULL;xrtFree(Dir);Ok=I->RuntimeLease&&MdoCliUseBegin(&I->CliUse,E);}
  if(Ok){Program=LmsProgram(R,E);Supervisor=LmsSupervisor(E);Ok=Program&&Supervisor;}
@@ -113,15 +127,16 @@ static int32 LmsRun(void* Data){
 }
 static void LmsReapLocked(LmInstance* I){if(I->Thread&&xrtThreadWaitFor(I->Thread,0)==XWAIT_OK){xrtThreadDestroy(I->Thread);I->Thread=NULL;xrtCancelDestroy(I->Cancel);I->Cancel=NULL;}}
 static bool LmsStart(cstr Id,bool AllowUnknown,char E[512]){
- if(!g_Lm.Lock||!LmXid(Id)||!xrtMutexTryLock(g_Lm.Writer))return LmFail(E,"The model registry is busy or unavailable");
- xvalue* D=LmDeployment(Id);if(!D){xrtMutexUnlock(g_Lm.Writer);return LmFail(E,"Select a deployment configuration");}xrtValueRelease(D);
- xrtMutexLock(g_Lm.Lock);for(size_t K=0;K<LMS_COUNT;K++)LmsReapLocked(&g_Lms[K]);LmInstance* I=LmsFind(Id);if(I&&I->Thread){bool Same=!I->Stop;xrtMutexUnlock(g_Lm.Lock);xrtMutexUnlock(g_Lm.Writer);return Same||LmFail(E,"Wait for the current deployment to stop");}
+ if(!g_Lm.Lock||!LmXid(Id)||!xrtMutexTryLock(g_Lm.Configurations))return LmFail(E,"The model registry is busy or unavailable");
+ xvalue* D=LmDeployment(Id);if(!D){xrtMutexUnlock(g_Lm.Configurations);return LmFail(E,"Select a deployment configuration");}xrtValueRelease(D);
+ xrtMutexLock(g_Lm.Lock);for(size_t K=0;K<LMS_COUNT;K++)LmsReapLocked(&g_Lms[K]);LmInstance* I=LmsFind(Id);if(I&&I->Thread){bool Same=!I->Stop;xrtMutexUnlock(g_Lm.Lock);xrtMutexUnlock(g_Lm.Configurations);return Same||LmFail(E,"Wait for the current deployment to stop");}
  if(!I)for(size_t K=0;K<LMS_COUNT;K++)if(!g_Lms[K].Thread){I=&g_Lms[K];break;}
  bool Ok=I&&!g_Lm.Stopping&&g_Lm.ServicesReady&&MdoApiWriteRetainBackground();if(Ok){memset(I,0,sizeof(*I));snprintf(I->Id,33,"%s",Id);snprintf(I->State,sizeof(I->State),"starting");I->AllowUnknown=AllowUnknown;I->Started=MdoUtcUs();I->Cancel=xrtCancelChild(g_Lm.Stop);I->Thread=I->Cancel?xrtThreadCreate(LmsRun,I,0):NULL;Ok=I->Thread!=NULL;if(!Ok){xrtCancelDestroy(I->Cancel);I->Cancel=NULL;MdoApiWriteReleaseBackground();}}
- xrtMutexUnlock(g_Lm.Lock);xrtMutexUnlock(g_Lm.Writer);return Ok||LmFail(E,"No free model service slot or the service manager is stopping");
+ xrtMutexUnlock(g_Lm.Lock);xrtMutexUnlock(g_Lm.Configurations);return Ok||LmFail(E,"No free model service slot or the service manager is stopping");
 }
 static bool LmsStop(cstr Id,bool Force,char E[512]){
- if(!LmXid(Id))return LmFail(E,"Select a deployment configuration");xrtMutexLock(g_Lm.Lock);LmInstance* I=LmsFind(Id);bool Ok=true;xcancel* Cancel=NULL;if(I&&I->Thread&&strcmp(I->State,"stopped")&&strcmp(I->State,"failed")){I->Stop=true;if(Force||strcmp(I->State,"ready"))Cancel=xrtCancelRef(I->Cancel);snprintf(I->State,sizeof(I->State),"stopping");}xrtMutexUnlock(g_Lm.Lock);if(Cancel){xrtCancelRequest(Cancel);xrtCancelDestroy(Cancel);}return Ok||LmFail(E,"The selected deployment has no running service");
+ if(!LmXid(Id))return LmFail(E,"Select a deployment configuration");
+ xrtMutexLock(g_Lm.Lock);LmInstance* I=LmsFind(Id);bool Ok=true;xcancel* Cancel=NULL;if(I&&I->Thread&&strcmp(I->State,"stopped")&&strcmp(I->State,"failed")){I->Stop=true;if(Force||strcmp(I->State,"ready"))Cancel=xrtCancelRef(I->Cancel);snprintf(I->State,sizeof(I->State),"stopping");}xrtMutexUnlock(g_Lm.Lock);if(Cancel){xrtCancelRequest(Cancel);xrtCancelDestroy(Cancel);}return Ok||LmFail(E,"The selected deployment has no running service");
 }
 static void LmsCancelCall(void* Data){xrtCancelRequest(Data);}
 bool MdoLocalModelCallBegin(cstr Model,cstr Alias,xcancel* Parent,xcancel** Cancel,void** Handle,char E[512]){
@@ -131,15 +146,18 @@ bool MdoLocalModelCallBegin(cstr Model,cstr Alias,xcancel* Parent,xcancel** Canc
 }
 void MdoLocalModelCallEnd(void* Handle){LmCall* C=Handle;if(!C)return;xrtCancelUnwatch(C->Watch);xrtMutexLock(g_Lm.Lock);if(C->Instance->Calls)C->Instance->Calls--;C->Instance->LastUse=MdoMonotonicUs();xrtMutexUnlock(g_Lm.Lock);xrtCancelDestroy(C->Cancel);xrtFree(C);}
 bool MdoLocalModelResolve(cstr Model,MdoLocalModelEndpoint* Out,char E[512]){
- if(!g_Lm.Lock||g_Lm.Stopping||!Out||!MdoLocalModelOwned(Model))return false;memset(Out,0,sizeof(*Out));xrtMutexLock(g_Lm.Lock);LmInstance* I=LmsFind(Model+12);bool Ok=I&&!strcmp(I->State,"ready")&&!I->Stop;if(Ok){snprintf(Out->Endpoint,sizeof(Out->Endpoint),"%s/v1/chat/completions",I->Url);snprintf(Out->Alias,sizeof(Out->Alias),"%s",I->Alias);snprintf(Out->Key,sizeof(Out->Key),"%s",I->Key);}xrtMutexUnlock(g_Lm.Lock);
+ if(!g_Lm.Lock||g_Lm.Stopping||!Out||!MdoLocalModelOwned(Model))return false;
+ memset(Out,0,sizeof(*Out));xrtMutexLock(g_Lm.Lock);LmInstance* I=LmsFind(Model+12);bool Ok=I&&!strcmp(I->State,"ready")&&!I->Stop;if(Ok){snprintf(Out->Endpoint,sizeof(Out->Endpoint),"%s/v1/chat/completions",I->Url);snprintf(Out->Alias,sizeof(Out->Alias),"%s",I->Alias);snprintf(Out->Key,sizeof(Out->Key),"%s",I->Key);}xrtMutexUnlock(g_Lm.Lock);
  if(!Ok){xvalue* D=LmDeployment(Model+12);bool Auto=false;xrtValueGetBool(LmGet(LmGet(D,"config"),"auto_start_on_use"),&Auto);xrtValueRelease(D);if(Auto){snprintf(Out->Endpoint,sizeof(Out->Endpoint),"http://127.0.0.1:1/v1/chat/completions");snprintf(Out->Alias,sizeof(Out->Alias),"pending");return true;}}
  return Ok||LmFail(E,"Start this local model from Settings > Local models before using it");
 }
 bool MdoLocalModelEnsure(cstr Model,xcancel* Cancel,uint64 Deadline,char E[512]){
- if(!g_Lm.Lock||g_Lm.Stopping||!MdoLocalModelOwned(Model))return false;xvalue* D=LmDeployment(Model+12);bool Auto=false;xrtValueGetBool(LmGet(LmGet(D,"config"),"auto_start_on_use"),&Auto);xrtValueRelease(D);uint64 End=MdoDeadlineAfterUs(300000000);if(Deadline&&Deadline<End)End=Deadline;
+ if(!g_Lm.Lock||g_Lm.Stopping||!MdoLocalModelOwned(Model))return false;
+ xvalue* D=LmDeployment(Model+12);bool Auto=false;xrtValueGetBool(LmGet(LmGet(D,"config"),"auto_start_on_use"),&Auto);xrtValueRelease(D);uint64 End=MdoDeadlineAfterUs(300000000);if(Deadline&&Deadline<End)End=Deadline;
  bool Attempted=false;while(!xrtCancelRequested(Cancel)&&!xrtCancelRequested(g_Lm.Stop)&&!MdoDeadlineExpired(End)){
-  xrtMutexLock(g_Lm.Lock);LmInstance* I=LmsFind(Model+12);bool Ready=I&&!I->Stop&&!strcmp(I->State,"ready"),Failed=I&&!strcmp(I->State,"failed");xrtMutexUnlock(g_Lm.Lock);if(Ready)return true;
-  if(!Auto||Attempted&&Failed)break;if(!Attempted){if(!LmsStart(Model+12,false,E))return false;Attempted=true;}xrtSleep(25);
+  xrtMutexLock(g_Lm.Lock);LmInstance* I=LmsFind(Model+12);bool Ready=I&&!I->Stop&&!strcmp(I->State,"ready"),Failed=I&&!strcmp(I->State,"failed"),Stopped=!I||I->Stop||!strcmp(I->State,"stopped");xrtMutexUnlock(g_Lm.Lock);if(Ready)return true;
+  if(!Auto||(Attempted&&(Failed||Stopped)))break;
+  if(!Attempted){if(!LmsStart(Model+12,false,E))return false;Attempted=true;}xrtSleep(25);
  }
  return LmFail(E,xrtCancelRequested(Cancel)?"Local model startup cancelled":"The local model is stopped, failed to load or exceeded its startup deadline");
 }
