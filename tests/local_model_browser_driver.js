@@ -48,7 +48,10 @@
       dialog().querySelector(".mdo-layer-controls button:last-child").click(); await until(() => !dialog(), "web dialog closed");
       button("stop").click(); await until(() => button("configure"), "deployment stopped without refresh");
       button("configure").click(); await until(() => dialog()?.querySelector("[name=output_tokens]"), "deployment editor");
-      dialog().querySelector("[name=output_tokens]").value = "1024"; button("confirm", dialog()).click(); await until(() => !dialog(), "edited deployment saved");
+      dialog().querySelector("[name=output_tokens]").value = "1024"; dialog().querySelector("[name=reasoning_mode]").value = "on"; button("confirm", dialog()).click(); await until(() => !dialog(), "edited deployment saved");
+      const managed = (await api.get("/models")).data.models.find(m => m.managed_local);
+      const { fillReasoningOptions } = await import("/js/features/chat/composer-profile.js"); const thinking = document.createElement("select"); fillReasoningOptions(thinking, managed);
+      check(thinking.disabled && thinking.selectedOptions[0].textContent === tr("reasoning_mode.on"), "Composer shows the effective deployment thinking mode");
       await until(() => button("rollback"), "previous configuration available"); button("rollback").click(); button("confirm", dialog()).click(); await until(() => !dialog(), "configuration rollback finished");
       button("deleteDeployment").click(); button("confirm", dialog()).click(); await until(() => !dialog() && !button("start"), "deployment deleted while keeping installation");
       check(!!button("createDeployment"), "Model resources remain reusable after deleting deployment");

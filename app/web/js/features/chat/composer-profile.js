@@ -27,12 +27,13 @@ export function fillReasoningOptions(select, model, preferred = "") {
     ? model.reasoning_efforts : (preferred ? [preferred] : []);
   clear(select);
   for (const effort of efforts)
-    select.append(element("option", { text: EFFORT_LABEL[effort]
+    select.append(element("option", { text: model?.managed_local && model?.local_reasoning_mode
+      ? t(`localModels.reasoning_mode.${model.local_reasoning_mode}`) : EFFORT_LABEL[effort]
       ? uiMessage(EFFORT_LABEL[effort][0], {}, EFFORT_LABEL[effort][1]) : effort,
       attrs: { value: effort } }));
   const chosen = reasoningChoice(model, preferred);
   select.value = chosen;
-  select.disabled = efforts.length === 0;
+  select.disabled = !!model?.managed_local || efforts.length === 0;
   return chosen;
 }
 

@@ -44,7 +44,11 @@ def main():
             installs=[]
             for backend in ('cpu','vulkan'):
                 plan=call(dict(action='plan',version=VERSION,profile=backend+'-16k'));check(plan['runtime_plan']['ready'],backend+' native dependency plan ready')
-                job=call(dict(action='install',plan_id=plan['id'],revision=plan['revision'],trust_code=True));job=wait('installations',job['id'],'state',('installed','failed'));check(job['state']=='installed',backend+' runtime and fixed weight installed from public endpoints: '+job.get('error',''));installs.append(job['id'])
+                job=call(dict(action='install',plan_id=plan['id'],revision=plan['revision'],trust_code=True));job=wait('installations',job['id'],'state',('installed','failed'))
+                for attempt in range(2):
+                    if job['state']=='installed' or 'connection failed' not in job.get('error',''):break
+                    report.setdefault('explicit_retries',[]).append(dict(backend=backend,attempt=attempt+1,error=job['error']));call(dict(action='retry',id=job['id']));job=wait('installations',job['id'],'state',('installed','failed'))
+                check(job['state']=='installed',backend+' runtime and fixed weight installed from public endpoints: '+job.get('error',''));installs.append(job['id'])
                 d=call(dict(action='deployment_create',installation=job['id'],name='Published '+backend));check(d['config']['reasoning_mode']=='off','starter thinking toggle defaults to off')
                 call(dict(action='start',id=d['id'],allow_unknown=backend!='cpu'));state=wait('deployments',d['id'],'service_state',('ready','failed'),120);check(state['service_state']=='ready',backend+' published runtime loaded: '+state.get('service_error',''))
                 verification=call(dict(action='verify',id=d['id']));check(verification['verified'] and verification['tools'],backend+' published model streaming and tool round trip passed')

@@ -188,7 +188,7 @@ bool MdoApiModelsRoute(MdoApiContext* Context)
             for(size_t N=0;N<xrtValueCount(Locals);N++){const xvalue* D=xrtValueArrayGet(Locals,N);cstr Id=MdoExtensionText(D,"id",32);if(!Id||strcmp(Id,Info.Id+12))continue;
                 const xvalue* V=xrtValueObjectGet(D,XRT_STR_LITERAL("verification"));bool Reply=false,Tools=false;xrtValueGetBool(xrtValueObjectGet(V,XRT_STR_LITERAL("reply")),&Reply);xrtValueGetBool(xrtValueObjectGet(V,XRT_STR_LITERAL("tools")),&Tools);
                 cstr Hash=MdoExtensionText(D,"fingerprint",64),Proof=MdoExtensionText(V,"fingerprint",64);bool Verified=Hash&&Proof&&!strcmp(Hash,Proof)&&Reply&&(!(Info.Capabilities&XLLM_CAP_TOOL_CALL_OUT)||Tools);
-                Ok=MdoApiValueSetBool(Item,"managed_local",true)&&MdoApiValueSetString(Item,"deployment_id",Id)&&MdoApiValueSetString(Item,"service_state",MdoExtensionText(D,"service_state",24))&&MdoApiValueSetBool(Item,"local_verified",Verified);break;
+                Ok=MdoApiValueSetBool(Item,"managed_local",true)&&MdoApiValueSetString(Item,"deployment_id",Id)&&MdoApiValueSetString(Item,"service_state",MdoExtensionText(D,"service_state",24))&&MdoApiValueSetString(Item,"local_reasoning_mode",MdoExtensionText(xrtValueObjectGet(D,XRT_STR_LITERAL("config")),"reasoning_mode",16))&&MdoApiValueSetBool(Item,"local_verified",Verified);break;
             }
         }
         if(Ok)Ok=MdoApiValueAppendTake(Models,&Item);
