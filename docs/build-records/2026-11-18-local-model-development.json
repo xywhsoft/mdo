@@ -1,0 +1,131 @@
+{
+  "date": "2026-11-18",
+  "build": {
+    "development": true,
+    "formal_release_published": false,
+    "source_commit": "eabc08eb63fad088b4c6ba6fbb3ef20fb07cd94f",
+    "version": "0.9.7",
+    "bytes": 7831958,
+    "sha256": "abc61f992f9f51158548267ddc866488e17667d8feda7dafcdf8982a5c36abaf",
+    "pack_source": "original app directory; no app/SDK copy"
+  },
+  "acceptance": {
+    "passed": true,
+    "packed": true,
+    "source": "production-public-store",
+    "version_id": "89862fdae02a5e0fbee835c7526a6b73",
+    "checks": [
+      "published recipe and both runtime builds are publicly resolvable",
+      "cpu native dependency plan ready",
+      "cpu runtime and fixed weight installed from public endpoints: ",
+      "starter thinking toggle defaults to off",
+      "cpu published runtime loaded: ",
+      "cpu published model streaming and tool round trip passed",
+      "vulkan native dependency plan ready",
+      "vulkan runtime and fixed weight installed from public endpoints: ",
+      "starter thinking toggle defaults to off",
+      "vulkan published runtime loaded: ",
+      "vulkan published model streaming and tool round trip passed",
+      "CPU and Vulkan installations share one verified 610 MiB weight",
+      "published test installations and owned weights removed"
+    ]
+  },
+  "browser": [
+    {
+      "locale": "en-US",
+      "width": 1400,
+      "passed": true,
+      "checks": [
+        "Requested interface language applied",
+        "Installed receipt shown",
+        "Failed deployment save retains parameter edits",
+        "Stopped deployment does not offer an unusable chat action",
+        "Ready model offers mdo conversation entry",
+        "Temporary API key stays out of registry snapshots",
+        "Composer shows the effective deployment thinking mode",
+        "Model resources remain reusable after deleting deployment",
+        "Failed import retains user input",
+        "Touch-friendly capsule switch",
+        "Ownership explained before removal",
+        "Catalog weight size rendered",
+        "Single-page navigation disabled",
+        "Profile resources and fixed runtime shown",
+        "Runtime installation requires explicit approval",
+        "Review displays immutable hashes and sources",
+        "Valid approved plan enables install",
+        "Dialog fits desktop and narrow screens",
+        "Page has no horizontal overflow",
+        "Localized interface resolves all keys",
+        "Configured language survives model mutations"
+      ]
+    },
+    {
+      "locale": "ru-RU",
+      "width": 390,
+      "passed": true,
+      "checks": [
+        "Requested interface language applied",
+        "Installed receipt shown",
+        "Failed deployment save retains parameter edits",
+        "Stopped deployment does not offer an unusable chat action",
+        "Ready model offers mdo conversation entry",
+        "Temporary API key stays out of registry snapshots",
+        "Composer shows the effective deployment thinking mode",
+        "Model resources remain reusable after deleting deployment",
+        "Failed import retains user input",
+        "Touch-friendly capsule switch",
+        "Ownership explained before removal",
+        "Catalog weight size rendered",
+        "Single-page navigation disabled",
+        "Profile resources and fixed runtime shown",
+        "Runtime installation requires explicit approval",
+        "Review displays immutable hashes and sources",
+        "Valid approved plan enables install",
+        "Dialog fits desktop and narrow screens",
+        "Page has no horizontal overflow",
+        "Localized interface resolves all keys",
+        "Configured language survives model mutations"
+      ]
+    },
+    {
+      "locale": "zh-CN",
+      "width": 1400,
+      "passed": true,
+      "checks": [
+        "Requested interface language applied",
+        "Installed receipt shown",
+        "Failed deployment save retains parameter edits",
+        "Stopped deployment does not offer an unusable chat action",
+        "Ready model offers mdo conversation entry",
+        "Temporary API key stays out of registry snapshots",
+        "Composer shows the effective deployment thinking mode",
+        "Model resources remain reusable after deleting deployment",
+        "Failed import retains user input",
+        "Touch-friendly capsule switch",
+        "Ownership explained before removal",
+        "Catalog weight size rendered",
+        "Single-page navigation disabled",
+        "Profile resources and fixed runtime shown",
+        "Runtime installation requires explicit approval",
+        "Review displays immutable hashes and sources",
+        "Valid approved plan enables install",
+        "Dialog fits desktop and narrow screens",
+        "Page has no horizontal overflow",
+        "Localized interface resolves all keys",
+        "Configured language survives model mutations"
+      ]
+    }
+  ],
+  "strict_c_compile": "passed -Wall -Wextra -Werror",
+  "pending_real_devices": [
+    "Linux",
+    "macOS",
+    "NVIDIA CUDA"
+  ],
+  "not_implemented": [
+    "Strata adapter",
+    "Remote runtime web forwarding to controller",
+    "Large runtime attachments beyond extension package limits",
+    "Arbitrary versions under the same runtime logical ID"
+  ]
+}

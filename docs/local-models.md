@@ -104,3 +104,13 @@
 下载生产者与短期配置操作分开锁定，暂停大文件下载不会阻止已有模型启停。分片 GGUF 崩溃残留视图在编辑/切换/删除部署时清理；资源卷离线时保留绑定，恢复后重试。引用导入通过可选 `source_store` 区分外部源文件和受管源文件；旧收据保持保守引用行为，避免误删原文件。
 
 本轮没有发布新的正式客户端版本；开发产物与正式八通道发布记录分开。
+
+## 单文件开发版验收
+
+开发版位于 `.build/local-model-development/mdo.exe`，直接打包项目原 `app` 目录，不复制应用或 SDK，不修改正式版本记录。对应代码提交为 `eabc08eb`；构建摘要及验收收据见 `docs/build-records/2026-11-18-local-model-development.json`。
+
+`tests/test_local_models_published.py --download --packed .build/local-model-development/mdo.exe --reuse-weight .build/local-model-real/Qwen3-0.6B-Q8_0.gguf` 已通过 CPU/Vulkan 的真实线上目录、运行库安装、启动、流式回复、工具往返、共享资源和卸载检查。通过硬链接复用固定摘要的权重，仍执行原生完整 SHA-256 校验；运行库从线上重新下载安装。这个检查还确认了单文件内的原生托管程序及运行库加载不依赖源码目录。
+
+最终服务与浏览器回归通过，中英俄每种语言完成 21 项界面检查，包含 390px 窄屏、胶囊开关、配置失败保留和实际部署思考模式显示。C 源码通过 `-Wall -Wextra -Werror` 检查。
+
+交付边界：Windows CPU 与本机 AMD Vulkan 已实机验收；Linux、macOS、NVIDIA CUDA 待实机验收。Strata、控制端访问远程运行时网页、超过既有扩展包上限的运行库附件，以及同一运行库逻辑 ID 的任意多版本并存尚未实现；目前使用独立构建 ID 固定并共享运行库。上述内容不标记为已验收能力。
