@@ -2,6 +2,7 @@
 #include "../../include/mdo/local_models.h"
 static bool LmApiInput(MdoApiContext* C,xvalue* Input){
  char E[512]={0};xvalue* Out=NULL;xstrview A={0};xrtValueGetString(xrtValueObjectGet(Input,XRT_STR_LITERAL("action")),&A);
+ if(A.Data&&!strcmp(A.Data,"verify")){bool Ok=MdoApiLocalModelVerify(C,Input);xrtValueRelease(Input);return Ok;}
  bool Read=A.Data&&(!strcmp(A.Data,"catalog")||!strcmp(A.Data,"detail")||!strcmp(A.Data,"plan"));
  bool Ok=Read?MdoLocalModelsRead(Input,C->SendCancel,&Out,E):MdoLocalModelsCommand(Input,&Out,E);xrtValueRelease(Input);
  if(Ok)return MdoApiReplySuccessTake(C,200,Out,NULL);xrtValueRelease(Out);return MdoApiReplyError(C,422,"local_model_operation_failed",E[0]?E:"The local model operation could not be completed",NULL);

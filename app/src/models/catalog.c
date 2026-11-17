@@ -93,6 +93,9 @@ typedef struct MdoCapabilityName {
 
 static MdoModelState g_MdoModels;
 static MdoModelOnlineAuthority g_MdoModelsOnline;
+static MdoModelLocalAuthority g_MdoModelsLocal;
+void MdoModelManagerSetLocalAuthority(const MdoModelLocalAuthority* A){if(A)g_MdoModelsLocal=*A;else memset(&g_MdoModelsLocal,0,sizeof(g_MdoModelsLocal));}
+static bool MdoModelsLocalOwned(cstr Id){return g_MdoModelsLocal.Owned&&g_MdoModelsLocal.Owned(Id);}
 
 static const MdoCapabilityName g_MdoCapabilities[] = {
     { "text-input", XLLM_CAP_TEXT_IN },
@@ -589,6 +592,7 @@ fail:
 }
 
 #include "online_catalog.inc.c"
+#include "local_catalog.inc.c"
 static MdoModelCatalog* MdoModelsBuildCandidate(uint64 Generation)
 {
     xjsonreadconfig JsonConfig;
@@ -656,6 +660,7 @@ static MdoModelCatalog* MdoModelsBuildCandidate(uint64 Generation)
     xvalue* Online=g_MdoModels.OnlineCatalog?xrtValueClone(g_MdoModels.OnlineCatalog):NULL;
     xrtMutexUnlock(g_MdoModels.Lock);
     bool Merged=MdoModelsMergeOnline(pCatalog,Online);xrtValueRelease(Online);if(!Merged)goto fail;
+    if(!MdoModelsMergeLocal(pCatalog))goto fail;
     if(pCatalog->DefaultModelIndex==SIZE_MAX && pCatalog->ModelCount)pCatalog->DefaultModelIndex=0u;
     xrtValueRelease(pRoot);
     return pCatalog;
@@ -1174,7 +1179,7 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
         return NULL;
     }
     MaxOutputTokens = pOptions->MaxOutputTokens != 0u ?
-        pOptions->MaxOutputTokens : (pModel->Policy?MdoModelPolicyBudget(pModel->Policy,ReasoningEffort):pModel->MaxOutputTokens);
+        pOptions->MaxOutputTokens : (pModel->Policy?MdoModelPolicyBudget(pModel->Policy,ReasoningEffort):MdoModelsLocalOwned(pModel->Id)?pModel->OutputReserveTokens:pModel->MaxOutputTokens);
     if ( MaxOutputTokens == 0u ||
          MaxOutputTokens > pModel->MaxOutputTokens ) {
         MdoModelProfileErrorInit(pError, "profile_output_limit",
@@ -1184,15 +1189,17 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
     if ( !MdoModelCatalogProfile(pCatalog, pModel->Id, Protocol,
             &Profile, pError) ) return NULL;
     bool Online=MdoModelIsOnline(pCatalog,pModel->Id);
+    MdoModelManagedEndpoint Local={0};bool Managed=MdoModelsLocalOwned(pModel->Id);
+    if(Managed){char Why[512]={0};if(!g_MdoModelsLocal.Resolve(pModel->Id,&Local,Why)){MdoModelProfileErrorInit(pError,"profile_local_model_stopped",Why);goto done;}Profile.sModel=Local.Alias;}
     if(Online&&!Access){MdoModelsProfileError(pError,"Sign in to use online models");if(pError)pError->eCode=XLLM_ERROR_AUTH;goto done;}
     static const char* const Paths[]={"/api/v1/ai/chat/completions","/api/v1/ai/responses","/api/v1/ai/messages"};
-    Endpoint=Online?MdoModelsOnlineJoin(g_MdoModelsOnline.Origin,Paths[EndpointIndex]):MdoModelsResolveEndpoint(pProvider->Endpoints[EndpointIndex],pError);
+    Endpoint=Managed?xrtStrDup(Local.Endpoint):Online?MdoModelsOnlineJoin(g_MdoModelsOnline.Origin,Paths[EndpointIndex]):MdoModelsResolveEndpoint(pProvider->Endpoints[EndpointIndex],pError);
     if ( Endpoint == NULL ) goto done;
-    Secret=Online?xrtStrDup(Access):MdoModelsResolveCredential(pProvider,pError);
+    Secret=Managed?xrtStrDup(Local.Key):Online?xrtStrDup(Access):MdoModelsResolveCredential(pProvider,pError);
     if ( Secret == NULL ) goto done;
     memset(&Transport, 0, sizeof(Transport));
     Transport.Size = sizeof(Transport);
-    if (!MdoModelProxySettings(MdoModelsSelectedProxy(pProvider, pModel), &Transport, pError)) goto done;
+    if(Managed)snprintf(Transport.ProxyKind,sizeof(Transport.ProxyKind),"none");else if (!MdoModelProxySettings(MdoModelsSelectedProxy(pProvider, pModel), &Transport, pError)) goto done;
     if ( Transport.CaPemPath[0] != '\0' ) {
         CaStore = MdoModelsLoadCaStore(Transport.CaPemPath, pError);
         if ( CaStore == NULL ) goto done;
@@ -1220,7 +1227,7 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
     xllmClientConfigInit(&Config);
     Config.sBaseUrl = Endpoint;
     Config.sApiKey = Secret;
-    Config.sModel = pModel->WireModel;
+    Config.sModel = Managed?Local.Alias:pModel->WireModel;
     /* Discovery can only provide an ID, not reasoning capabilities. Its
      * neutral "none" selection means no control when the profile lacks it;
      * passing a nonempty effort would request an undeclared capability. */
@@ -1267,6 +1274,7 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
     }
 
 done:
+    xrtSecureZero(&Local,sizeof(Local));
     xrtSecureZero(&SystemProxy, sizeof(SystemProxy));
     xrtX509StoreFree(CaStore);
     MdoSecretRelease(&ProxyPassword);
@@ -1281,5 +1289,5 @@ uint32 MdoModelCatalogOutputBudget(const MdoModelCatalog* Catalog,cstr Id,cstr E
     if(!Catalog)return 0;
     const MdoModelEntry* M=Id&&*Id?MdoModelsLookup(Catalog,Id):
         Catalog->DefaultModelIndex<Catalog->ModelCount?&Catalog->Models[Catalog->DefaultModelIndex]:NULL;
-    return M?(M->Policy?MdoModelPolicyBudget(M->Policy,Effort&&*Effort?Effort:M->DefaultReasoningEffort):M->MaxOutputTokens):0;
+    return M?(M->Policy?MdoModelPolicyBudget(M->Policy,Effort&&*Effort?Effort:M->DefaultReasoningEffort):MdoModelsLocalOwned(M->Id)?M->OutputReserveTokens:M->MaxOutputTokens):0;
 }

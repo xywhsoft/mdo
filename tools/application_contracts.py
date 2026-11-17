@@ -236,7 +236,7 @@ INPUTS['Queue']['properties'].update(fields('hold_for_edit:b'))
 INPUTS['Truncate']['properties']['replacement'] = document('text:s attachments:ss profile:Profile', ('text','attachments','profile'), True)
 QUERY['MarkdownResourceRoute']='path:s mode:s'
 
-INPUTS['LocalModels']=document('action:s id:s name:s path:s mode:s plan_id:s revision:s trust_code:b delete_files:b version:s profile:s limit:u offset:u q:s',('action',),True)
+INPUTS['LocalModels']=document('action:s id:s name:s path:s mode:s plan_id:s revision:s trust_code:b delete_files:b version:s profile:s limit:u offset:u q:s installation:s runtime_ref:s backend:s deployment_revision:u config:Document capabilities:ss allow_unknown:b force:b tools:b',('action',),True)
 DEFS['LocalModelsInput']=INPUTS['LocalModels']
 BODY['LocalModelsRoute']='LocalModels'
 RESULT['LocalModelsRoute']='Document'

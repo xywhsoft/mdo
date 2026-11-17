@@ -1,6 +1,7 @@
 static bool LmStateValid(const xvalue* State){
  const xvalue* Roots=LmGet(State,"roots"),*Jobs=LmGet(State,"installations");
- if(!LmFields(State,"schema owner roots installations default_root")||strcmp(LmStr(State,"schema"),"mdo.local-model-state.v1")||!LmXid(LmStr(State,"owner"))||xrtValueType(Roots)!=XVALUE_OBJECT||xrtValueCount(Roots)>LM_LIMIT||xrtValueType(Jobs)!=XVALUE_OBJECT||xrtValueCount(Jobs)>LM_LIMIT)return false;
+ if(!LmFields(State,"schema owner roots installations default_root deployments")||strcmp(LmStr(State,"schema"),"mdo.local-model-state.v1")||!LmXid(LmStr(State,"owner"))||xrtValueType(Roots)!=XVALUE_OBJECT||xrtValueCount(Roots)>LM_LIMIT||xrtValueType(Jobs)!=XVALUE_OBJECT||xrtValueCount(Jobs)>LM_LIMIT)return false;
+ const xvalue* Deployments=LmGet(State,"deployments");if(Deployments){if(xrtValueType(Deployments)!=XVALUE_OBJECT||xrtValueCount(Deployments)>LM_LIMIT)return false;for(size_t I=0;I<xrtValueCount(Deployments);I++){xstrview K={0};const xvalue* D=xrtValueObjectAt(Deployments,I,&K);if(!LmDeploymentValid(D)||strcmp(K.Data,LmStr(D,"id"))||!LmGet(Jobs,LmStr(D,"installation")))return false;}}
  cstr Default=LmStr(State,"default_root");if(Default[0]&&!LmGet(Roots,Default))return false;
  for(size_t I=0;I<xrtValueCount(Roots);I++){xstrview K={0};const xvalue* R=xrtValueObjectAt(Roots,I,&K);cstr Path=LmStr(R,"path");if(!LmXid(K.Data)||!LmFields(R,"id path")||strcmp(K.Data,LmStr(R,"id"))||!Path[0]||(!xrtPathIsAbs(Path)&&!MdoExtensionRelativePath(Path)))return false;}
  for(size_t I=0;I<xrtValueCount(Jobs);I++){

@@ -1,0 +1,17 @@
+/* Managed models have stable identities even while stopped. Endpoints and
+ * credentials are resolved at client creation, never written to providers. */
+static bool MdoModelsMergeLocal(MdoModelCatalog* Catalog){
+ if(!g_MdoModelsLocal.Catalog)return true;xvalue* Rows=g_MdoModelsLocal.Catalog();size_t Count=xrtValueCount(Rows);if(!Rows)return false;if(!Count){xrtValueRelease(Rows);return true;}
+ if(MdoModelsFindProvider(Catalog,"mdo-local")){xrtValueRelease(Rows);return false;}
+ MdoProviderEntry* Providers=xrtRealloc(Catalog->Providers,(Catalog->ProviderCount+1)*sizeof(*Providers));if(!Providers){xrtValueRelease(Rows);return false;}Catalog->Providers=Providers;MdoProviderEntry* P=&Providers[Catalog->ProviderCount++];memset(P,0,sizeof(*P));
+ P->Id=xrtStrDup("mdo-local");P->Name=xrtStrDup("mdo local");P->Builtin=true;P->Protocols=1;P->TimeoutMilliseconds=600000;P->Endpoints[0]=xrtStrDup("managed:local");P->Proxy=xrtJsonParse(XRT_STR_LITERAL("{\"kind\":\"none\"}"));
+ MdoModelEntry* Models=xrtRealloc(Catalog->Models,(Catalog->ModelCount+Count)*sizeof(*Models));bool Ok=Models&&P->Id&&P->Name&&P->Endpoints[0]&&P->Proxy;if(!Ok){xrtValueRelease(Rows);return false;}Catalog->Models=Models;
+ for(size_t K=0;Ok&&K<Count;K++){const xvalue* D=xrtValueArrayGet(Rows,K),*C=xrtValueObjectGet(D,XRT_STR_LITERAL("config"));xstrview Id={0},Name={0};Ok=xrtValueGetString(xrtValueObjectGet(D,XRT_STR_LITERAL("id")),&Id)&&xrtValueGetString(xrtValueObjectGet(D,XRT_STR_LITERAL("name")),&Name);if(!Ok)break;
+  MdoModelEntry* M=&Models[Catalog->ModelCount++];memset(M,0,sizeof(*M));M->Id=xrtFormat("local-model.%s",Id.Data);M->Name=xrtStrDupN(Name.Data,Name.Size);M->ProviderId=xrtStrDup("mdo-local");M->WireModel=xrtStrDup(M->Id);M->Builtin=true;M->Free=true;M->Protocols=1;M->DefaultProtocol=MDO_MODEL_PROTOCOL_OPENAI_CHAT_COMPLETIONS;M->WindowMode=XLLM_WINDOW_SHARED_CONTEXT;
+  uint64 Context=0,Output=0,Budget=0;Ok=MdoModelsUnsigned(xrtValueObjectGet(C,XRT_STR_LITERAL("context_tokens")),&Context)&&MdoModelsUnsigned(xrtValueObjectGet(C,XRT_STR_LITERAL("max_output_tokens")),&Output)&&MdoModelsUnsigned(xrtValueObjectGet(C,XRT_STR_LITERAL("output_tokens")),&Budget);
+  M->ContextWindowTokens=M->MaxInputTokens=Context;M->MaxOutputTokens=(uint32)Output;M->OutputReserveTokens=(uint32)Budget;M->SummaryTokens=(uint32)(Output<2048?Output:2048);M->Capabilities=XLLM_CAP_TEXT_IN|XLLM_CAP_TEXT_OUT|XLLM_CAP_STREAM|XLLM_CAP_JSON_OUT;M->DefaultReasoningEffort=xrtStrDup("none");M->ReasoningEfforts=xrtCalloc(1,sizeof(char*));if(M->ReasoningEfforts){M->ReasoningEfforts[0]=xrtStrDup("none");M->ReasoningEffortCount=1;}M->Proxy=xrtJsonParse(XRT_STR_LITERAL("{\"kind\":\"none\"}"));
+  const xvalue* Caps=xrtValueObjectGet(D,XRT_STR_LITERAL("capabilities"));for(size_t N=0;N<xrtValueCount(Caps);N++){xstrview Cap={0};xrtValueGetString(xrtValueArrayGet(Caps,N),&Cap);if(MdoModelsViewEqual(Cap,"tools"))M->Capabilities|=XLLM_CAP_TOOL_CALL_OUT|XLLM_CAP_TOOL_RESULT_IN;if(MdoModelsViewEqual(Cap,"vision")){M->Capabilities|=XLLM_CAP_IMAGE_IN;M->Attachments=MDO_MODEL_ATTACHMENT_IMAGE;}if(MdoModelsViewEqual(Cap,"reasoning"))M->Capabilities|=XLLM_CAP_REASONING_OUT;}
+  Ok=Ok&&M->Id&&M->Name&&M->ProviderId&&M->WireModel&&M->DefaultReasoningEffort&&M->ReasoningEfforts&&M->ReasoningEfforts[0]&&M->Proxy;
+ }
+ xrtValueRelease(Rows);return Ok;
+}

@@ -5,6 +5,18 @@
 #include <xllm.h>
 
 typedef struct MdoModelCatalog MdoModelCatalog;
+typedef struct MdoModelManagedEndpoint {char Endpoint[128],Key[96],Alias[128];} MdoModelManagedEndpoint;
+/* Optional native lifecycle owner. Standalone catalogs do not depend on the
+ * local-model installer, process manager or application bootstrap. */
+typedef struct MdoModelLocalAuthority {
+ xvalue* (*Catalog)(void);
+ bool (*Owned)(cstr);
+ bool (*Resolve)(cstr,MdoModelManagedEndpoint*,char Error[512]);
+ bool (*Ensure)(cstr,xcancel*,uint64,char Error[512]);
+ bool (*Begin)(cstr,cstr,xcancel*,xcancel**,void**,char Error[512]);
+ void (*End)(void*);
+} MdoModelLocalAuthority;
+void MdoModelManagerSetLocalAuthority(const MdoModelLocalAuthority*);
 
 typedef enum MdoModelProtocol {
     MDO_MODEL_PROTOCOL_OPENAI_CHAT_COMPLETIONS = 1,

@@ -25,6 +25,7 @@ static const struct {
     { "profile_login_unavailable", "The online model list could not be loaded. Check the connection and retry account refresh." },
     { "profile_image_unsupported", "The selected model cannot view images in this conversation. Choose a model with image input to continue." },
     { "profile_model_missing", "The selected model is no longer in the model list. Refresh the list or choose another model." },
+    { "profile_local_model_stopped", "The local model is stopped or restarting. Start it from Settings > Local models, then retry." },
     { "profile_protocol_unsupported", "The selected model does not support this API protocol. Check the model protocol or choose another model." },
     { "profile_reasoning_unsupported", "The selected model does not support this reasoning level. Choose a supported level." },
     { "profile_output_limit", "The configured output limit exceeds this model's limit. Lower the output limit in the Agent or model settings." },
@@ -286,7 +287,7 @@ static const xllm_request* MdoModelsClientRequest(xllm_client* Client,
 
 #include "tool_schema.inc.c"
 
-static xllm_result MdoModelsClientComplete(xllm_client* Client, const xllm_request* Request,
+static xllm_result MdoModelsClientCompleteInner(xllm_client* Client, const xllm_request* Request,
     const xllm_stream_callbacks* Callbacks, xllm_response** Response, xllm_error* Error)
 {
     xllm_request View; MdoModelHooks Context; xllm_hooks Hooks;
@@ -296,6 +297,14 @@ static xllm_result MdoModelsClientComplete(xllm_client* Client, const xllm_reque
     xllm_model_profile Profile;bool Replay=xllmClientGetModelProfile(Client,&Profile)&&Profile.eProvider==XLLM_PROVIDER_OPENAI_COMPAT&&Profile.sModel&&!strncmp(Profile.sModel,"deepseek-",9u);
     MdoModelsRequestHooks(&View, &Context, &Hooks, Request->sReasoningEffort && !strcmp(Request->sReasoningEffort, "default"),Replay);
     return xllmClientComplete(Client, &View, Callbacks, Response, Error);
+}
+static xllm_result MdoModelsClientComplete(xllm_client* Client,const xllm_request* Request,const xllm_stream_callbacks* Callbacks,xllm_response** Response,xllm_error* Error){
+ xllm_model_profile P;if(!Client||!Request||!xllmClientGetModelProfile(Client,&P)||!MdoModelsLocalOwned(P.sId))return MdoModelsClientCompleteInner(Client,Request,Callbacks,Response,Error);
+ void* Handle=NULL;xcancel* Cancel=NULL;char Why[512]={0};if(!g_MdoModelsLocal.Ensure(P.sId,Request->pCancel,Request->uDeadline,Why)){MdoModelProfileErrorInit(Error,"profile_local_model_stopped",Why);if(Response)*Response=NULL;return XLLM_RESULT_ERROR;}
+ MdoModelCatalog* Current=MdoModelCatalogSnapshot();MdoModelClientOptions O;MdoModelClientOptionsInit(&O);O.ModelId=P.sId;O.ReasoningEffort=Request->sReasoningEffort;O.MaxOutputTokens=Request->uMaxOutputTokens;xllm_client* Fresh=MdoModelClientCreateAuth(Current,&O,NULL,Error,NULL);MdoModelCatalogRelease(Current);
+ xllm_model_profile Effective;bool Ready=Fresh&&xllmClientGetModelProfile(Fresh,&Effective)&&g_MdoModelsLocal.Begin(P.sId,Effective.sModel,Request->pCancel,&Cancel,&Handle,Why);
+ if(!Ready){xllmClientDestroy(Fresh);MdoModelProfileErrorInit(Error,"profile_local_model_stopped",Why);if(Response)*Response=NULL;return XLLM_RESULT_ERROR;}
+ xllm_request View=*Request;View.pCancel=Cancel;xllm_result R=MdoModelsClientCompleteInner(Fresh,&View,Callbacks,Response,Error);g_MdoModelsLocal.End(Handle);xllmClientDestroy(Fresh);return R;
 }
 
 static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Request,

@@ -64,3 +64,19 @@
 | `test_download_center.mjs`, `test_downloads.mjs`, `test_extension_settings.mjs`, `test_extension_settings_form.mjs` | 21 项通过 |
 
 浏览器证据位于 `.build/local-model-browser/`，测试只生成约 1 MiB 的合成权重和不可执行的假运行库。所有商店及权重请求均由本机 HTTPS 测试服务响应，不向生产写入合成作品。没有发布客户端新版本，没有执行真实模型；Linux/macOS、大模型吞吐、显存判断和推理闭环尚待下一阶段实机验收。
+
+## 受管服务与模型接入（2026-11-18）
+
+安装收据新增独立 `deployments`，旧收据缺少该字段时按空集合兼容。每份部署保存固定运行库、实际上下文、并发、输出预算、思考模式与行为选项；同一安装可以建立多份配置，共享权重。配置修改保留一份可回滚版本，按 revision 防止覆盖。
+
+本地模型稳定身份为 `local-model.<部署XID>`。服务停止后仍在模型列表，临时端口和密钥不写入供应商配置。请求沿用现有 xllm 流式与重试链路；请求前检查实例身份并持有请求租约。首次使用启动、随应用启动、空闲停止默认关闭。停止先拒绝新请求并等在途请求结束，强制停止取消在途调用。
+
+服务由附带的原生 model-supervisor 托管：Windows Job、POSIX 进程组与父进程管道生命线。不凭旧 PID 接管进程。默认回环监听，环境变量传递临时 API Key，日志脱敏，单次磁盘日志最多 4 MiB。启动检查文件大小和完整 SHA-256、固定运行库身份，再检查健康、模型随机别名、有效每槽上下文和并发数。
+
+新增操作：`hardware`、`deployment_options`、`deployment_create/update/delete/rollback`、`start/stop`、`logs`、`verify`、`web_access`。编辑与删除使用 `deployment_revision`；`web_access` 仅在用户明确打开运行时网页时经受保护的 POST 返回本次运行凭据，不出现在 GET 快照。
+
+硬件检测区分可用内存和 GPU 标称容量；目前不声称能精确读取可用显存。GPU 或检测不完整时，需明确启用允许尝试启动。目录要求是预设参考值，改变上下文/并发后须重新评估。多分片 GGUF 使用同盘硬链接视图，不复制权重。
+
+`verify` 通过真实产品调用链检查流式回复及工具声明→结果→继续回复，不执行模型提议的实际工具；验证指纹绑定权重、运行库、模板、能力和有效参数，临时端口变化不使其失效。
+
+本机 Windows CPU 与 AMD RX 5700 Vulkan 已使用官方 llama.cpp b12477、Qwen3-0.6B Q8_0（639,446,688 字节）完成真实安装、流式及工具往返、网页、停止重启和卸载。证据在 `.build/local-model-real/acceptance-*.json`。Linux/macOS/CUDA 只有接口及实现，待实机验收；Strata 尚未接入。大型运行库附件与同逻辑 ID 多版本并存不在当前实现中。

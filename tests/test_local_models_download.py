@@ -23,9 +23,9 @@ def archive(files):
         for name,data in files.items():z.writestr(name,json.dumps(data,ensure_ascii=False,separators=(',',':')) if isinstance(data,dict) else data)
     return stream.getvalue()
 
-def fixtures():
+def fixtures(program=None):
     runtime=dict(kind='external-tools',id='external-tool:qa.local-runtime',name='Synthetic runtime (never executed)',alias='qa-runtime',entry='tool.json',platforms=['windows-x86_64'])
-    runtime_zip=archive({'extension.json':runtime,'tool.json':dict(program='server.exe',commands=[dict(name='qa-llama-server',entry='server.exe')]),'server.exe':b'NOT AN EXECUTABLE: never run this fixture'})
+    runtime_zip=archive({'extension.json':runtime,'tool.json':dict(program='server.exe',prompt='Protocol fixture for local model service tests.',commands=[dict(name='qa-llama-server',entry='server.exe')]),'server.exe':program or b'NOT AN EXECUTABLE: never run this fixture'})
     doc=recipe();doc['weights'][0]['files'][0].update(bytes=len(PAYLOAD),sha256=HASH,urls=['https://weights.example.test/model.gguf'],redirect_hosts=[])
     doc['runtimes'][0].update(version_id=RUNTIME_VERSION,sha256=hashlib.sha256(runtime_zip).hexdigest())
     profile=doc['profiles'][0];profile['requirements'].update(ram_bytes=1048576,disk_bytes=2*len(PAYLOAD),margin_bytes=0)
@@ -57,7 +57,7 @@ class Publisher(BaseHTTPRequestHandler):
             except (BrokenPipeError,ConnectionResetError,ssl.SSLError):pass
             return
         if p.path.endswith('/archive'):
-            data=ARCHIVES[query['version'][0]];offset=int(query.get('offset',['0'])[0]);self.send_response(200);self.send_header('Content-Type','application/zip');self.send_header('Content-Length',str(len(data[offset:])));self.end_headers();self.wfile.write(data[offset:]);return
+            data=ARCHIVES[query['version'][0]];offset=int(query.get('offset',['0'])[0]);chunk=data[offset:offset+1048576];self.send_response(200);self.send_header('Content-Type','application/zip');self.send_header('Content-Length',str(len(chunk)));self.end_headers();self.wfile.write(chunk);return
         if p.path.endswith('/catalog'):value=dict(items=[MODEL],total=1,offset=0,limit=100)
         elif p.path.endswith('/plan'):value=PLAN
         elif p.path.endswith('/detail'):value=RUNTIME if query['version'][0]==RUNTIME_VERSION else MODEL
@@ -97,13 +97,20 @@ def certificates(base):
     ca=base/'ca.pem';leaf=base/'cert.pem';pem=base/'key.pem';ca.write_bytes(ca_cert.public_bytes(serialization.Encoding.PEM));leaf.write_bytes(cert.public_bytes(serialization.Encoding.PEM));pem.write_bytes(key.private_bytes(serialization.Encoding.PEM,serialization.PrivateFormat.TraditionalOpenSSL,serialization.NoEncryption()));return ca,leaf,pem
 
 def main():
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--host',type=Path,default=ROOT/'.build/host/xs.exe');parser.add_argument('--browser',type=Path);args=parser.parse_args()
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--host',type=Path,default=ROOT/'.build/host/xs.exe');parser.add_argument('--browser',type=Path);parser.add_argument('--services',action='store_true');args=parser.parse_args()
+    global DOC,RUNTIME,MODEL,PLAN,ARCHIVES
+    if args.services:
+        import sys
+        runner=ROOT/'.build/local-model-fixture-runner.exe'
+        subprocess.run(['gcc','-Os','-s','-municode','-ffunction-sections','-Wl,--gc-sections',str(ROOT/'tests/local_model_fixture_runner.c'),'-lshell32','-o',str(runner)],check=True)
+        DOC,RUNTIME,MODEL,PLAN,ARCHIVES=fixtures(runner.read_bytes())
     with tempfile.TemporaryDirectory(prefix='local-model-download-',dir=ROOT/'.build') as raw,product_http_config(free_port()) as config:
         base=Path(raw);home=base/'home';(home/'config').mkdir(parents=True);(home/'certs').mkdir();ca,leaf,key=certificates(base);(home/'certs/ca.pem').write_bytes(ca.read_bytes())
         publisher=ThreadingHTTPServer(('127.0.0.1',0),Publisher);publisher.daemon_threads=True;context=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);context.load_cert_chain(leaf,key);publisher.socket=context.wrap_socket(publisher.socket,server_side=True)
         proxy=ProxyServer(('127.0.0.1',0),Proxy);proxy.target=publisher.server_port;proxy.targets=[]
         threading.Thread(target=publisher.serve_forever,daemon=True).start();threading.Thread(target=proxy.serve_forever,daemon=True).start()
         (home/'config/settings.json').write_text(json.dumps(dict(schema_version=1,patch=dict(transport=dict(ca_pem_path='certs/ca.pem',proxy=dict(kind='http-connect',host='127.0.0.1',port=proxy.server_address[1],user='probe',bypass='',credential=dict(secret_ref='env:MDO_TEST_PROXY_PASSWORD')))))),encoding='utf-8')
+        control=base/'control.json';control.write_text('{}');
         process=None;port=json.loads(config.read_text(encoding='utf-8'))['services'][0]['port'];log=base/'runtime.log';checks=0
         def check(value,detail):
             nonlocal checks
@@ -112,7 +119,7 @@ def main():
             code,_,raw=request(port,'GET' if body is None else 'POST','/api/v1'+path,body=None if body is None else json.dumps(body).encode(),headers={'Content-Type':'application/json'});data=json.loads(raw);check(code==status,(code,data));return data.get('data')
         def start():
             nonlocal process
-            with log.open('ab') as out:process=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(home)],cwd=APP,env={**os.environ,'MDO_HOME':str(home),'USERPROFILE':str(base),'USE_WEBVIEW':'0','MDO_TEST_PROXY_PASSWORD':'bounded-password'},stdout=out,stderr=out,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            with log.open('ab') as out:process=subprocess.Popen([str(args.host.resolve()),str(config),'--','--home',str(home)],cwd=APP,env={**os.environ,'MDO_HOME':str(home),'USERPROFILE':str(base),'USE_WEBVIEW':'0','MDO_TEST_PROXY_PASSWORD':'bounded-password','MDO_QA_MODEL_PYTHON':__import__('sys').executable,'MDO_QA_MODEL_SCRIPT':str(ROOT/'tests/local_model_server_fixture.py'),'MDO_QA_MODEL_CONTROL':str(control)},stdout=out,stderr=out,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
             wait_ready(port,process)
         def wait(id,skip=()):
             end=time.monotonic()+50
@@ -166,6 +173,44 @@ def main():
             row=call()['installations'][interrupted];check(row['state']=='interrupted',row);hits=Publisher.hits;time.sleep(.25);check(Publisher.hits==hits,'restart unexpectedly resumed model downloads')
             call({},path=f"/download-tasks/{task['id']}/resume");check((resumed:=wait(interrupted,('interrupted',)))['state']=='installed',resumed);check((store/'blobs'/HASH).read_bytes()==PAYLOAD,'restart committed wrong bytes')
             check(all('example.test:443' in t or 'ai.xywhsoft.com:443' in t for t in proxy.targets),'unexpected network destination')
+            if args.services:
+                deployment=call(dict(action='deployment_create',installation=interrupted,name='Service QA'))
+                did=deployment['id'];mid='local-model.'+did
+                model_rows=call(path='/models')['models'];check(any(m['id']==mid for m in model_rows),'managed model missing from catalog')
+                check(next(m for m in model_rows if m['id']==mid)['default_output_tokens']==2048,'deployment output budget lost')
+                def service(state,timeout=30):
+                    end=time.monotonic()+timeout
+                    while time.monotonic()<end:
+                        row=call()['deployments'][did]
+                        if row['service_state'] in state:return row
+                        time.sleep(.05)
+                    raise AssertionError(row)
+                call(dict(action='start',id=did));row=service(('ready','failed'));check(row['service_state']=='ready',row)
+                checked=call(dict(action='verify',id=did));check(checked['verified'] and checked['reply'] and checked['tools'],checked)
+                check('[redacted]' in call(dict(action='logs',id=did))['text'],'runtime credential was not redacted')
+                call(dict(action='deployment_update',id=did,deployment_revision=deployment['revision'],config=deployment['config']),status=422)
+                call(dict(action='uninstall',id=interrupted,delete_files=True),status=422)
+                call(dict(action='stop',id=did));check(service(('stopped',))['service_state']=='stopped','stop never finished')
+                # A stopped deployment remains selectable; no random closed port is saved.
+                check(any(m['id']==mid for m in call(path='/models')['models']),'stopped model disappeared')
+                for _ in range(30):
+                    try:
+                        edited=call(dict(action='deployment_update',id=did,deployment_revision=deployment['revision'],config={**deployment['config'],'context_tokens':4096,'max_output_tokens':2048,'output_tokens':1024}))
+                        break
+                    except AssertionError:time.sleep(.05)
+                else:raise AssertionError('completed deployment remained locked')
+                call(dict(action='start',id=did));row=service(('ready','failed'));check(row['service_state']=='ready',row)
+                call(dict(action='stop',id=did,force=True));service(('stopped',))
+                call(dict(action='deployment_rollback',id=did,deployment_revision=edited['revision']))
+                current=call()['deployments'][did];check(current['config']['context_tokens']==8192,'deployment rollback lost original context')
+                current=call(dict(action='deployment_update',id=did,deployment_revision=current['revision'],config={**current['config'],'auto_start_on_use':True,'idle_seconds':1}))
+                checked=call(dict(action='verify',id=did));check(checked['verified'],'first-use startup failed');service(('stopped',))
+                current=call()['deployments'][did]
+                current=call(dict(action='deployment_update',id=did,deployment_revision=current['revision'],config={**current['config'],'auto_start_on_use':False,'idle_seconds':0}))
+                control.write_text('{"bad_context":true}');call(dict(action='start',id=did));row=service(('failed',));check('context' in row['service_error'],'wrong effective server context accepted')
+                control.write_text('{}');current=call()['deployments'][did]
+                call(dict(action='deployment_delete',id=did,deployment_revision=current['revision']))
+                check(not any(m['id']==mid for m in call(path='/models')['models']),'deleted deployment stayed in model catalog')
             if args.browser:
                 source=base/'browser.gguf';source.write_bytes(PAYLOAD)
                 evidence=ROOT/'.build/local-model-browser';evidence.mkdir(exist_ok=True)

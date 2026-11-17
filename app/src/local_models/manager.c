@@ -6,13 +6,15 @@
 #include "../../include/mdo/downloads.h"
 #include "../../include/mdo/distribution.h"
 #include "../../include/mdo/time.h"
+#include "../../include/mdo/models.h"
+void MdoApiLiveChanged(void* Data);
 
 #define LM_STATE "data/local-models/state.json"
 #define LM_STATE_LIMIT (16u*1024u*1024u)
 #define LM_LIMIT 128u
 typedef struct LmStoreLock {char Id[33];char* Path;xfile File;} LmStoreLock;
 typedef struct LmPin {char Id[33];MdoExtensionLease *Recipe,*Runtime;} LmPin;
-static struct {xmutex *Lock,*Writer;xthread* Thread;xcancel *Stop,*ActiveCancel;xnetengine* Engine;xvalue* State;bool Fault,Stopping;char Active[33],Owner[33];LmPin Pins[LM_LIMIT];LmStoreLock Stores[LM_LIMIT];} g_Lm;
+static struct {xmutex *Lock,*Writer;xthread* Thread;xcancel *Stop,*ActiveCancel;xnetengine* Engine;xvalue* State;bool Fault,Stopping,ServicesReady;char Active[33],Owner[33];LmPin Pins[LM_LIMIT];LmStoreLock Stores[LM_LIMIT];} g_Lm;
 static const xvalue* LmGet(const xvalue* V,cstr K){return xrtValueObjectGet(V,xrtStrView(K));}
 static cstr LmStr(const xvalue* V,cstr K){cstr S=MdoExtensionText(V,K,4096);return S?S:"";}
 static bool LmPut(xvalue* V,cstr K,cstr S){return xrtValueObjectSetNew(V,xrtStrView(K),xrtValueString(xrtStrView(S?S:"")));}
@@ -34,7 +36,9 @@ static bool LmHash(xfile F,uint64 Bytes,char Hash[65],xcancel* Cancel,xfile Copy
  while(Ok&&At<Bytes){size_t N=(size_t)(Bytes-At>sizeof(Buffer)?sizeof(Buffer):Bytes-At);Ok=(!Cancel||!xrtCancelRequested(Cancel))&&xrtReadFull(F,Buffer,N,NULL)&&xrtSha256Update(&S,Buffer,N)&&(!Copy||xrtWriteFull(Copy,Buffer,N,NULL));At+=N;}
  Ok=Ok&&xrtSha256Final(&S,Digest);if(Ok)for(size_t I=0;I<32;I++)snprintf(Hash+I*2,3,"%02x",Digest[I]);return Ok;
 }
+#include "deployments.inc.c"
 #include "state.inc.c"
+#include "hardware.inc.c"
 static bool LmBlob(xroot R,cstr Hash,uint64 Bytes,xcancel* Cancel){char* P=xrtFormat("blobs/%s",Hash);xfile F=P?LmFile(R,P,XFILE_READ):NULL;char Actual[65];bool Ok=F&&LmHash(F,Bytes,Actual,Cancel,NULL)&&!strcmp(Hash,Actual);xrtClose(F);xrtFree(P);return Ok;}
 static xvalue* LmStore(cstr Id){xrtMutexLock(g_Lm.Lock);const xvalue* R=LmGet(LmGet(g_Lm.State,"roots"),Id);xvalue* Out=R?xrtValueClone(R):NULL;xrtMutexUnlock(g_Lm.Lock);return Out;}
 static xroot LmRoot(const xvalue* Store,char** Native,char E[512]){
@@ -118,6 +122,7 @@ static bool LmImport(cstr Id,const xvalue* J,xroot Root,cstr Native,xcancel* Can
  if(Ok){xrtMutexLock(g_Lm.Lock);xvalue* Before=xrtValueClone(g_Lm.State),*Job=LmEdit("installations",Id),*File=xrtValueObject(),*Assets=xrtValueArray();Ok=Before&&Job&&File&&Assets&&(!ReferencedStore[0]||LmPut(Job,"store",ReferencedStore))&&LmPut(File,"sha256",Hash)&&xrtValueObjectSetNew(File,XRT_STR_LITERAL("bytes"),xrtValueUInt(Size))&&LmPut(File,"path",Copy?"model.gguf":Path)&&xrtValueObjectSetNew(File,XRT_STR_LITERAL("owned"),xrtValueBool(Copy))&&xrtValueArrayAppend(Assets,File)&&xrtValueObjectSet(Job,XRT_STR_LITERAL("assets"),Assets);Ok=LmCommit(Before,Ok);xrtValueRelease(File);xrtValueRelease(Assets);xrtMutexUnlock(g_Lm.Lock);}
  if(!Ok)LmFail(E,"Import failed: expected a readable GGUF v2/v3 file, sufficient free space and an unchanged source");return Ok;
 }
+#include "services.inc.c"
 static bool LmRun(cstr Id,xcancel* Cancel,bool QueuedOnly,char E[512]){
  if(g_Lm.Stopping||!xrtMutexTryLock(g_Lm.Writer))return LmFail(E,"Another model resource operation is running");
  xrtMutexLock(g_Lm.Lock);const xvalue* Current=LmGet(LmGet(g_Lm.State,"installations"),Id);cstr State=LmStr(Current,"state");if(!Current||(QueuedOnly?strcmp(State,"queued"):!LmOneOf(State,"queued interrupted failed attention"))){xrtMutexUnlock(g_Lm.Lock);xrtMutexUnlock(g_Lm.Writer);return LmFail(E,"This installation is no longer resumable");}snprintf(g_Lm.Active,33,"%s",Id);g_Lm.ActiveCancel=xrtCancelChild(Cancel);Cancel=g_Lm.ActiveCancel;xrtMutexUnlock(g_Lm.Lock);
@@ -140,12 +145,13 @@ bool MdoLocalModelsInit(xnetengine* Engine){
  if(!Exists&&g_Lm.State){char* Owner=xrtXidMakeString();if(!Owner||!LmPut(g_Lm.State,"owner",Owner))g_Lm.Fault=true;xrtFree(Owner);}
  if(!LmStateValid(g_Lm.State)){g_Lm.Fault=true;xrtValueRelease(g_Lm.State);g_Lm.State=xrtValueObject();}
 
+ if(!LmGet(g_Lm.State,"deployments"))xrtValueObjectSetNew(g_Lm.State,XRT_STR_LITERAL("deployments"),xrtValueObject());
  snprintf(g_Lm.Owner,33,"%s",LmStr(g_Lm.State,"owner"));if(!Exists&&!g_Lm.Fault&&!LmSave())g_Lm.Fault=true;
  xvalue* Jobs=xrtValueObjectEdit(g_Lm.State,XRT_STR_LITERAL("installations"));bool Changed=false;for(size_t I=0;I<xrtValueCount(Jobs);I++){xstrview Key={0};xrtValueObjectAt(Jobs,I,&Key);xvalue* J=xrtValueObjectEdit(Jobs,Key);cstr State=LmStr(J,"state");if(!strcmp(State,"queued")||!strcmp(State,"installing")||!strcmp(State,"removing")){LmPut(J,"state",!strcmp(State,"removing")?"cleanup_pending":"interrupted");Changed=true;}if(LmGet(J,"plan")){char E[512]={0};if(!LmPins(Key.Data,J,E)){LmPut(J,"state","attention");LmPut(J,"error",E);Changed=true;}}}
- if(Changed&&!LmSave())g_Lm.Fault=true;g_Lm.Thread=xrtThreadCreate(LmWorker,NULL,0);return g_Lm.Thread!=NULL;
+ if(Changed&&!LmSave())g_Lm.Fault=true;g_Lm.Thread=xrtThreadCreate(LmWorker,NULL,0);const MdoModelLocalAuthority Authority={MdoLocalModelCatalog,MdoLocalModelOwned,MdoLocalModelResolve,MdoLocalModelEnsure,MdoLocalModelCallBegin,MdoLocalModelCallEnd};MdoModelManagerSetLocalAuthority(&Authority);return g_Lm.Thread!=NULL;
 }
-void MdoLocalModelsStop(void){if(!g_Lm.Lock)return;xrtMutexLock(g_Lm.Lock);g_Lm.Stopping=true;xrtCancelRequest(g_Lm.Stop);if(g_Lm.ActiveCancel)xrtCancelRequest(g_Lm.ActiveCancel);xrtMutexUnlock(g_Lm.Lock);}
-void MdoLocalModelsUnit(void){if(!g_Lm.Lock)return;MdoLocalModelsStop();if(g_Lm.Thread){xrtThreadWait(g_Lm.Thread);xrtThreadDestroy(g_Lm.Thread);}/* A download-center resume can own the writer on its dispatcher thread. */xrtMutexLock(g_Lm.Writer);xrtMutexUnlock(g_Lm.Writer);for(size_t I=0;I<LM_LIMIT;I++){xrtClose(g_Lm.Stores[I].File);xrtFree(g_Lm.Stores[I].Path);MdoExtensionsRelease(g_Lm.Pins[I].Recipe);MdoExtensionsRelease(g_Lm.Pins[I].Runtime);}xrtValueRelease(g_Lm.State);xrtCancelDestroy(g_Lm.Stop);xrtMutexDestroy(g_Lm.Writer);xrtMutexDestroy(g_Lm.Lock);memset(&g_Lm,0,sizeof(g_Lm));}
-xvalue* MdoLocalModelsSnapshot(char E[512]){(void)E;if(!g_Lm.Lock)return NULL;xrtMutexLock(g_Lm.Lock);xvalue* Out=xrtValueDeepClone(g_Lm.State);if(Out){LmPut(Out,"platform",MdoExtensionRuntimePlatform());xrtValueObjectSetNew(Out,XRT_STR_LITERAL("read_only"),xrtValueBool(g_Lm.Fault));xvalue* Jobs=xrtValueObjectGet(Out,XRT_STR_LITERAL("installations"));for(size_t I=0;I<xrtValueCount(Jobs);I++){xvalue* J=xrtValueObjectAt(Jobs,I,NULL);const xvalue* Doc=LmGet(LmGet(J,"plan"),"document");if(Doc){xvalue* Labels=xrtValueObject();const cstr Fields[]={"default_locale","i18n","tags"};for(size_t K=0;Labels&&K<3;K++){const xvalue* V=LmGet(Doc,Fields[K]);if(V)xrtValueObjectSet(Labels,xrtStrView(Fields[K]),V);}if(Labels)xrtValueObjectSetNew(J,XRT_STR_LITERAL("local_model"),Labels);}xrtValueObjectRemove(J,XRT_STR_LITERAL("runtime_plan"));xrtValueObjectRemove(J,XRT_STR_LITERAL("plan"));}}xrtMutexUnlock(g_Lm.Lock);return Out;}
+void MdoLocalModelsStop(void){if(!g_Lm.Lock)return;xrtMutexLock(g_Lm.Lock);g_Lm.Stopping=true;xcancel* Active=xrtCancelRef(g_Lm.ActiveCancel),*Stop=xrtCancelRef(g_Lm.Stop);xrtMutexUnlock(g_Lm.Lock);xrtCancelRequest(Stop);xrtCancelRequest(Active);xrtCancelDestroy(Active);xrtCancelDestroy(Stop);}
+void MdoLocalModelsUnit(void){if(!g_Lm.Lock)return;MdoLocalModelsStop();if(g_Lm.Thread){xrtThreadWait(g_Lm.Thread);xrtThreadDestroy(g_Lm.Thread);}/* A download-center resume can own the writer on its dispatcher thread. */xrtMutexLock(g_Lm.Writer);xrtMutexUnlock(g_Lm.Writer);LmsUnit();for(size_t I=0;I<LM_LIMIT;I++){xrtClose(g_Lm.Stores[I].File);xrtFree(g_Lm.Stores[I].Path);MdoExtensionsRelease(g_Lm.Pins[I].Recipe);MdoExtensionsRelease(g_Lm.Pins[I].Runtime);}xrtValueRelease(g_Lm.State);xrtCancelDestroy(g_Lm.Stop);xrtMutexDestroy(g_Lm.Writer);xrtMutexDestroy(g_Lm.Lock);memset(&g_Lm,0,sizeof(g_Lm));}
+xvalue* MdoLocalModelsSnapshot(char E[512]){(void)E;if(!g_Lm.Lock)return NULL;xrtMutexLock(g_Lm.Lock);xvalue* Out=xrtValueDeepClone(g_Lm.State);if(Out){LmPut(Out,"platform",MdoExtensionRuntimePlatform());xrtValueObjectSetNew(Out,XRT_STR_LITERAL("read_only"),xrtValueBool(g_Lm.Fault));xvalue* Jobs=xrtValueObjectGet(Out,XRT_STR_LITERAL("installations"));for(size_t I=0;I<xrtValueCount(Jobs);I++){xvalue* J=xrtValueObjectAt(Jobs,I,NULL);const xvalue* Doc=LmGet(LmGet(J,"plan"),"document");if(Doc){xvalue* Labels=xrtValueObject();const cstr Fields[]={"default_locale","i18n","tags"};for(size_t K=0;Labels&&K<3;K++){const xvalue* V=LmGet(Doc,Fields[K]);if(V)xrtValueObjectSet(Labels,xrtStrView(Fields[K]),V);}if(Labels)xrtValueObjectSetNew(J,XRT_STR_LITERAL("local_model"),Labels);}xrtValueObjectRemove(J,XRT_STR_LITERAL("runtime_plan"));xrtValueObjectRemove(J,XRT_STR_LITERAL("plan"));}}const xvalue* Ds=LmGet(g_Lm.State,"deployments");xvalue* Public=xrtValueObject();for(size_t K=0;Public&&K<xrtValueCount(Ds);K++){xstrview Key={0};const xvalue* D=xrtValueObjectAt(Ds,K,&Key);xrtValueObjectSetNew(Public,Key,LmsSnapshotLocked(D));}if(Out)xrtValueObjectSetNew(Out,XRT_STR_LITERAL("deployments"),Public);else xrtValueRelease(Public);xrtMutexUnlock(g_Lm.Lock);return Out;}
 
 #include "operations.inc.c"

@@ -4,6 +4,7 @@
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/mcp.h"
 #include "../../include/mdo/models.h"
+#include "../../include/mdo/local_models.h"
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/skills.h"
 #include "../../include/mdo/tool_catalog.h"
@@ -109,6 +110,7 @@ bool MdoApiModelsRoute(MdoApiContext* Context)
     xvalue* Data = xrtValueObject();
     xvalue* Providers = xrtValueArray();
     xvalue* Models = xrtValueArray();
+    xvalue* Locals = MdoLocalModelCatalog();
     MdoModelInfo Default;
     size_t Index;
     bool Ok = Catalog != NULL && Data != NULL && Providers != NULL &&
@@ -181,8 +183,15 @@ bool MdoApiModelsRoute(MdoApiContext* Context)
                 Info.DefaultReasoningEffort) &&
             MdoApiValueSetStrings(Item, "reasoning_efforts",
                 Info.ReasoningEfforts, Info.ReasoningEffortCount) &&
-            MdoApiValueSetUInt(Item, "attachments", Info.Attachments) &&
-            MdoApiValueAppendTake(Models, &Item);
+            MdoApiValueSetUInt(Item, "attachments", Info.Attachments);
+        if(Ok&&MdoLocalModelOwned(Info.Id)){
+            for(size_t N=0;N<xrtValueCount(Locals);N++){const xvalue* D=xrtValueArrayGet(Locals,N);cstr Id=MdoExtensionText(D,"id",32);if(!Id||strcmp(Id,Info.Id+12))continue;
+                const xvalue* V=xrtValueObjectGet(D,XRT_STR_LITERAL("verification"));bool Reply=false,Tools=false;xrtValueGetBool(xrtValueObjectGet(V,XRT_STR_LITERAL("reply")),&Reply);xrtValueGetBool(xrtValueObjectGet(V,XRT_STR_LITERAL("tools")),&Tools);
+                cstr Hash=MdoExtensionText(D,"fingerprint",64),Proof=MdoExtensionText(V,"fingerprint",64);bool Verified=Hash&&Proof&&!strcmp(Hash,Proof)&&Reply&&(!(Info.Capabilities&XLLM_CAP_TOOL_CALL_OUT)||Tools);
+                Ok=MdoApiValueSetBool(Item,"managed_local",true)&&MdoApiValueSetString(Item,"deployment_id",Id)&&MdoApiValueSetString(Item,"service_state",MdoExtensionText(D,"service_state",24))&&MdoApiValueSetBool(Item,"local_verified",Verified);break;
+            }
+        }
+        if(Ok)Ok=MdoApiValueAppendTake(Models,&Item);
         xrtValueRelease(Item);
     }
     if ( Ok ) Ok =
@@ -193,6 +202,7 @@ bool MdoApiModelsRoute(MdoApiContext* Context)
         MdoApiValueSetTake(Data, "models", &Models);
     xrtValueRelease(Providers);
     xrtValueRelease(Models);
+    xrtValueRelease(Locals);
     MdoModelCatalogRelease(Catalog);
     if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }
     return MdoApiCatalogReply(Context, Data);

@@ -473,3 +473,4 @@ bool MdoApiMcpReloadRoute(MdoApiContext* Context)
 }
 #include "model_setup.inc.c"
 #include "model_probe.inc.c"
+#include "local_model_probe.inc.c"
