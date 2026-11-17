@@ -236,6 +236,11 @@ INPUTS['Queue']['properties'].update(fields('hold_for_edit:b'))
 INPUTS['Truncate']['properties']['replacement'] = document('text:s attachments:ss profile:Profile', ('text','attachments','profile'), True)
 QUERY['MarkdownResourceRoute']='path:s mode:s'
 
+INPUTS['LocalModels']=document('action:s id:s name:s path:s mode:s plan_id:s revision:s trust_code:b delete_files:b version:s profile:s limit:u offset:u q:s',('action',),True)
+DEFS['LocalModelsInput']=INPUTS['LocalModels']
+BODY['LocalModelsRoute']='LocalModels'
+RESULT['LocalModelsRoute']='Document'
+
 def contract(row):
     handler=row['handler'].removeprefix('MdoApi');method=row['method'];path=row['path']
     if handler not in BODY and handler not in NO_BODY and handler!='BackupUploadChunkRoute':

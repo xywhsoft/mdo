@@ -1,0 +1,74 @@
+static bool LmPlan(const xvalue* Input,xcancel* Cancel,xvalue** Result,char E[512]){
+ xvalue* Remote=NULL;if(!MdoLocalModelServiceRead(Input,Cancel,&Remote,E))return false;
+ bool Ok=MdoLocalModelPlanValid(Remote,E)&&!strcmp(LmStr(LmGet(Remote,"recipe"),"version_id"),LmStr(Input,"version"))&&!strcmp(LmStr(LmGet(Remote,"profile"),"id"),LmStr(Input,"profile"));const xvalue* Runtime=LmGet(Remote,"runtime_plan");xvalue* Request=xrtValueObject(),*Native=NULL;
+ Ok=Ok&&Request&&LmPut(Request,"action","install")&&LmPut(Request,"ref",LmStr(Runtime,"root"))&&MdoExtensionsPlan(Request,LmGet(Runtime,"items"),&Native,E);xrtValueRelease(Request);
+ char* Id=Ok?xrtXidMakeString():NULL;xvalue* Plan=Ok?xrtValueObject():NULL;
+ Ok=Ok&&Plan&&Id&&LmPut(Plan,"id",Id)&&xrtValueObjectSet(Plan,XRT_STR_LITERAL("model"),Remote)&&xrtValueObjectSet(Plan,XRT_STR_LITERAL("runtime_plan"),Native);
+ char* Json=Ok?xrtJsonStringify(Plan,false,NULL):NULL;char Revision[65];Ok=Ok&&Json&&MdoExtensionHash(Json,Revision)&&LmPut(Plan,"revision",Revision);xrtFree(Json);
+ char* Path=Id?xrtFormat("data/local-models/plans/%s.json",Id):NULL;Ok=Ok&&Path&&LmSaveJson(Path,Plan);
+ if(Ok)*Result=Plan;else xrtValueRelease(Plan);xrtFree(Id);xrtFree(Path);xrtValueRelease(Native);xrtValueRelease(Remote);return Ok;
+}
+static bool LmDiscardPlan(const xvalue* Input,char E[512]){
+ cstr Id=LmStr(Input,"plan_id");if(!LmXid(Id))return LmFail(E,"Select an inspected model plan");
+ xrtMutexLock(g_Lm.Lock);const xvalue* Jobs=LmGet(g_Lm.State,"installations");bool Used=false;for(size_t I=0;I<xrtValueCount(Jobs);I++)if(!strcmp(LmStr(xrtValueObjectAt(Jobs,I,NULL),"install_plan_id"),Id))Used=true;xrtMutexUnlock(g_Lm.Lock);if(Used)return LmFail(E,"The plan belongs to an installed or pending model");
+ char* Path=xrtFormat("data/local-models/plans/%s.json",Id);xvalue* Plan=Path?LmReadJson(Path):NULL;bool Ok=Plan&&!strcmp(LmStr(Plan,"revision"),LmStr(Input,"revision"));
+ if(Ok){char Why[512]={0};const xvalue* Native=LmGet(Plan,"runtime_plan");MdoExtensionsPlanDiscard(LmStr(Native,"id"),LmStr(Native,"revision"),Why);Ok=MdoHomeRemove(Path,false);}
+ xrtValueRelease(Plan);xrtFree(Path);return Ok||LmFail(E,"The model plan changed or could not be discarded");
+}
+bool MdoLocalModelsRead(const xvalue* Input,xcancel* Cancel,xvalue** Result,char E[512]){
+ *Result=NULL;if(E)E[0]=0;cstr Action=LmStr(Input,"action");
+ if(!strcmp(Action,"catalog")||!strcmp(Action,"detail"))return MdoLocalModelServiceRead(Input,Cancel,Result,E);
+ if(!strcmp(Action,"plan"))return !g_Lm.Fault&&LmPlan(Input,Cancel,Result,E);
+ return LmFail(E,"Select a local model catalog, detail or install plan");
+}
+static bool LmQueue(const xvalue* Input,xvalue** Result,char E[512]){
+ cstr Action=LmStr(Input,"action");bool Install=!strcmp(Action,"install");xvalue* Plan=NULL;
+ if(Install){cstr Id=LmStr(Input,"plan_id");
+  if(!LmXid(Id))return LmFail(E,"Inspect an install plan first");char* Path=xrtFormat("data/local-models/plans/%s.json",Id);Plan=Path?LmReadJson(Path):NULL;xrtFree(Path);
+  bool Trust=false,Ready=false;if(!Plan||strcmp(LmStr(Plan,"revision"),LmStr(Input,"revision"))||!xrtValueGetBool(LmGet(Input,"trust_code"),&Trust)||!Trust||!xrtValueGetBool(LmGet(LmGet(Plan,"runtime_plan"),"ready"),&Ready)||!Ready||!MdoLocalModelPlanValid(LmGet(Plan,"model"),E)){xrtValueRelease(Plan);return LmFail(E,"Confirm the inspected runtime code and unchanged model plan");}
+  xrtMutexLock(g_Lm.Lock);const xvalue* Existing=LmGet(g_Lm.State,"installations");for(size_t I=0;I<xrtValueCount(Existing);I++){const xvalue* J=xrtValueObjectAt(Existing,I,NULL);if(!strcmp(LmStr(J,"install_plan_id"),Id)){*Result=xrtValueClone(J);break;}}xrtMutexUnlock(g_Lm.Lock);if(*Result){xrtValueRelease(Plan);return true;}}
+ xrtMutexLock(g_Lm.Lock);char Store[33];snprintf(Store,33,"%s",LmStr(g_Lm.State,"default_root"));size_t Count=xrtValueCount(LmGet(g_Lm.State,"installations"));xrtMutexUnlock(g_Lm.Lock);
+ if(Count>=LM_LIMIT){xrtValueRelease(Plan);return LmFail(E,"Remove an unused model installation before adding another");}
+ if(!Store[0]){xvalue* New=NULL;if(!LmNewStore(NULL,&New,E)){xrtValueRelease(Plan);return false;}snprintf(Store,33,"%s",LmStr(New,"id"));xrtValueRelease(New);}
+ char* Id=xrtXidMakeString();xvalue* Job=xrtValueObject();bool Ok=Job&&Id&&LmPut(Job,"id",Id)&&LmPut(Job,"store",Store)&&LmPut(Job,"state","queued")&&LmPut(Job,"kind",Install?"download":!strcmp(LmStr(Input,"mode"),"reference")?"reference":"copy");
+ if(Install){LmPut(Job,"install_plan_id",LmStr(Input,"plan_id"));const xvalue* Model=LmGet(Plan,"model"),*Recipe=LmGet(Model,"recipe");Ok=Ok&&LmPut(Job,"name",LmStr(Recipe,"name"))&&xrtValueObjectSet(Job,XRT_STR_LITERAL("plan"),Model)&&xrtValueObjectSet(Job,XRT_STR_LITERAL("runtime_plan"),(xvalue*)LmGet(Plan,"runtime_plan"))&&xrtValueObjectSet(Job,XRT_STR_LITERAL("assets"),(xvalue*)LmGet(Model,"assets"));}
+ else {cstr Source=LmStr(Input,"path"),Name=LmStr(Input,"name");Ok=Ok&&Source[0]&&xrtPathIsAbs(Source)&&LmPut(Job,"source_path",Source)&&LmPut(Job,"name",Name[0]?Name:Source);}
+ xrtMutexLock(g_Lm.Lock);xvalue* Before=xrtValueClone(g_Lm.State),*Jobs=xrtValueObjectEdit(g_Lm.State,XRT_STR_LITERAL("installations"));Ok=Ok&&Before&&Jobs&&xrtValueObjectSet(Jobs,xrtStrView(Id),Job);Ok=LmCommit(Before,Ok);xrtMutexUnlock(g_Lm.Lock);
+ if(Ok)*Result=xrtValueClone(Job);else LmFail(E,"Cannot queue this model installation");xrtValueRelease(Job);xrtValueRelease(Plan);xrtFree(Id);return Ok;
+}
+static bool LmReferenced(cstr Exclude,cstr Store,cstr Hash){
+ const xvalue* Jobs=LmGet(g_Lm.State,"installations");for(size_t I=0;I<xrtValueCount(Jobs);I++){xstrview Key={0};const xvalue* J=xrtValueObjectAt(Jobs,I,&Key);if(!strcmp(Key.Data,Exclude)||strcmp(LmStr(J,"store"),Store))continue;const xvalue* Assets=LmGet(J,"assets");for(size_t K=0;K<xrtValueCount(Assets);K++)if(!strcmp(LmStr(xrtValueArrayGet(Assets,K),"sha256"),Hash))return true;}return false;
+}
+static bool LmRemove(cstr Id,bool Files,xvalue** Result,char E[512]){
+ if(!xrtMutexTryLock(g_Lm.Writer))return LmFail(E,"Finish or cancel the current model operation before uninstalling");xvalue* J=LmJob(Id);bool Ok=J&&LmJobState(Id,"removing","");
+ xvalue* Store=J?LmStore(LmStr(J,"store")):NULL;char* Native=NULL;xroot Root=Files&&Store?LmRoot(Store,&Native,E):NULL;
+ if(Ok&&Files&&strcmp(LmStr(J,"kind"),"reference")){
+  Ok=Root!=NULL;const xvalue* Assets=LmGet(J,"assets");for(size_t I=0;Ok&&I<xrtValueCount(Assets);I++){cstr Hash=LmStr(xrtValueArrayGet(Assets,I),"sha256");if(!LmHex(Hash,64)){Ok=false;break;}xrtMutexLock(g_Lm.Lock);bool Shared=LmReferenced(Id,LmStr(J,"store"),Hash);xrtMutexUnlock(g_Lm.Lock);if(Shared)continue;
+   char* P=xrtFormat("blobs/%s",Hash);xfileinfo Info;if(P&&xrtRootStat(Root,P,false,&Info))Ok=Info.Type==XFILE_TYPE_FILE&&xrtRootRemove(Root,P);else xrtClearError();xrtFree(P);
+   const cstr Suffixes[]={".part",".part.resume.json"};for(size_t K=0;Ok&&K<2;K++){P=xrtFormat("partial/%s%s",Hash,Suffixes[K]);if(P&&xrtRootStat(Root,P,false,&Info))Ok=Info.Type==XFILE_TYPE_FILE&&xrtRootRemove(Root,P);else xrtClearError();xrtFree(P);}
+  }
+ }
+ if(Ok){LmUnpin(Id);
+  const xvalue* Recipe=LmGet(LmGet(J,"plan"),"recipe");bool Shared=false;xrtMutexLock(g_Lm.Lock);const xvalue* Jobs=LmGet(g_Lm.State,"installations");
+  for(size_t I=0;Recipe&&I<xrtValueCount(Jobs);I++){xstrview Key={0};const xvalue* Other=xrtValueObjectAt(Jobs,I,&Key);if(strcmp(Key.Data,Id)&&!strcmp(LmStr(LmGet(LmGet(Other,"plan"),"recipe"),"id"),LmStr(Recipe,"id")))Shared=true;}xrtMutexUnlock(g_Lm.Lock);
+  if(Recipe&&!Shared){char Why[512]={0};xvalue* Row=MdoExtensionsResolve(LmStr(Recipe,"id"),Why),*Out=NULL;if(Row)Ok=MdoExtensionsRemove("local-models",LmStr(Recipe,"xid"),&Out,E);xrtValueRelease(Row);xrtValueRelease(Out);}
+ }
+ if(Ok){xrtMutexLock(g_Lm.Lock);xvalue* Before=xrtValueClone(g_Lm.State),*Jobs=xrtValueObjectEdit(g_Lm.State,XRT_STR_LITERAL("installations"));Ok=Before&&Jobs&&xrtValueObjectRemove(Jobs,xrtStrView(Id));Ok=LmCommit(Before,Ok);xrtMutexUnlock(g_Lm.Lock);}
+ if(!Ok&&J){char Why[512]={0};LmPins(Id,J,Why);}
+ if(!Ok&&J)LmJobState(Id,"cleanup_pending",E[0]?E:"Cannot remove the model's owned resources; other resources were retained");
+ if(Ok&&LmXid(LmStr(J,"install_plan_id"))){char* P=xrtFormat("data/local-models/plans/%s.json",LmStr(J,"install_plan_id"));if(P)MdoHomeRemove(P,false);xrtFree(P);}
+ xrtRootClose(Root);xrtFree(Native);xrtValueRelease(Store);xrtValueRelease(J);xrtMutexUnlock(g_Lm.Writer);if(Ok)*Result=xrtValueObject();return Ok;
+}
+bool MdoLocalModelsCommand(const xvalue* Input,xvalue** Result,char E[512]){
+ *Result=NULL;if(E)E[0]=0;if(!g_Lm.Lock||g_Lm.Fault||g_Lm.Stopping)return LmFail(E,"The model registry is read-only or stopping; its original data was preserved");
+ cstr Action=LmStr(Input,"action"),Id=LmStr(Input,"id");bool Ok=false;
+ if(!strcmp(Action,"discard_plan")){Ok=LmDiscardPlan(Input,E);if(Ok)*Result=xrtValueObject();return Ok;}
+ if(!strcmp(Action,"storage"))return LmNewStore(LmStr(Input,"path"),Result,E);
+ if(!strcmp(Action,"import")&&!LmOneOf(LmStr(Input,"mode"),"copy reference"))return LmFail(E,"Choose copy or reference import mode");
+ if(!strcmp(Action,"install")||!strcmp(Action,"import"))return LmQueue(Input,Result,E);
+ if(!LmXid(Id))return LmFail(E,"Select an installed model");
+ if(!strcmp(Action,"retry")){xrtMutexLock(g_Lm.Lock);const xvalue* J=LmGet(LmGet(g_Lm.State,"installations"),Id);cstr State=LmStr(J,"state");bool Busy=!strcmp(g_Lm.Active,Id)||!J||(!strcmp(State,"installed")||!strcmp(State,"queued")||!strcmp(State,"installing"));xrtMutexUnlock(g_Lm.Lock);if(!Busy)Ok=LmJobState(Id,"queued","");}
+ else if(!strcmp(Action,"cancel")){xrtMutexLock(g_Lm.Lock);if(!strcmp(g_Lm.Active,Id)&&g_Lm.ActiveCancel){xrtCancelRequest(g_Lm.ActiveCancel);Ok=true;}xrtMutexUnlock(g_Lm.Lock);if(!Ok){xvalue* J=LmJob(Id);bool Queued=!strcmp(LmStr(J,"state"),"queued");xrtValueRelease(J);if(Queued)Ok=LmJobState(Id,"interrupted","Cancelled; files are retained until uninstall");}}
+ else if(!strcmp(Action,"uninstall")){bool Files=true;xrtValueGetBool(LmGet(Input,"delete_files"),&Files);return LmRemove(Id,Files,Result,E);}
+ if(Ok)*Result=LmJob(Id);else if(!E[0])LmFail(E,"The model operation is already running or the requested action is unavailable");return Ok;
+}

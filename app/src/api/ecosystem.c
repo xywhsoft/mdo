@@ -15,8 +15,8 @@ static bool EcoHandleInput(MdoApiContext* C,xvalue* Input){
  if(Action&&!strcmp(Action,"updates")){Out=MdoExtensionUpdatesSnapshot();Ok=Out!=NULL;}
  else if(Action&&!strcmp(Action,"check_updates")){Ok=MdoExtensionUpdatesRequest();Out=Ok?MdoExtensionUpdatesSnapshot():NULL;Ok=Ok&&Out;}
  else if(Action&&!strcmp(Action,"installed")){
-  const cstr Kinds[]={"agents","subagents","tools","mcp","skills","commands","external-tools","knowledge","plugins"};Out=xrtValueObject();Ok=Out!=NULL;
-  for(size_t I=0;Ok&&I<9;I++){xvalue* Rows=MdoExtensionsList(Kinds[I],Error);Ok=Rows!=NULL;for(size_t J=0;Ok&&J<xrtValueCount(Rows);J++){const xvalue* Row=xrtValueArrayGet(Rows,J);cstr Id=MdoExtensionText(Row,"directory_id",96);char* Key=Id?xrtFormat("%s:%s",Kinds[I],Id):NULL;Ok=Key&&xrtValueObjectSet(Out,xrtStrView(Key),Row);xrtFree(Key);}xrtValueRelease(Rows);}
+  const cstr Kinds[]={"agents","subagents","tools","mcp","skills","commands","external-tools","knowledge","plugins","local-models"};Out=xrtValueObject();Ok=Out!=NULL;
+  for(size_t I=0;Ok&&I<sizeof(Kinds)/sizeof(*Kinds);I++){xvalue* Rows=MdoExtensionsList(Kinds[I],Error);Ok=Rows!=NULL;for(size_t J=0;Ok&&J<xrtValueCount(Rows);J++){const xvalue* Row=xrtValueArrayGet(Rows,J);cstr Id=MdoExtensionText(Row,"directory_id",96);char* Key=Id?xrtFormat("%s:%s",Kinds[I],Id):NULL;Ok=Key&&xrtValueObjectSet(Out,xrtStrView(Key),Row);xrtFree(Key);}xrtValueRelease(Rows);}
  }else if(Action&&!strcmp(Action,"migrate_builtins")){
   bool Trust=false;Ok=xrtValueGetBool(xrtValueObjectGet(Input,XRT_STR_LITERAL("trust_code")),&Trust)&&Trust&&MdoExtensionsMutationBegin();
   if(Ok){Ok=MdoExtensionsMigrateBuiltins(Error)&&MdoModuleManagerReload()&&MdoSkillManagerReload();MdoExtensionsMutationEnd();}
@@ -39,6 +39,7 @@ typedef struct EcoApiJob {
     XS_HttpReq Request;
     xhttp1head Head;
     xvalue* Input;
+    bool (*Handler)(MdoApiContext*,xvalue*);
     bool Sent;
 } EcoApiJob;
 static struct { xmutex* Lock;xtaskpool* Pool;size_t Count;bool Stopping; } EcoApi;
@@ -57,7 +58,7 @@ static xtaskoutcome EcoApiRun(xcancel* cancel,ptr value,xtaskvalue* out)
     (void)out;EcoApiJob* job=value;job->Context.SendCancel=cancel;
     if(!MdoApiDownloadLive(&job->Context))return XTASK_CANCELLED;
     xvalue* input=job->Input;job->Input=NULL;
-    job->Sent=EcoHandleInput(&job->Context,input);
+    job->Sent=job->Handler(&job->Context,input);
     MdoApiLiveChanged(NULL);return job->Sent?XTASK_SUCCESS:XTASK_FAILED;
 }
 void MdoApiEcosystemUnit(void)
@@ -75,14 +76,18 @@ bool MdoApiEcosystemRoute(MdoApiContext* c)
     xjsonreadconfig limits;xrtJsonReadConfigInit(&limits);limits.MaxInputBytes=65536;limits.MaxStringBytes=8192;limits.MaxDepth=8;limits.MaxValues=1024;
     xvalue* input=xrtJsonRead(xrtStrViewN(raw,length),&limits);xrtFree(raw);
     if(!input)return MdoApiReplyError(c,422,"ecosystem_request_invalid","Expected a bounded JSON object",NULL);
-    if(c->ApplicationResponse)return EcoHandleInput(c,input);
+    return MdoApiQueueOperation(c,input,EcoHandleInput);
+}
+
+bool MdoApiQueueOperation(MdoApiContext* c,xvalue* input,bool (*Handler)(MdoApiContext*,xvalue*)){
+    if(c->ApplicationResponse)return Handler(c,input);
     EcoApiJob* job=xrtCalloc(1,sizeof(*job));xfuture* future=NULL;
     if(!job||!EcoApi.Lock)goto failed;
     job->Head.MethodCode=XHTTP_METHOD_POST;job->Request.head=&job->Head;
     if(c->Request->tls)job->Request.tls=xrtTlsStreamRef(c->Request->tls);else if(c->Request->tcp)job->Request.tcp=xrtNetStreamRef(c->Request->tcp);
     if(!job->Request.tls&&!job->Request.tcp)goto failed;
     job->Context.Request=&job->Request;job->Context.Target.Path=xrtStrView("/api/v1/ecosystem");job->Context.CloseResponse=true;
-    job->Context.SendDeadline=MdoDeadlineAfterUs(1200000000);memcpy(job->Context.RequestId,c->RequestId,sizeof(c->RequestId));job->Input=input;
+    job->Context.SendDeadline=MdoDeadlineAfterUs(1200000000);memcpy(job->Context.RequestId,c->RequestId,sizeof(c->RequestId));job->Input=input;job->Handler=Handler;
     /* Transfer the admitted write count to the owned job. Home purge/import
      * stays fenced until network work and any resource publication finish. */
     job->Context.WriteShared=c->WriteShared;job->Context.WriteExclusive=c->WriteExclusive;

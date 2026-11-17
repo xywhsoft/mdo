@@ -29,6 +29,7 @@ static xatomic64 g_MdoApiFallbackId;
 static bool g_MdoApiInitialized;
 
 static const MdoApiRoute g_MdoApiRoutes[] = {
+    { "/api/v1/local-models", XHTTP_METHOD_GET | XHTTP_METHOD_POST, "GET, POST, OPTIONS", MdoApiLocalModelsRoute, false },
     { "/api/v1/projects/{project}/sessions/{session}/markdown-resource", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiMarkdownResourceRoute, true },
     { "/api/v1/download-tasks", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiNativeDownloadsRoute, false },

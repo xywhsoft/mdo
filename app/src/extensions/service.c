@@ -52,7 +52,7 @@ static bool MdoExtServiceFetchAttempt(cstr Path,cstr Method,const void* Body,siz
  if(Retryable)*Retryable=false;
  if(Error)Error[0]=0;
  char* Url=xrtFormat(MDO_ACCOUNT_SERVICE_ORIGIN "%s",Path);char Authorization[4200]={0};XS_FetchHeader Headers[3]={{"Accept",Binary&&!strcmp(Method,"GET")?"application/zip":"application/json"},{"Content-Type",Binary?"application/octet-stream":"application/json"}};size_t Count=2;
- bool Ok=Url&&Path&&!strncmp(Path,MDO_EXT_SERVICE,sizeof(MDO_EXT_SERVICE)-1)&&Bytes<=1048576&&(!Cancel||!xrtCancelRequested(Cancel));
+ bool Ok=Url&&Path&&(!strncmp(Path,MDO_EXT_SERVICE,sizeof(MDO_EXT_SERVICE)-1)||!strncmp(Path,"/api/v1/mdo/local-models/",sizeof("/api/v1/mdo/local-models/")-1))&&Bytes<=1048576&&(!Cancel||!xrtCancelRequested(Cancel));
  if(Ok&&Lease&&Lease->Managed){Ok=Lease->AccessToken&&strlen(Lease->AccessToken)<=4096;if(Ok){snprintf(Authorization,sizeof(Authorization),"Bearer %s",Lease->AccessToken);Headers[Count++]=(XS_FetchHeader){"Authorization",Authorization};}}
  bool ArchiveRead=Binary&&!strcmp(Method,"GET");
  XS_FetchRequest Request={0};Request.Size=sizeof(Request);Request.Version=XS_FETCH_REQUEST_VERSION;Request.Url=Url;Request.Method=Method;Request.Headers=Headers;Request.HeaderCount=Count;Request.Body=Body;Request.BodySize=Bytes;Request.Timeout=ArchiveRead?120000000:30000000;Request.IdleTimeout=ArchiveRead?30000000:10000000;Request.MaxBodyBytes=Binary?1048576:8u*1024u*1024u;Request.Cancel=Lease&&Lease->Managed?Lease->Cancel:Cancel;Response->Size=sizeof(*Response);
@@ -234,3 +234,5 @@ bool MdoExtensionServiceWrite(const xvalue* Input,xcancel* Cancel,xvalue** Resul
 }
 
 #include "service_plan.inc.c"
+
+#include "service_local_models.inc.c"

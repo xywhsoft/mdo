@@ -63,6 +63,8 @@ bool MdoApiCommandProjectRoute(MdoApiContext* Context);
 bool MdoApiDistributionRoute(MdoApiContext* Context);
 bool MdoApiCliToolsRoute(MdoApiContext* Context);
 bool MdoApiUpdateRoute(MdoApiContext* Context);
+bool MdoApiQueueOperation(MdoApiContext* C,xvalue* Input,bool (*Handler)(MdoApiContext*,xvalue*));
+bool MdoApiLocalModelsRoute(MdoApiContext* C);
 bool MdoApiNativeDownloadsRoute(MdoApiContext* Context);
 bool MdoApiUpdateDownloadRoute(MdoApiContext* Context);
 bool MdoApiUpdateInstallRoute(MdoApiContext* Context);

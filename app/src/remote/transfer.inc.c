@@ -6,18 +6,30 @@
 #include "../../include/mdo/downloads.h"
 #include "../../include/mdo/aria2.h"
 
+static xfile MdoTransferRootOpen(xroot Root,cstr Path,uint32 Flags){
+ if(!Root)return Flags&XFILE_WRITE?MdoHomeOpenWrite(Path,Flags):MdoHomeOpenRead(Path);
+ xfileoptions O;xrtFileOptionsInit(&O);O.Flags=Flags|XFILE_NOFOLLOW;return xrtRootFileOpen(Root,Path,&O);
+}
+static bool MdoTransferRootWrite(xroot Root,cstr Path,cstr Text){
+ if(!Root)return MdoHomeAtomicWrite(Path,Text,strlen(Text),false);
+ char* Id=xrtXidMakeString(),*Temp=Id?xrtFormat("partial/%s.tmp",Id):NULL;xrtFree(Id);
+ xfile F=Temp?MdoTransferRootOpen(Root,Temp,XFILE_WRITE|XFILE_CREATE|XFILE_EXCLUSIVE):NULL;
+ bool Ok=F&&xrtWriteFull(F,Text,strlen(Text),NULL)&&xrtFlush(F);if(F&&!xrtClose(F))Ok=false;
+ if(Ok)Ok=xrtRootFileRename(Root,Temp,Path,true);if(!Ok&&Temp)xrtRootRemove(Root,Temp);xrtFree(Temp);return Ok;
+}
+static bool MdoTransferRootRemove(xroot Root,cstr Path){return Root?xrtRootRemove(Root,Path):MdoHomeRemove(Path,false);}
 static char* MdoTransferResumePath(cstr Relative){return xrtFormat("%s.resume.json",Relative);}
-static xvalue* MdoTransferResumeRead(cstr Relative){
-    char* Path=MdoTransferResumePath(Relative);xfile F=Path?MdoHomeOpenRead(Path):NULL;xrtFree(Path);uint64 Size=0;
+static xvalue* MdoTransferResumeRead(xroot Root,cstr Relative){
+    char* Path=MdoTransferResumePath(Relative);xfile F=Path?MdoTransferRootOpen(Root,Path,XFILE_READ):NULL;xrtFree(Path);uint64 Size=0;
     char Text[8192];bool Ok=F&&xrtFileSize(F,&Size)&&Size&&Size<sizeof(Text)&&xrtReadFull(F,Text,(size_t)Size,NULL);xrtClose(F);
     return Ok?xrtJsonParse(xrtStrViewN(Text,(size_t)Size)):NULL;
 }
 static cstr MdoTransferText(const xvalue* V,cstr Key){xstrview S={0};return xrtValueGetString(xrtValueObjectGet(V,xrtStrView(Key)),&S)&&!memchr(S.Data,0,S.Size)?S.Data:"";}
-static bool MdoTransferResumeSave(cstr Relative,cstr Path,cstr Hash,uint64 Size,cstr Etag){
+static bool MdoTransferResumeSave(xroot Root,cstr Relative,cstr Path,cstr Hash,uint64 Size,cstr Etag){
     xvalue* V=xrtValueObject();bool Ok=V&&xrtValueObjectSetNew(V,XRT_STR_LITERAL("path"),xrtValueString(xrtStrView(Path)))&&
         xrtValueObjectSetNew(V,XRT_STR_LITERAL("sha256"),xrtValueString(xrtStrView(Hash)))&&
         xrtValueObjectSetNew(V,XRT_STR_LITERAL("size"),xrtValueUInt(Size))&&xrtValueObjectSetNew(V,XRT_STR_LITERAL("etag"),xrtValueString(xrtStrView(Etag)));
-    char* Text=Ok?xrtJsonStringify(V,false,NULL):NULL,*Meta=MdoTransferResumePath(Relative);Ok=Text&&Meta&&MdoHomeAtomicWrite(Meta,Text,strlen(Text),false);
+    char* Text=Ok?xrtJsonStringify(V,false,NULL):NULL,*Meta=MdoTransferResumePath(Relative);Ok=Text&&Meta&&MdoTransferRootWrite(Root,Meta,Text);
     xrtValueRelease(V);xrtFree(Text);xrtFree(Meta);return Ok;
 }
 
@@ -25,7 +37,7 @@ static bool MdoTransferResumeSave(cstr Relative,cstr Path,cstr Hash,uint64 Size,
  * chunks; pause never blocks a shared network worker. The producer thread
  * resumes/cancels its own call and publishes durable progress. */
 typedef struct MdoTransferStream {
-    xmutex* Lock;xfile File;xsha256 Sha;uint64 Total,Size;bool Done,Success,Headers;
+    xroot Root;xmutex* Lock;xfile File;xsha256 Sha;uint64 Total,Size;bool Done,Success,Headers;
     cstr Path,Relative,Hash,Code,Detail;char Validator[512];char* Redirect;MdoNativeDownload* Task;xcancel* Cancel;
 } MdoTransferStream;
 static bool MdoTransferHeaders(xhttpcall* Call,const xhttpresponse* Response,void* Data){
@@ -44,7 +56,7 @@ static bool MdoTransferHeaders(xhttpcall* Call,const xhttpresponse* Response,voi
         Ok=Ok&&xrtFileResize(S->File,0)&&xrtSeek(S->File,0,XSEEK_START,NULL);if(Ok){S->Total=0;xrtSha256Init(&S->Sha);}}
     }else {if(Status>=300&&Status<400&&S->Redirect){const xhttpfield* Location=xrtHttpResponseHeader(Response,XRT_STR_LITERAL("location"));if(Location&&Location->Value.Size<=2048)snprintf(S->Redirect,2049,"%.*s",(int)Location->Value.Size,Location->Value.Data);}
         Ok=false;S->Code=S->Redirect&&S->Redirect[0]?"redirect":Status==416?"range":"http";S->Detail="Download server rejected the request or returned a redirect";}
-    if(Ok){S->Code="write";S->Detail="Unable to persist download ownership";Ok=MdoTransferResumeSave(S->Relative,S->Path,S->Hash,S->Size,Validator);}
+    if(Ok){S->Code="write";S->Detail="Unable to persist download ownership";Ok=MdoTransferResumeSave(S->Root,S->Relative,S->Path,S->Hash,S->Size,Validator);}
     S->Headers=Ok;if(Ok){S->Code="download";S->Detail="Download connection interrupted; received bytes were retained";}
     xrtMutexUnlock(S->Lock);return Ok;
 }
@@ -63,14 +75,14 @@ static void MdoTransferDone(xhttpcall* Call,const xhttpcallresult* Result,void* 
         S->Code="certificate";S->Detail="Download TLS certificate verification failed; check custom CA settings";break;}
     S->Success=Result->Result==XNET_RESULT_OK;S->Done=true;xrtMutexUnlock(S->Lock);
 }
-static bool MdoTransferAttempt(xnetengine* Engine,cstr Path,cstr Relative,uint64 Size,cstr Hash,xcancel* Cancel,MdoTransferProgress Progress,void* ProgressData,MdoTransferReport* Report,MdoNativeDownload* Task,cstr EffectiveUrl,char Redirect[2049]){
-    MdoTransferStream S={0};S.Path=Path;S.Relative=Relative;S.Hash=Hash;S.Size=Size;S.Task=Task;S.Cancel=Cancel;S.Code="metadata";S.Redirect=Redirect;if(Redirect)Redirect[0]=0;S.Detail="Invalid download metadata";
+static bool MdoTransferAttempt(xnetengine* Engine,cstr Path,cstr Relative,uint64 Size,cstr Hash,xcancel* Cancel,MdoTransferProgress Progress,void* ProgressData,MdoTransferReport* Report,MdoNativeDownload* Task,cstr EffectiveUrl,char Redirect[2049],xroot Root,cstr NativeRoot){
+    MdoTransferStream S={0};S.Root=Root;S.Path=Path;S.Relative=Relative;S.Hash=Hash;S.Size=Size;S.Task=Task;S.Cancel=Cancel;S.Code="metadata";S.Redirect=Redirect;if(Redirect)Redirect[0]=0;S.Detail="Invalid download metadata";
     xhttpclient* Client=NULL;xhttprequest* Request=NULL;xhttpcall* Call=NULL;char* Url=NULL;bool Ok=false;uint8 Digest[32],Buffer[65536];char Hex[65]={0};
     if(Report)memset(Report,0,sizeof(*Report));
     if(!Size||Size>UINT64_C(1099511627776)||!Hash||strlen(Hash)!=64||!Path||(Path[0]!='/'&&!MdoHttpUrlValid(xrtStrView(Path),false))||strchr(Path,'\r')||strchr(Path,'\n'))goto done;
-    S.Lock=xrtMutexCreate();S.File=MdoHomeOpenWrite(Relative,XFILE_READ|XFILE_WRITE|XFILE_CREATE);uint64 Existing=0;S.Code="write";S.Detail="Unable to open the partial download";
+    S.Lock=xrtMutexCreate();S.File=MdoTransferRootOpen(Root,Relative,XFILE_READ|XFILE_WRITE|XFILE_CREATE);uint64 Existing=0;S.Code="write";S.Detail="Unable to open the partial download";
     if(!S.Lock||!S.File||!xrtFileSize(S.File,&Existing))goto done;
-    xvalue* Saved=MdoTransferResumeRead(Relative);uint64 SavedSize=0;int64 SignedSize=0;const xvalue* Value=xrtValueObjectGet(Saved,XRT_STR_LITERAL("size"));
+    xvalue* Saved=MdoTransferResumeRead(Root,Relative);uint64 SavedSize=0;int64 SignedSize=0;const xvalue* Value=xrtValueObjectGet(Saved,XRT_STR_LITERAL("size"));
     if(!xrtValueGetUInt(Value,&SavedSize)&&xrtValueGetInt(Value,&SignedSize)&&SignedSize>0)SavedSize=(uint64)SignedSize;
     bool Same=SavedSize==Size&&!strcmp(MdoTransferText(Saved,"sha256"),Hash)&&!strcmp(MdoTransferText(Saved,"path"),Path);cstr Etag=MdoTransferText(Saved,"etag");
     if(Same&&Etag[0]=='"'&&strlen(Etag)<sizeof(S.Validator)&&!strchr(Etag,'\r')&&!strchr(Etag,'\n'))snprintf(S.Validator,sizeof(S.Validator),"%s",Etag);
@@ -84,7 +96,7 @@ static bool MdoTransferAttempt(xnetengine* Engine,cstr Path,cstr Relative,uint64
         xrtSha256Init(&S.Sha);
         Hex[0]=0;
         }
-    char* Parent=MdoHomeExternalPath(Relative);if(Parent){char* Slash=strrchr(Parent,'/'),*Back=strrchr(Parent,'\\');if(Back&&(!Slash||Back>Slash))Slash=Back;if(Slash)*Slash=0;}
+    char* Parent=Root?xrtPathJoin(NativeRoot,Relative):MdoHomeExternalPath(Relative);if(Parent){char* Slash=strrchr(Parent,'/'),*Back=strrchr(Parent,'\\');if(Back&&(!Slash||Back>Slash))Slash=Back;if(Slash)*Slash=0;}
     bool Space=Parent&&MdoHomeDiskSpace(Parent,Size-S.Total);xrtFree(Parent);if(!Space){S.Code="space";S.Detail="Insufficient free disk space or unable to inspect the download volume";goto done;}
     if(!MdoDownloadsGate(Task,Cancel))goto done;
     Url=EffectiveUrl?xrtStrDup(EffectiveUrl):xrtFormat("%s://%s:%u%s",MDO_DISTRIBUTION_SECURE?"https":"http",MDO_DISTRIBUTION_HOST,(unsigned)MDO_DISTRIBUTION_PORT,Path);
@@ -110,7 +122,7 @@ static bool MdoTransferAttempt(xnetengine* Engine,cstr Path,cstr Relative,uint64
 done:
     if(Report){Report->Bytes=S.Total;snprintf(Report->ActualHash,sizeof(Report->ActualHash),"%s",Hex);if(!Ok){snprintf(Report->Code,sizeof(Report->Code),"%s",S.Code);snprintf(Report->Detail,sizeof(Report->Detail),"%s",S.Detail);}}
     xrtHttpCallDestroy(Call);xrtHttpRequestDestroy(Request);xrtHttpClientDestroy(Client);if(S.File)(void)xrtFlush(S.File);xrtClose(S.File);xrtMutexDestroy(S.Lock);xrtFree(Url);
-    if((Ok&&!Task)||!strcmp(S.Code,"checksum")||!strcmp(S.Code,"range")){char* Meta=MdoTransferResumePath(Relative);if(Meta)MdoHomeRemove(Meta,false);xrtFree(Meta);if(!Ok)MdoHomeRemove(Relative,false);}
+    if((Ok&&!Task)||!strcmp(S.Code,"checksum")||!strcmp(S.Code,"range")){char* Meta=MdoTransferResumePath(Relative);if(Meta)MdoTransferRootRemove(Root,Meta);xrtFree(Meta);if(!Ok)MdoTransferRootRemove(Root,Relative);}
     return Ok;
 }
 static bool MdoTransferRedirectAllowed(cstr Initial,cstr Next,const xvalue* Hosts){
@@ -136,7 +148,7 @@ static bool MdoTransferDownloadInternal(xnetengine* Engine,cstr Path,cstr Relati
     MdoAriaResult Ar=Url?MdoAriaDownload(Task,Url,Size,Hash,NULL,MdoDownloadsCancelToken(Task,Cancel),&ArFile,&Local):MDO_ARIA_UNAVAILABLE;
     if(Ar==MDO_ARIA_COMPLETE){
         xfile Parent=MdoDownloadsGate(Task,Cancel)?MdoHomeOpenWrite(Relative,XFILE_CREATE|XFILE_WRITE):NULL;bool PreparedTarget=Parent!=NULL;xrtClose(Parent);
-        Ok=PreparedTarget&&MdoTransferResumeSave(Relative,Path,Hash,Size,"")&&MdoHomeRemove(Relative,false)&&MdoHomeRenameNoReplace(ArFile,Relative);
+        Ok=PreparedTarget&&MdoTransferResumeSave(NULL,Relative,Path,Hash,Size,"")&&MdoHomeRemove(Relative,false)&&MdoHomeRenameNoReplace(ArFile,Relative);
         if(!Ok){snprintf(Local.Code,sizeof(Local.Code),"write");snprintf(Local.Detail,sizeof(Local.Detail),"Cannot publish the verified aria2 download");}
         if(Ok&&Progress)Progress(Size,Size,ProgressData);
     }
@@ -145,7 +157,7 @@ static bool MdoTransferDownloadInternal(xnetengine* Engine,cstr Path,cstr Relati
         if(!MdoDownloadsGate(Task,Cancel))break;
         char* Effective=xrtStrDup(Url);char Redirect[2049]={0};
         for(unsigned Hop=0;Effective&&Hop<=5;Hop++){
-            Ok=MdoTransferAttempt(Engine,Path,Relative,Size,Hash,MdoDownloadsCancelToken(Task,Cancel),Progress,ProgressData,&Local,Task,Effective,Redirect);
+            Ok=MdoTransferAttempt(Engine,Path,Relative,Size,Hash,MdoDownloadsCancelToken(Task,Cancel),Progress,ProgressData,&Local,Task,Effective,Redirect,NULL,NULL);
             if(Ok||strcmp(Local.Code,"redirect")||!Hosts||Hop==5)break;
             char* Next=NULL;
             if(Redirect[0]=='/'&&Redirect[1]!='/'){cstr Authority=strstr(Effective,"://");size_t End=Authority?(size_t)(Authority+3-Effective)+strcspn(Authority+3,"/?"):0;Next=End?xrtFormat("%.*s%s",(int)End,Effective,Redirect):NULL;}
@@ -176,3 +188,21 @@ bool MdoTransferDownloadProgress(xnetengine* Engine,cstr Path,cstr Relative,uint
 {return MdoTransferDownloadReport(Engine,Path,Relative,Size,Hash,Cancel,Progress,Data,NULL);}
 bool MdoTransferDownload(xnetengine* Engine,cstr Path,cstr Relative,uint64 Size,cstr Hash,xcancel* Cancel)
 {return MdoTransferDownloadProgress(Engine,Path,Relative,Size,Hash,Cancel,NULL,NULL);}
+
+/* Local-model producer owns this rooted file and its recovery journal. It
+ * supplies the existing task so controls never create an independent writer. */
+bool MdoTransferDownloadManaged(xnetengine* Engine,const MdoDownloadSource* Source,xroot Root,cstr NativeRoot,MdoNativeDownload* Task,xcancel* Cancel,MdoTransferReport* Report){
+ MdoTransferReport Local={0};if(!Report)Report=&Local;memset(Report,0,sizeof(*Report));
+ if(!Source||!Root||!NativeRoot||!Source->Url||!Source->Relative||!MdoExtensionRelativePath(Source->Relative)||strncmp(Source->Relative,"partial/",8)||!MdoHttpUrlValid(xrtStrView(Source->Url),false)||!Source->Bytes||Source->Bytes>UINT64_C(1099511627776)||!Source->Sha256||strlen(Source->Sha256)!=64||Source->RedirectHostCount>8||(Source->RedirectHostCount&&!Source->RedirectHosts))return false;
+ xvalue* Hosts=xrtValueArray();for(size_t I=0;Hosts&&I<Source->RedirectHostCount;I++)xrtValueArrayAppendNew(Hosts,xrtValueString(xrtStrView(Source->RedirectHosts[I])));
+ MdoDownloadsEngine(Task,"native","aria2_managed_source_policy");bool Ok=false;
+ for(unsigned Attempt=0;Hosts&&Attempt<3&&MdoDownloadsGate(Task,Cancel);Attempt++){
+  char* Effective=xrtStrDup(Source->Url);char Redirect[2049]={0};
+  for(unsigned Hop=0;Effective&&Hop<=5;Hop++){
+   Ok=MdoTransferAttempt(Engine,Source->Url,Source->Relative,Source->Bytes,Source->Sha256,Cancel,NULL,NULL,Report,Task,Effective,Redirect,Root,NativeRoot);
+   if(Ok||strcmp(Report->Code,"redirect")||Hop==5)break;
+   char* Next=NULL;if(Redirect[0]=='/'&&Redirect[1]!='/'){cstr A=strstr(Effective,"://");size_t N=A?(size_t)(A+3-Effective)+strcspn(A+3,"/?"):0;Next=N?xrtFormat("%.*s%s",(int)N,Effective,Redirect):NULL;}else Next=xrtStrDup(Redirect);
+   bool Allowed=Next&&MdoHttpUrlValid(xrtStrView(Next),false)&&MdoTransferRedirectAllowed(Source->Url,Next,Hosts);xrtFree(Effective);Effective=Allowed?Next:NULL;if(!Allowed)xrtFree(Next);
+  }xrtFree(Effective);if(Ok||strcmp(Report->Code,"network")&&strcmp(Report->Code,"download")&&strcmp(Report->Code,"range"))break;
+ }xrtValueRelease(Hosts);return Ok;
+}

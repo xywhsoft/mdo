@@ -1,6 +1,7 @@
 #ifndef MDO_DISTRIBUTION_H
 #define MDO_DISTRIBUTION_H
 #include <xsbase.h>
+#include "downloads.h"
 #ifndef MDO_DISTRIBUTION_ORIGIN
 #define MDO_DISTRIBUTION_ORIGIN "https://ai.xywhsoft.com"
 #endif
@@ -27,6 +28,7 @@ typedef struct MdoDownloadSource {
     cstr Url,Relative,Sha256;uint64 Bytes;
     const cstr* RedirectHosts;size_t RedirectHostCount;
 } MdoDownloadSource;
+bool MdoTransferDownloadManaged(xnetengine* Engine,const MdoDownloadSource* Source,xroot Root,cstr NativeRoot,MdoNativeDownload* Task,xcancel* Cancel,MdoTransferReport* Report);
 bool MdoTransferDownloadSource(xnetengine* Engine,const MdoDownloadSource* Source,xcancel* Cancel,MdoTransferProgress Progress,void* Data,MdoTransferReport* Report);
 bool MdoTransferDownloadProgress(xnetengine* Engine,cstr Path,cstr Relative,uint64 Size,cstr Hash,xcancel* Cancel,MdoTransferProgress Progress,void* Data);
 bool MdoDistributionInit(XS_ServerInfo* Server);

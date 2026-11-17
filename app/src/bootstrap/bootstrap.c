@@ -1,3 +1,4 @@
+#include "../../include/mdo/local_models.h"
 #include "../../include/mdo/distribution.h"
 #include "../../include/mdo/downloads.h"
 #include "../../include/mdo/extension_updates.h"
@@ -79,6 +80,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         MdoBootstrapFail("Extension installation recovery failed");
         return false;
     }
+    if(!MdoLocalModelsInit(pHost->Server->Engine)){MdoBootstrapFail("Local model registry initialization failed");return false;}
     if(!MdoAndroidToolsInit(ExtensionError))fprintf(stderr,"[mdo] optional Android tools: %s\n",ExtensionError);
     if(!MdoApplicationInit(pHost->Server)){MdoBootstrapFail("Application SDK initialization failed");return false;}
     MdoProjectRuntimeGuardSet(MdoApplicationTerminalsProjectBusy);
@@ -261,7 +263,9 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
 
 void MdoBootstrapUnit(void)
 {
+    MdoLocalModelsStop();
     MdoDownloadsStop();
+    MdoLocalModelsUnit();
     MdoExtensionUpdatesUnit();
     MdoApplicationInstancesStop();
     MdoModuleManagerStop();

@@ -1,3 +1,4 @@
+#include "../../include/mdo/local_models.h"
 #include "../../include/mdo/downloads.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/distribution.h"
@@ -165,6 +166,7 @@ again:
 static bool DlPartial(const xvalue* R,bool RemoveFile){
     const xvalue* C=xrtValueObjectGet(R,XRT_STR_LITERAL("context"));
     bool Ok=true;
+    if(DlText(C,"local_model_install")[0])return true;
     if(!strcmp(DlText(R,"source"),"extension")){if(RemoveFile){xvalue* Out=NULL;char E[512]={0};Ok=MdoExtensionTaskCancel(DlText(C,"archive_id"),&Out,E);xrtValueRelease(Out);}}
     else {
         cstr Relative=DlText(C,"relative");char* Meta=xrtFormat("%s.resume.json",Relative);xvalue* Proof=Meta?DlRead(Meta):NULL;
@@ -243,7 +245,8 @@ static int32 DlWorker(void* Unused){
         else if(!strcmp(DlText(R,"source"),"update")){
             MdoUpdateStatus S={0};Ok=MdoUpdateGetStatus(&S)&&!strcmp(S.Hash,DlText(R,"sha256"))&&MdoUpdateResumeDownload(Dispatch);
             if(!Ok)snprintf(E,sizeof(E),"Update metadata changed or another update operation is active; open the update details");
-        }else if(DlText(C,"path")[0]=='/')Ok=MdoTransferDownload(MdoDownloads.Engine,DlText(C,"path"),DlText(C,"relative"),DlNumber(R,"bytes"),DlText(R,"sha256"),Dispatch);
+        }else if(DlText(C,"local_model_install")[0])Ok=MdoLocalModelsResume(DlText(C,"local_model_install"),Dispatch,E);
+        else if(DlText(C,"path")[0]=='/')Ok=MdoTransferDownload(MdoDownloads.Engine,DlText(C,"path"),DlText(C,"relative"),DlNumber(R,"bytes"),DlText(R,"sha256"),Dispatch);
         else {cstr Hosts[8]={0};const xvalue* H=xrtValueObjectGet(C,XRT_STR_LITERAL("redirect_hosts"));size_t Count=xrtValueCount(H);
             for(size_t J=0;J<Count&&J<8;J++){xstrview V={0};xrtValueGetString(xrtValueArrayGet(H,J),&V);Hosts[J]=V.Data;}
             MdoDownloadSource Source={DlText(C,"path"),DlText(C,"relative"),DlText(R,"sha256"),DlNumber(R,"bytes"),Hosts,Count};
