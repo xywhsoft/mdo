@@ -1,0 +1,59 @@
+{
+  "passed": true,
+  "packages": [
+    {
+      "file": "llama-b12477-windows-cpu.zip",
+      "kind": "external-tools",
+      "platform": "windows-x86_64",
+      "size": 21184384,
+      "sha256": "10fb0c9fe7383fa688dcf1aecb1084518c962b524676c3fd3d03a3b573fc5e06",
+      "work": "1cf0aea1232052599ac1c6c17f4d09c6",
+      "version_id": "b664ac07f7f65043b50d793e63f7ff94"
+    },
+    {
+      "file": "llama-b12477-windows-vulkan.zip",
+      "kind": "external-tools",
+      "platform": "windows-x86_64",
+      "size": 34278031,
+      "sha256": "e5777323e32904dc0a6f8b43aaf878747dfae614af54f6258b294fe5d0c8e888",
+      "work": "0be16d44595654feb3efb9a9477ff885",
+      "version_id": "6308920bf3e550349bf03ced63d3513d"
+    },
+    {
+      "file": "qwen3-0.6b-local.zip",
+      "kind": "local-models",
+      "platform": "windows-x86_64",
+      "size": 3005,
+      "sha256": "a0e9277c9c10cdb7914360277facb0194503c783a316f416f5b35bc4dbc48c11",
+      "work": "6cd7ca9786945b7ab2a7b1a4c14a1214",
+      "version_id": "89862fdae02a5e0fbee835c7526a6b73"
+    }
+  ],
+  "backup": "/home/xs/mdo-local-models-20261118-1/backup.db",
+  "old_heads": 43,
+  "heads": 46,
+  "old_heads_unchanged": true,
+  "date": "2026-11-18",
+  "acceptance": {
+    "passed": true,
+    "source": "production-public-store",
+    "version_id": "89862fdae02a5e0fbee835c7526a6b73",
+    "checks": [
+      "published recipe and both runtime builds are publicly resolvable",
+      "cpu native dependency plan ready",
+      "cpu runtime and fixed weight installed from public endpoints: ",
+      "starter thinking toggle defaults to off",
+      "cpu published runtime loaded: ",
+      "cpu published model streaming and tool round trip passed",
+      "vulkan native dependency plan ready",
+      "vulkan runtime and fixed weight installed from public endpoints: ",
+      "starter thinking toggle defaults to off",
+      "vulkan published runtime loaded: ",
+      "vulkan published model streaming and tool round trip passed",
+      "CPU and Vulkan installations share one verified 610 MiB weight",
+      "published test installations and owned weights removed"
+    ]
+  },
+  "client_release_published": false,
+  "weights_hosted_on_mdo": false
+}
