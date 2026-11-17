@@ -709,6 +709,8 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
         if package.exists():
             shutil.rmtree(package)
         shutil.copytree(APP, package)
+        import build_model_supervisor
+        build_model_supervisor.build(package / ("generated/native/windows/model-supervisor.exe" if os.name == "nt" else "generated/native/linux/model-supervisor"), args.cc)
         if os.name == "nt":
             import build_cli_forwarder
             build_cli_forwarder.build(xserver, package / "generated/native/windows/cli-forwarder.exe", args.cc)

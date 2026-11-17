@@ -35,6 +35,8 @@ tools/*
 !tools/version_code.py
 !tools/build_cli_forwarder.py
 !tools/cli_forwarder.c
+!tools/model_supervisor.c
+!tools/build_model_supervisor.py
 !tools/application_sdk.py
 !tools/application_contracts.py
 !tools/workbench_contracts.py
