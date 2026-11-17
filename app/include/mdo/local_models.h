@@ -12,6 +12,7 @@ bool MdoLocalModelsCommand(const xvalue* Input,xvalue** Result,char Error[512]);
 bool MdoLocalModelsResume(cstr Installation,xcancel* Cancel,char Error[512]);
 bool MdoLocalModelServiceRead(const xvalue* Input,xcancel* Cancel,xvalue** Result,char Error[512]);
 bool MdoLocalModelsServicesInit(void);
+void MdoLocalModelsServicesStop(void);
 xvalue* MdoLocalModelCatalog(void);
 bool MdoLocalModelOwned(cstr ModelId);
 typedef MdoModelManagedEndpoint MdoLocalModelEndpoint;

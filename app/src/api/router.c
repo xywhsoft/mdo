@@ -559,6 +559,7 @@ bool MdoApiInit(void)
 void MdoApiUnit(void)
 {
     MdoApiQueueStop();
+    MdoLocalModelsServicesStop();
     MdoCliStop();
     g_MdoApiInitialized = false;
     MdoApiModelProbesUnit();

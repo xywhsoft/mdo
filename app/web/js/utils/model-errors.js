@@ -12,7 +12,7 @@ const kinds = new Set([
   "profile_login_pending", "profile_login_required", "profile_login_unavailable",
   "profile_output_limit", "profile_context_limit", "profile_credential_unavailable",
   "profile_proxy_unavailable", "profile_proxy_invalid", "profile_system_proxy_unavailable", "profile_ca_unavailable", "profile_endpoint_invalid",
-  "profile_image_unsupported",
+  "profile_image_unsupported", "profile_local_model_stopped",
 ]);
 
 // Classifications come from the server; unknown/older records retain their
@@ -39,7 +39,7 @@ const titles = {
   profile_context_limit: "configuration", profile_credential_unavailable: "configuration",
   profile_proxy_unavailable: "configuration", profile_proxy_invalid: "configuration", profile_system_proxy_unavailable: "configuration", profile_ca_unavailable: "configuration",
   profile_endpoint_invalid: "configuration",
-  profile_image_unsupported: "configuration",
+  profile_image_unsupported: "configuration", profile_local_model_stopped: "configuration",
 };
 
 export function modelErrorTitle(kind, fallback) {

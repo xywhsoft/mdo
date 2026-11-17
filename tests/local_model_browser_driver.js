@@ -31,6 +31,28 @@
     const dialog = () => [...document.querySelectorAll("dialog[open]")].at(-1);
     await until(() => host.querySelector(".local-model-card"), "installed model list");
     check(host.textContent.includes(tr("state.installed")), "Installed receipt shown");
+    if (params.get("qa_services") === "1") {
+      button("createDeployment").click(); await until(() => dialog()?.querySelector("[name=context_tokens]"), "native deployment options loaded");
+      const ctx = dialog().querySelector("[name=context_tokens]"); ctx.value = "512";
+      button("confirm", dialog()).click(); await until(() => dialog()?.querySelector("[role=status]")?.textContent && !button("confirm", dialog()).disabled, "invalid deployment rejected");
+      check(ctx.value === "512", "Failed deployment save retains parameter edits"); ctx.value = "8192";
+      button("confirm", dialog()).click(); await until(() => !dialog(), "deployment created");
+      await until(() => button("start"), "stopped deployment rendered"); check(!button("chat"), "Stopped deployment does not offer an unusable chat action");
+      button("start").click(); await until(() => button("verify"), "deployment reached ready");
+      button("verify").click(); await until(() => dialog()?.textContent.includes(tr("verifiedTools")), "native streaming and tools verification complete");
+      await dialog().querySelector('[aria-label]').closest("dialog").querySelector(".mdo-layer-controls button:last-child").click(); await until(() => !dialog(), "verification dialog closed");
+      check(!!button("chat"), "Ready model offers mdo conversation entry");
+      button("web").click(); await until(() => dialog()?.querySelector("input[type=password]"), "runtime credentials loaded only on demand");
+      const key = dialog().querySelector("input[type=password]").value;
+      check(key.length >= 32 && !JSON.stringify((await api.get("/local-models")).data).includes(key), "Temporary API key stays out of registry snapshots");
+      dialog().querySelector(".mdo-layer-controls button:last-child").click(); await until(() => !dialog(), "web dialog closed");
+      button("stop").click(); await until(() => button("configure"), "deployment stopped without refresh");
+      button("configure").click(); await until(() => dialog()?.querySelector("[name=output_tokens]"), "deployment editor");
+      dialog().querySelector("[name=output_tokens]").value = "1024"; button("confirm", dialog()).click(); await until(() => !dialog(), "edited deployment saved");
+      await until(() => button("rollback"), "previous configuration available"); button("rollback").click(); button("confirm", dialog()).click(); await until(() => !dialog(), "configuration rollback finished");
+      button("deleteDeployment").click(); button("confirm", dialog()).click(); await until(() => !dialog() && !button("start"), "deployment deleted while keeping installation");
+      check(!!button("createDeployment"), "Model resources remain reusable after deleting deployment");
+    }
     button("import").click(); await until(() => dialog()?.querySelector("[name=path]"), "import form");
     const path = dialog().querySelector("[name=path]"); path.value = "relative.gguf";
     button("confirm", dialog()).click(); await until(() => dialog()?.querySelector(".extension-error")?.textContent, "invalid import rejected");

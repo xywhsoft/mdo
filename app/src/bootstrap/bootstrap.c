@@ -118,7 +118,6 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_MODELS_READY;
-    if(!MdoLocalModelsServicesInit()){MdoBootstrapFail("Local model service initialization failed");return false;}
 
     xworkRuntimeConfigInit(&RuntimeConfig);
     memset(&WorkError, 0, sizeof(WorkError));

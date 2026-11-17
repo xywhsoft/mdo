@@ -35,6 +35,8 @@ def main():
             blob=store/'blobs'/digest;check(blob.read_bytes()==payload,'copied resource mismatch')
             second=call(dict(action='import',path=str(source),mode='copy',name='Shared copy'));item=wait(second['id']);check(item['state']=='installed',item)
             check(len(list((store/'blobs').iterdir()))==1,'duplicate physical weight')
+            check(call(dict(action='prune_cache',id=root['id']))['files']==0 and blob.exists(),'cache sweep removed installed resources')
+            orphan=store/'blobs'/('f'*64);orphan.write_bytes(b'orphan');foreign=store/'blobs'/'user-not-a-hash.txt';foreign.write_text('keep');check(call(dict(action='cache',id=root['id']))['files']==1,'cache preview missed orphan');check(orphan.exists(),'cache preview mutated files');call(dict(action='prune_cache',id=root['id']));check(not orphan.exists() and blob.exists() and foreign.exists(),'cache sweep removed referenced/unknown content')
             call(dict(action='uninstall',id=first['id'],delete_files=True));check(blob.exists(),'shared resource removed')
             stop_host(process);process=None;start();check(second['id'] in call()['installations'],'installation lost across restart')
             call(dict(action='uninstall',id=second['id'],delete_files=True));check(not blob.exists() and source.exists(),'wrong copy ownership')

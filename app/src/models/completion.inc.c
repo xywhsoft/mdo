@@ -302,9 +302,12 @@ static xllm_result MdoModelsClientComplete(xllm_client* Client,const xllm_reques
  xllm_model_profile P;if(!Client||!Request||!xllmClientGetModelProfile(Client,&P)||!MdoModelsLocalOwned(P.sId))return MdoModelsClientCompleteInner(Client,Request,Callbacks,Response,Error);
  void* Handle=NULL;xcancel* Cancel=NULL;char Why[512]={0};if(!g_MdoModelsLocal.Ensure(P.sId,Request->pCancel,Request->uDeadline,Why)){MdoModelProfileErrorInit(Error,"profile_local_model_stopped",Why);if(Response)*Response=NULL;return XLLM_RESULT_ERROR;}
  MdoModelCatalog* Current=MdoModelCatalogSnapshot();MdoModelClientOptions O;MdoModelClientOptionsInit(&O);O.ModelId=P.sId;O.ReasoningEffort=Request->sReasoningEffort;O.MaxOutputTokens=Request->uMaxOutputTokens;xllm_client* Fresh=MdoModelClientCreateAuth(Current,&O,NULL,Error,NULL);MdoModelCatalogRelease(Current);
- xllm_model_profile Effective;bool Ready=Fresh&&xllmClientGetModelProfile(Fresh,&Effective)&&g_MdoModelsLocal.Begin(P.sId,Effective.sModel,Request->pCancel,&Cancel,&Handle,Why);
+ if(!Fresh){if(Response)*Response=NULL;return XLLM_RESULT_ERROR;}
+ xllm_model_profile Effective;bool Ready=xllmClientGetModelProfile(Fresh,&Effective)&&g_MdoModelsLocal.Begin(P.sId,Effective.sModel,Request->pCancel,&Cancel,&Handle,Why);
  if(!Ready){xllmClientDestroy(Fresh);MdoModelProfileErrorInit(Error,"profile_local_model_stopped",Why);if(Response)*Response=NULL;return XLLM_RESULT_ERROR;}
- xllm_request View=*Request;View.pCancel=Cancel;xllm_result R=MdoModelsClientCompleteInner(Fresh,&View,Callbacks,Response,Error);g_MdoModelsLocal.End(Handle);xllmClientDestroy(Fresh);return R;
+ /* Agent history keeps the stable model ID; only this request targets the
+  * nonce-bound runtime alias. Raw Agent wire IDs must not escape to transport. */
+ xllm_request View=*Request;View.sModel=(char*)Effective.sModel;View.pCancel=Cancel;xllm_result R=MdoModelsClientCompleteInner(Fresh,&View,Callbacks,Response,Error);g_MdoModelsLocal.End(Handle);xllmClientDestroy(Fresh);return R;
 }
 
 static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Request,

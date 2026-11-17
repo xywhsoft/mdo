@@ -9,7 +9,7 @@ export function createResourcePanels() {
   const modelPanel = createModelConfigPanel(document.querySelector("#settings-models-list"));
   const pluginPanel = createPluginWorkbench(document.querySelector("#settings-extensions-list"));
   return Object.freeze({
-    hasPendingChanges: () => extensionPanels.hasPendingChanges() || pluginPanel.hasPendingChanges(),
+    hasPendingChanges: () => localModels.hasPendingChanges() || extensionPanels.hasPendingChanges() || pluginPanel.hasPendingChanges(),
     selectSection(section) {
       localModels.selectSection(section);
       extensionPanels.selectSection(section);

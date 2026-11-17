@@ -140,7 +140,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     const id = selectedModel(catalog, requested)?.id || requested;
     clear(modelSelect);
     for (const model of catalog) {
-      const suffix = model.free ? t("model.freeSuffix", {}, " · 免费") : "";
+      const suffix = model.managed_local ? ` · ${t(`localModels.service.${model.service_state || "stopped"}`)}` : model.free ? t("model.freeSuffix", {}, " · 免费") : "";
       modelSelect.append(element("option", {
         text: `${model.name || model.id}${suffix}`,
         attrs: { value: model.id },

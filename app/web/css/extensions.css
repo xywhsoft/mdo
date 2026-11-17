@@ -88,3 +88,7 @@
 .extension-settings-previews pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 20rem; overflow: auto; }
 
 .local-model-list{display:grid;gap:14px}.local-model-card{border:1px solid var(--border);border-radius:10px;padding:16px;min-width:0;overflow-wrap:anywhere}.local-model-card h3{margin-top:0}.local-model-requirements{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}.local-model-list .secondary-button{min-height:44px}
+
+.local-model-deployment{border-top:1px solid var(--border);padding:12px 0}.local-model-deployment h4{margin:0 0 8px}.local-model-config{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:12px}.local-model-config>p{grid-column:1/-1}.local-model-config input,.local-model-config select{width:100%;box-sizing:border-box}
+
+.local-model-deployment{border-top:1px solid var(--border);padding:12px 0}.local-model-deployment h4{margin:0 0 8px}.local-model-config{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:12px}.local-model-config>p{grid-column:1/-1}.local-model-config input,.local-model-config select{width:100%;box-sizing:border-box}

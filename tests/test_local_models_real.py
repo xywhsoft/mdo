@@ -53,7 +53,11 @@ def main():
         proxy=fixture.ProxyServer(('127.0.0.1',0),fixture.Proxy);proxy.target=publisher.server_port;proxy.targets=[]
         threading.Thread(target=publisher.serve_forever,daemon=True).start();threading.Thread(target=proxy.serve_forever,daemon=True).start()
         (home/'config/settings.json').write_text(json.dumps(dict(schema_version=1,patch=dict(transport=dict(ca_pem_path='certs/ca.pem',proxy=dict(kind='http-connect',host='127.0.0.1',port=proxy.server_address[1],user='probe',bypass='',credential=dict(secret_ref='env:MDO_TEST_PROXY_PASSWORD')))))),encoding='utf-8')
-        process=None;port=json.loads(config.read_text(encoding='utf-8'))['services'][0]['port'];log=base/'runtime.log';checks=[];did=None;report=dict(backend=a.backend,build='b12477',model='Qwen3-0.6B-Q8_0',weight_sha256=record['sha256'],passed=False,checks=checks)
+        role=home/'agents/local-acceptance';role.mkdir(parents=True)
+        (role/'extension.json').write_text(json.dumps(dict(kind='agents',id='agent:local-acceptance',alias='local-acceptance',name='Local acceptance',entry='agent.md',platforms=['any'])),encoding='utf-8')
+        (role/'agent.md').write_text(json.dumps(dict(schema='mdo.agent.v1',name='Local acceptance',prompt='You have a read function. You MUST call read to inspect files, never print the filename as file contents. To inspect marker.txt use a tool call with name read and arguments {\"path\":\"marker.txt\"}. After the tool result, copy the returned file contents.',tools=['read'],runtime=dict(max_turns=4),context={k:False for k in ('memory.global','memory.project','knowledge','skills.discovery','external_tools','user_instructions')})),encoding='utf-8')
+        workspace=base/'workspace';workspace.mkdir();marker='LOCAL-MODEL-TOOL-'+os.urandom(6).hex();(workspace/'marker.txt').write_text(marker,encoding='utf-8')
+        session_path=None;process=None;port=json.loads(config.read_text(encoding='utf-8'))['services'][0]['port'];log=base/'runtime.log';checks=[];did=None;report=dict(backend=a.backend,build='b12477',model='Qwen3-0.6B-Q8_0',weight_sha256=record['sha256'],passed=False,checks=checks)
         def check(v,text):
             assert v,text;checks.append(text);print('PASS',text,flush=True)
         def call(body=None,path='/local-models',timeout=300):
@@ -66,7 +70,7 @@ def main():
                 c=http.client.HTTPConnection('127.0.0.1',port,timeout=timeout)
                 try:c.request('POST','/api/v1'+path,json.dumps(body).encode(),{'Content-Type':'application/json','X-Mdo-Write-Token':token});r=c.getresponse();status,b=r.status,r.read()
                 finally:c.close()
-            value=json.loads(b);assert status==200,(status,value);return value['data']
+            value=json.loads(b);assert status in (200,201,202),(status,value);return value['data']
         def wait(kind,id,states,timeout=240):
             end=time.monotonic()+timeout
             while time.monotonic()<end:
@@ -82,6 +86,18 @@ def main():
             deployment=call(dict(action='deployment_update',id=did,deployment_revision=deployment['revision'],config=config));start=time.monotonic();call(dict(action='start',id=did,allow_unknown=a.backend!='cpu'));row=wait('deployments',did,('ready','failed'));logs=call(dict(action='logs',id=did))['text'];report['runtime_log']=logs
             check(row['service_state']=='ready','real runtime service ready' if row['service_state']=='ready' else str(row)+'\n'+logs);report['load_seconds']=round(time.monotonic()-start,2)
             result=call(dict(action='verify',id=did));report['verification']=result;check(result['verified'] and result['reply'] and result['tools'],'real streaming reply and tool/result/follow-up verified')
+            # Execute an actual harmless Agent tool in a bounded workspace.
+            project=call(dict(id='local-real',name='Local real acceptance',workspace_root=str(workspace)),path='/projects')
+            session=call(dict(project_id=project['id'],title='Read real fixture',agent_id='agent.local-acceptance',model_id='local-model.'+did,permission_profile='read-only'),path='/sessions')
+            session_path='/projects/'+project['id']+'/sessions/'+session['id']
+            run=call(dict(prompt='Call read with path marker.txt now, then answer with its exact contents. Do not answer without calling the function.',timeout_ms=30000),path=session_path+'/runs');end=time.monotonic()+40
+            while not run['terminal'] and time.monotonic()<end:
+                time.sleep(.2);run=call(path='/runs/'+run['id'])
+            report['agent_run']=run;report['agent_events']=[json.loads(line) for line in (home/'sessions'/project['id']/session['id']/'ui-events.jsonl').read_text(encoding='utf-8').splitlines()];report['agent_conversation']=call(path=session_path+'/conversation');check(run['state']=='succeeded','real mdo Agent run completed' if run['state']=='succeeded' else 'Agent failed: '+str(run)+' '+json.dumps(report['agent_events'],ensure_ascii=False)[-4000:])
+            conversation=call(path=session_path+'/conversation');report['agent_conversation']=conversation
+            serialized=json.dumps(conversation,ensure_ascii=False);check(marker in serialized and 'read' in serialized,'real Agent executed read and included the unseen file contents')
+            logs=report['runtime_log']+'\n'+call(dict(action='logs',id=did))['text'];report['runtime_log']=logs
+            if a.backend=='vulkan':check('Vulkan' in logs and ('offload' in logs.lower() or 'Radeon' in logs),'Vulkan device and GPU offload observed in native runtime logs')
             import urllib.request
             with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(urllib.request.Request(row['web_url'],headers={'Accept':'text/html','Accept-Encoding':'gzip'}),timeout=10) as page:check(page.status==200,'real llama.cpp chat page available')
             models=call(path='/models')['models'];model_row=next(x for x in models if x['id']=='local-model.'+did);check(model_row['context_window_tokens']==16384 and model_row['local_verified'],'effective context and verification published in mdo model list')
@@ -92,7 +108,7 @@ def main():
             if did:
                 try:report['runtime_log']=call(dict(action='logs',id=did))['text']
                 except Exception:pass
-            report['error']=str(e);raise AssertionError(str(e)+'\n'+report.get('runtime_log','')+'\n'+log.read_text(encoding='utf-8',errors='replace')[-2500:]) from e
+            report['error']=str(e);raise AssertionError(str(e)+'\n'+report.get('runtime_log','')[-3500:]+'\n'+log.read_text(encoding='utf-8',errors='replace')[-2500:]) from e
         finally:
             (base_assets/f'acceptance-{a.backend}.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
             if process:stop_host(process)

@@ -13,7 +13,7 @@ export const runsStore = createResourceStore({ active_runs: 0, items: [] },
 const rejectedBeforeExecution = new Set([
   "run_start_invalid", "image_model_unsupported", "attachment_invalid",
   "session_profile_invalid", "agent_unavailable", "model_profile_image_unsupported",
-  "model_profile_model_missing", "model_profile_protocol_unsupported",
+  "model_profile_local_model_stopped", "model_profile_model_missing", "model_profile_protocol_unsupported",
   "model_profile_reasoning_unsupported", "model_profile_output_limit",
   "model_profile_context_limit", "model_profile_credential_unavailable",
   "model_profile_proxy_unavailable", "model_profile_proxy_invalid", "model_profile_system_proxy_unavailable", "model_profile_ca_unavailable",

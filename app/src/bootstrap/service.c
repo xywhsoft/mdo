@@ -49,6 +49,7 @@ static void MdoServiceRetry(void* User)
     if (xrtAtomic32Load(&g_MdoServiceState,XMEMORY_ACQUIRE) != MDO_SERVICE_WAITING) return;
     if(MdoPluginBootstrapTry(host)){xrtAtomic32Store(&g_MdoServiceState,MDO_SERVICE_READY,XMEMORY_RELEASE);return;}
     if (MdoBootstrapInit(host)) {
+        (void)MdoLocalModelsServicesInit();
         (void)MdoApiQueueStart();
         (void)MdoRemoteInit(host->Server);
         (void)MdoDeviceTransfersInit(host->Server);
@@ -99,7 +100,7 @@ void ServiceInit(XS_HostInfo* pHost)
         }
     }
     (void)MdoApiInit();
-    if (ready) (void)MdoApiQueueStart();
+    if (ready) { (void)MdoLocalModelsServicesInit(); (void)MdoApiQueueStart(); }
     if (ready) { (void)MdoRemoteInit(pHost->Server); (void)MdoDeviceTransfersInit(pHost->Server);MdoServiceOutputMaintenanceStart(pHost); }
 }
 

@@ -1,0 +1,87 @@
+{
+  "date": "2026-11-18",
+  "hardware": {
+    "cpu": "AMD Ryzen 5 5600",
+    "ram": "32 GiB",
+    "gpu": "AMD Radeon RX 5700"
+  },
+  "acceptance": [
+    {
+      "backend": "cpu",
+      "build": "b12477",
+      "model": "Qwen3-0.6B-Q8_0",
+      "weight_sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
+      "passed": true,
+      "checks": [
+        "real runtime dependency plan ready",
+        "real model installed with full size and SHA-256: ",
+        "real runtime service ready",
+        "real streaming reply and tool/result/follow-up verified",
+        "real mdo Agent run completed",
+        "real Agent executed read and included the unseen file contents",
+        "real llama.cpp chat page available",
+        "effective context and verification published in mdo model list",
+        "real model restarts with the same stable model identity",
+        "real installation and owned model resources removed"
+      ],
+      "load_seconds": 6.47,
+      "verification": {
+        "fingerprint": "80d4170900984ad0026a8a0a5de6ef6df76997519cda017ab1d446791dc5dd32",
+        "reply": true,
+        "checked_at": 1794945437278000,
+        "tools": true,
+        "verified": true,
+        "latency_ms": 19284
+      },
+      "agent": {
+        "state": "succeeded",
+        "model_calls": 2,
+        "tool_calls": 1,
+        "result": "ok"
+      },
+      "report_sha256": "79aa0fd2c973cc21d6682e199bbbd213dbac11bafab1296574029617bdbcef5c"
+    },
+    {
+      "backend": "vulkan",
+      "build": "b12477",
+      "model": "Qwen3-0.6B-Q8_0",
+      "weight_sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
+      "passed": true,
+      "checks": [
+        "real runtime dependency plan ready",
+        "real model installed with full size and SHA-256: ",
+        "real runtime service ready",
+        "real streaming reply and tool/result/follow-up verified",
+        "real mdo Agent run completed",
+        "real Agent executed read and included the unseen file contents",
+        "Vulkan device and GPU offload observed in native runtime logs",
+        "real llama.cpp chat page available",
+        "effective context and verification published in mdo model list",
+        "real model restarts with the same stable model identity",
+        "real installation and owned model resources removed"
+      ],
+      "load_seconds": 8.17,
+      "verification": {
+        "fingerprint": "4baf9fa04e4a58477631917919cdbdd8fa60ad7fd6353e3e1ebd223515f732b3",
+        "reply": true,
+        "checked_at": 1794945362016000,
+        "tools": true,
+        "verified": true,
+        "latency_ms": 9983
+      },
+      "agent": {
+        "state": "succeeded",
+        "model_calls": 2,
+        "tool_calls": 1,
+        "result": "ok"
+      },
+      "report_sha256": "738819b068f0c7933a539319d98ea518a7b6879b0bba792c51f1fbf189aedcbf"
+    }
+  ],
+  "pending_real_devices": [
+    "Linux",
+    "macOS",
+    "NVIDIA CUDA"
+  ],
+  "scope": "Bounded Qwen3-0.6B functional acceptance; no autonomous-agent quality benchmark"
+}

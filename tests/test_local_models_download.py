@@ -58,7 +58,8 @@ class Publisher(BaseHTTPRequestHandler):
             return
         if p.path.endswith('/archive'):
             data=ARCHIVES[query['version'][0]];offset=int(query.get('offset',['0'])[0]);chunk=data[offset:offset+1048576];self.send_response(200);self.send_header('Content-Type','application/zip');self.send_header('Content-Length',str(len(chunk)));self.end_headers();self.wfile.write(chunk);return
-        if p.path.endswith('/catalog'):value=dict(items=[MODEL],total=1,offset=0,limit=100)
+        if p.path.endswith('/updates'):value=dict(items=[MODEL],platform='windows-x86_64')
+        elif p.path.endswith('/catalog'):value=dict(items=[MODEL],total=1,offset=0,limit=100)
         elif p.path.endswith('/plan'):value=PLAN
         elif p.path.endswith('/detail'):value=RUNTIME if query['version'][0]==RUNTIME_VERSION else MODEL
         else:return self.send_error(404)
@@ -187,6 +188,17 @@ def main():
                     raise AssertionError(row)
                 call(dict(action='start',id=did));row=service(('ready','failed'));check(row['service_state']=='ready',row)
                 checked=call(dict(action='verify',id=did));check(checked['verified'] and checked['reply'] and checked['tools'],checked)
+                access=call(dict(action='web_access',id=did));check(access['key'] not in json.dumps(call()),'web credential leaked into snapshots')
+                # A live request owns a lease; a graceful stop drains it.
+                from concurrent.futures import ThreadPoolExecutor
+                control.write_text('{"slow_call":true}')
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    task=pool.submit(call,dict(action='verify',id=did));end=time.monotonic()+5
+                    while not call()['deployments'][did].get('active_requests') and time.monotonic()<end:time.sleep(.02)
+                    check(call()['deployments'][did]['active_requests']>0,'verification did not own an active request lease')
+                    call(dict(action='stop',id=did));check(call()['deployments'][did]['service_state']=='stopping','graceful stop did not reject new requests while draining');task.result(timeout=8)
+                service(('stopped',));call(dict(action='stop',id=did));check(service(('stopped',))['service_state']=='stopped','stop was not idempotent')
+                control.write_text('{}');call(dict(action='start',id=did));service(('ready',))
                 check('[redacted]' in call(dict(action='logs',id=did))['text'],'runtime credential was not redacted')
                 call(dict(action='deployment_update',id=did,deployment_revision=deployment['revision'],config=deployment['config']),status=422)
                 call(dict(action='uninstall',id=interrupted,delete_files=True),status=422)
@@ -208,16 +220,30 @@ def main():
                 current=call()['deployments'][did]
                 current=call(dict(action='deployment_update',id=did,deployment_revision=current['revision'],config={**current['config'],'auto_start_on_use':False,'idle_seconds':0}))
                 control.write_text('{"bad_context":true}');call(dict(action='start',id=did));row=service(('failed',));check('context' in row['service_error'],'wrong effective server context accepted')
-                control.write_text('{}');current=call()['deployments'][did]
+                # Publish a new inert recipe while preserving an old deployment.
+                control.write_text('{}');before_hits=Publisher.hits;new_doc=copy.deepcopy(DOC);new_doc['profiles'][0].update(context_tokens=4096,max_output_tokens=2048,output_tokens=1024)
+                new_manifest=manifest();new_manifest['version']='2.0.0';new_zip=archive({'extension.json':new_manifest,'model.json':new_doc});new_version='E'*32
+                MODEL={**MODEL,**new_manifest,'manifest':new_manifest,'version_id':new_version,'sha256':hashlib.sha256(new_zip).hexdigest(),'bytes':len(new_zip),'serial':2,'local_model':new_doc};ARCHIVES[new_version]=new_zip
+                PLAN=sign({**PLAN,'recipe':MODEL,'document':new_doc,'profile':copy.deepcopy(new_doc['profiles'][0])})
+                latest=call(dict(action='updates',id=interrupted));check(latest['items'][0]['version_id']==new_version,'update lookup did not return published version')
+                new_plan=call(dict(action='plan',version=new_version,profile='default'));new_install=call(dict(action='install',plan_id=new_plan['id'],revision=new_plan['revision'],trust_code=True));new_row=wait(new_install['id']);check(new_row['state']=='installed',new_row);check(Publisher.hits==before_hits,'unchanged weight was downloaded on update')
+                current=call()['deployments'][did];switched=call(dict(action='deployment_switch',id=did,deployment_revision=current['revision'],installation=new_install['id']));check(switched['config']['context_tokens']==4096 and switched['id']==did,'update changed stable identity or lost new profile')
+                call(dict(action='uninstall',id=interrupted,delete_files=True),status=422)
+                call(dict(action='deployment_rollback',id=did,deployment_revision=switched['revision']));check(call()['deployments'][did]['installation']==interrupted,'rollback did not restore old model installation')
+                stop_host(process);process=None;start();check(call()['installations'][interrupted]['state']=='installed','updated recipe made old deployment unavailable after restart')
+                current=call()['deployments'][did]
+                current=call(dict(action='deployment_update',id=did,deployment_revision=current['revision'],config={**current['config'],'auto_start':True}))
+                stop_host(process);process=None;start();check(service(('ready','failed'))['service_state']=='ready','automatic startup happened before the command/API services were ready')
+                call(dict(action='stop',id=did));service(('stopped',));current=call()['deployments'][did]
                 call(dict(action='deployment_delete',id=did,deployment_revision=current['revision']))
-                check(not any(m['id']==mid for m in call(path='/models')['models']),'deleted deployment stayed in model catalog')
+                check(not any(m['id']==mid for m in call(path='/models')['models']),'deleted deployment stayed in model catalog');call(dict(action='uninstall',id=new_install['id'],delete_files=True))
             if args.browser:
                 source=base/'browser.gguf';source.write_bytes(PAYLOAD)
                 evidence=ROOT/'.build/local-model-browser';evidence.mkdir(exist_ok=True)
                 for locale,width in [('en-US',1400),('ru-RU',390),('zh-CN',1400)]:
                     with tempfile.TemporaryDirectory(prefix='chrome-',dir=base) as profile:
                         from urllib.parse import urlencode
-                        result=subprocess.run(['node',str(ROOT/'tests/queue_browser_driver.mjs'),str(args.browser),profile,f'http://127.0.0.1:{port}/?'+urlencode(dict(locale=locale,qa_model_path=str(source))),str(width),str(evidence/f'{locale}-{width}.png'),str(ROOT/'tests/local_model_browser_driver.js'),'desktop'],capture_output=True,timeout=60)
+                        result=subprocess.run(['node',str(ROOT/'tests/queue_browser_driver.mjs'),str(args.browser),profile,f'http://127.0.0.1:{port}/?'+urlencode(dict(locale=locale,qa_model_path=str(source),qa_services="1" if args.services else "0")),str(width),str(evidence/f'{locale}-{width}.png'),str(ROOT/'tests/local_model_browser_driver.js'),'desktop'],capture_output=True,timeout=60)
                         report=json.loads(result.stdout);(evidence/f'{locale}-{width}.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8');check(result.returncode==0 and report.get('passed'),report)
             call(dict(action='uninstall',id=interrupted,delete_files=True));check(not (home/'local-models'/MODEL_WORK).exists(),'last recipe installation was retained')
             runtime=call(path='/extensions/external-tools/'+RUNTIME_WORK);call(dict(action='remove',expected_revision=runtime['revision']),path='/extensions/external-tools/'+RUNTIME_WORK+'/actions')
