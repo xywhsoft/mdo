@@ -10,9 +10,10 @@
 #define MDO_EXTENSION_DIRECTORY_BYTES (1024u*1024u*1024u)
 #define MDO_EXTENSION_FILE_BYTES (512u*1024u*1024u)
 #define MDO_EXTENSION_DIRECTORY_ENTRIES 50000u
-static const char* const MdoExtensionKinds[]={"agents","subagents","tools","mcp","skills","commands","external-tools","knowledge","plugins"};
+static const char* const MdoExtensionKinds[]={"agents","subagents","tools","mcp","skills","commands","external-tools","knowledge","plugins","local-models"};
+#define MDO_EXTENSION_KIND_COUNT (sizeof(MdoExtensionKinds)/sizeof(MdoExtensionKinds[0]))
 static bool MdoExtensionDirectoryKind(cstr Kind)
-{for(size_t I=0;I<9;I++)if(Kind&&!strcmp(Kind,MdoExtensionKinds[I]))return true;return false;}
+{for(size_t I=0;I<MDO_EXTENSION_KIND_COUNT;I++)if(Kind&&!strcmp(Kind,MdoExtensionKinds[I]))return true;return false;}
 
 /* Archive paths are relative UTF-8 names. Dotfiles are ordinary files; dot
  * components, Win32 aliases, streams and escape paths are not. */

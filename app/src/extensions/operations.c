@@ -129,7 +129,7 @@ bool MdoExtensionsWarnings(xvalue* Items){
   if(!MdoDiagnosticWarning(Items,"extensions","recovery_pending",Path?Path:"extensions",Path?Path:"data/extension-tasks",Message?Message:"Extension recovery needs attention","Preserved records were not deleted. Repair the indicated record or restore its backup, then restart mdo","extensions")){xrtValueRelease(Recovery);return false;}}
  xrtValueRelease(Recovery);
  cstr AndroidWarning=MdoAndroidToolsWarning();if(AndroidWarning&&!MdoDiagnosticWarning(Items,"extensions","android_tools_unavailable","external-tools","external-tools",AndroidWarning,"Install the full APK again or free storage, then restart","external-tools"))return false;
- for(size_t K=0;K<9;K++){cstr Kind=MdoExtensionKinds[K];char Error[512]={0};xvalue* Rows=MdoExtensionsList(Kind,Error);
+ for(size_t K=0;K<MDO_EXTENSION_KIND_COUNT;K++){cstr Kind=MdoExtensionKinds[K];char Error[512]={0};xvalue* Rows=MdoExtensionsList(Kind,Error);
   if(!Rows){if(!MdoDiagnosticWarning(Items,"extensions","catalog_unavailable",Kind,Kind,Error,"Check the extension directory and host installation state","extensions"))return false;continue;}
   for(size_t I=0;I<xrtValueCount(Rows);I++){
    if(xrtValueCount(Items)>=255){xrtValueRelease(Rows);return MdoDiagnosticWarning(Items,"extensions","warning_limit","","","Additional extension warnings were omitted","Resolve the listed issues and check again","extensions");}

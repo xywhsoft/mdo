@@ -81,7 +81,7 @@ bad:if(Error&&Capacity)snprintf(Error,Capacity,"Use an int32 sort_order and up t
 }
 static bool MdoExtensionManifest(const xvalue* M,char* Error,size_t Capacity)
 {
-    cstr Why="extension.json must describe one of the nine extension types";
+    cstr Why="extension.json must describe a supported extension type";
     if(xrtValueType(M)!=XVALUE_OBJECT)goto bad;
     if(!MdoExtensionPresentation(M,Error,Capacity))return false;
     const xvalue* Settings=xrtValueObjectGet(M,XRT_STR_LITERAL("settings"));bool Off=false;
@@ -115,6 +115,7 @@ bad:if(Error&&Capacity)snprintf(Error,Capacity,"%s",Why);return false;
 typedef struct MdoExtensionManifestBuffer {uint8* Data;size_t Used,Capacity;} MdoExtensionManifestBuffer;
 static bool MdoExtensionManifestSink(const void* Data,size_t Size,void* User)
 {MdoExtensionManifestBuffer* B=User;if(Size>B->Capacity-B->Used)return false;memcpy(B->Data+B->Used,Data,Size);B->Used+=Size;return true;}
+#include "local_model_format.h"
 static xvalue* MdoExtensionZipManifest(MdoZip* Z,xcancel* Cancel)
 {
     int64 At=MdoZipFind(Z,"extension.json");if(At<0){MdoZipFail(Z,"ZIP root must contain extension.json; no enclosing folder or payload wrapper");return NULL;}
@@ -138,6 +139,14 @@ static xvalue* MdoExtensionZipManifest(MdoZip* Z,xcancel* Cancel)
         const xvalue* Env=MdoEsGet(Settings,"environment");for(size_t I=0;Good&&I<xrtValueCount(Env);I++){xstrview Field={0};xrtValueGetString(xrtValueObjectAt(Env,I,NULL),&Field);const xvalue* Fld=MdoEsFind(Definition,Field.Data);cstr T=MdoEsText(Fld,"type");Good=Fld&&strcmp(T,"multiselect");}
         const xvalue* Templates=MdoEsGet(Settings,"templates");for(size_t I=0;Good&&I<xrtValueCount(Templates);I++){xstrview P={0};xrtValueGetString(xrtValueArrayGet(Templates,I),&P);int64 At=MdoZipFind(Z,P.Data);Good=At>=0&&!Z->Entries[At].Directory&&Z->Entries[At].Bytes&&Z->Entries[At].Bytes<=128u*1024u;}
         xrtValueRelease(Definition);if(!Good){xrtValueRelease(M);MdoZipFail(Z,"Extension settings form, field binding or text template is invalid or missing");return NULL;}
+    }
+    if(!strcmp(MdoExtensionText(M,"kind",32),"local-models")){
+        cstr Entry=MdoExtensionText(M,"entry",4096);int64 At=MdoZipFind(Z,Entry);MdoExtensionManifestBuffer B={0};
+        bool Good=Z->Bytes<=MD_LOCAL_MODEL_PACKAGE_BYTES&&Z->Total<=MD_LOCAL_MODEL_PACKAGE_BYTES&&At>=0&&Z->Entries[At].Bytes<=MD_LOCAL_MODEL_BYTES;
+        for(size_t I=0;Good&&I<Z->Count;I++){MdoZipEntry* F=&Z->Entries[I];if(F->Directory)continue;cstr Dot=strrchr(F->Path,'.');Good=F->Bytes<=MD_LOCAL_MODEL_BYTES&&(!strcmp(F->Path,"LICENSE")||!strcmp(F->Path,"COPYING")||(Dot&&(!strcmp(Dot,".md")||!strcmp(Dot,".json")||!strcmp(Dot,".txt")||!strcmp(Dot,".jinja"))));}
+        if(Good){B.Capacity=(size_t)Z->Entries[At].Bytes;B.Data=xrtMalloc(B.Capacity+1);Good=B.Data&&MdoZipEntryRead(Z,(size_t)At,MdoExtensionManifestSink,&B,Cancel,NULL)&&B.Used==B.Capacity&&!memchr(B.Data,0,B.Used);}
+        xvalue* D=Good?xrtJsonParse(xrtStrViewN((cstr)B.Data,B.Used)):NULL;xrtFree(B.Data);Good=Good&&D&&MdLocalModelValidate(D,M,Z->Error);xrtValueRelease(D);
+        if(!Good){xrtValueRelease(M);if(!Z->Error[0])MdoZipFail(Z,"Local model packages require a valid small recipe and text resources only");return NULL;}
     }
     return M;
 }

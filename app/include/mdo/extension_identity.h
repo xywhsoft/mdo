@@ -10,20 +10,20 @@
 /* Logical identity is not a directory name, callable alias or store XID. */
 static inline cstr MdoExtensionRefPrefix(cstr Kind)
 {
-    static const char* Kinds[]={"agents","subagents","tools","skills","mcp","external-tools","commands","plugins","knowledge"};
-    static const char* Prefixes[]={"agent","subagent","tool","skill","mcp","external-tool","command","plugin","knowledge"};
-    for(size_t I=0;Kind&&I<9;I++)if(!strcmp(Kind,Kinds[I]))return Prefixes[I];
+    static const char* Kinds[]={"agents","subagents","tools","skills","mcp","external-tools","commands","plugins","knowledge","local-models"};
+    static const char* Prefixes[]={"agent","subagent","tool","skill","mcp","external-tool","command","plugin","knowledge","local-model"};
+    for(size_t I=0;Kind&&I<sizeof(Kinds)/sizeof(Kinds[0]);I++)if(!strcmp(Kind,Kinds[I]))return Prefixes[I];
     return NULL;
 }
 static inline cstr MdoExtensionRefKind(cstr Ref)
 {
-    static const char* Kinds[]={"agents","subagents","tools","skills","mcp","external-tools","commands","plugins","knowledge"};
+    static const char* Kinds[]={"agents","subagents","tools","skills","mcp","external-tools","commands","plugins","knowledge","local-models"};
     if(!Ref||strlen(Ref)>MDO_EXTENSION_REF_BYTES)return NULL;
     const char* Colon=strchr(Ref,':');if(!Colon)return NULL;
     const char* Name=Colon+1;size_t N=strlen(Name);
     if(!N||N>128||Name[0]=='.'||Name[N-1]=='.'||strstr(Name,".."))return NULL;
     for(size_t I=0;I<N;I++){unsigned char C=Name[I];if(!((C>='a'&&C<='z')||(C>='0'&&C<='9')||C=='.'||C=='_'||C=='-'))return NULL;}
-    for(size_t I=0;I<9;I++){cstr Prefix=MdoExtensionRefPrefix(Kinds[I]);size_t P=strlen(Prefix);if((size_t)(Colon-Ref)==P&&!memcmp(Ref,Prefix,P))return Kinds[I];}
+    for(size_t I=0;I<sizeof(Kinds)/sizeof(Kinds[0]);I++){cstr Prefix=MdoExtensionRefPrefix(Kinds[I]);size_t P=strlen(Prefix);if((size_t)(Colon-Ref)==P&&!memcmp(Ref,Prefix,P))return Kinds[I];}
     return NULL;
 }
 static inline bool MdoExtensionRefValid(cstr Ref){return MdoExtensionRefKind(Ref)!=NULL;}

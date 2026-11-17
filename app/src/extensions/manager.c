@@ -141,7 +141,7 @@ static xvalue* MdoExtListRawLocked(cstr Kind,const xvalue* State,char Error[512]
 static xvalue* MdoExtSnapshotLocked(const xvalue* State,char Error[512])
 {
     xvalue* Rows=xrtValueArray();bool Ok=Rows&&State&&xrtValueType(State)==XVALUE_OBJECT;
-    for(size_t K=0;Ok&&K<9;K++){
+    for(size_t K=0;Ok&&K<MDO_EXTENSION_KIND_COUNT;K++){
         xvalue* Part=MdoExtListRawLocked(MdoExtensionKinds[K],State,Error);Ok=Part!=NULL;
         for(size_t I=0;Ok&&I<xrtValueCount(Part);I++)Ok=xrtValueCount(Rows)<MDO_EXTENSION_GRAPH_NODES&&xrtValueArrayAppend(Rows,xrtValueArrayGet(Part,I));
         xrtValueRelease(Part);
@@ -227,7 +227,7 @@ static bool MdoExtIdentityLocked(cstr Kind,cstr Directory,const xvalue* Manifest
     cstr Source=MdoExtensionText(Credits,"source",16);
     if(!MdoExtensionRefValid(Ref)||(Source&&!strcmp(Source,"store")&&(!Expected||strcmp(Expected,Ref))))return MdoExtError(Error,"The archive logical ID does not match the verified store identity");
     xvalue* State=MdoExtReadJson(MDO_EXT_STATE,MDO_EXT_STATE_LIMIT,true);bool Ok=State&&xrtValueType(State)==XVALUE_OBJECT;
-    for(size_t K=0;Ok&&K<9;K++){
+    for(size_t K=0;Ok&&K<MDO_EXTENSION_KIND_COUNT;K++){
         xvalue* Rows=MdoExtListRawLocked(MdoExtensionKinds[K],State,Error);Ok=Rows!=NULL;
         for(size_t I=0;Ok&&I<xrtValueCount(Rows);I++){
             const xvalue* Row=xrtValueArrayGet(Rows,I);cstr Id=MdoExtensionText(Row,"id",MDO_EXTENSION_REF_BYTES),Dir=MdoExtensionText(Row,"directory_id",96);bool Same=Dir&&!strcmp(Kind,MdoExtensionKinds[K])&&!strcmp(Directory,Dir);
