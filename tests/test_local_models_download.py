@@ -145,6 +145,7 @@ def main():
             call(dict(action='plan',version=MODEL_VERSION,profile='unselected'),status=422)
             store=base/'weights';store.mkdir();call(dict(action='storage',path=str(store)))
             first=install();row=wait(first);check(row['state']=='installed',row);check((store/'blobs'/HASH).read_bytes()==PAYLOAD,'verified model bytes differ');check(any(Publisher.ranges),'interrupted response did not resume with Range')
+            check(row['local_model']['i18n']==DOC['i18n'] and 'plan' not in row and 'runtime_plan' not in row,'snapshot lost localization or exposed its internal install plans')
             runtime=call(path='/extensions/external-tools/'+RUNTIME_WORK);call(dict(action='remove',expected_revision=runtime['revision']),path='/extensions/external-tools/'+RUNTIME_WORK+'/actions',status=422)
             hits=Publisher.hits;second=install();row=wait(second);check(row['state']=='installed',row);check(Publisher.hits==hits,'shared model weights downloaded twice')
             call(dict(action='uninstall',id=first,delete_files=True));check((store/'blobs'/HASH).exists(),'shared model file removed')

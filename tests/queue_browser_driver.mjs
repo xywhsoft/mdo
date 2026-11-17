@@ -59,6 +59,13 @@ try {
   process.stdout.write(report);
   if (testScript && !JSON.parse(report).passed) process.stderr.write(JSON.stringify(diagnostics));
 } finally {
-  clearTimeout(timeout); socket?.close(); child.kill();
+  clearTimeout(timeout);
+  // Let Chromium flush profile files and close its children before the Python
+  // harness removes the owned temporary profile (notably Windows cache locks).
+  if (socket?.readyState === WebSocket.OPEN) {
+    try { socket.send(JSON.stringify({ id: 2147483647, method: "Browser.close" })); } catch { /* Already closing. */ }
+    await Promise.race([new Promise(resolve => child.exitCode !== null ? resolve() : child.once("exit", resolve)), delay(2000)]);
+  }
+  socket?.close(); if (child.exitCode === null) child.kill();
   await new Promise(resolve => child.exitCode !== null ? resolve() : child.once("exit", resolve));
 }

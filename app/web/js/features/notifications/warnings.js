@@ -11,7 +11,7 @@ export function warningRevision(value) {
   return (a>>>0).toString(16).padStart(8,"0")+(b>>>0).toString(16).padStart(8,"0");
 }
 const sections={knowledge:"knowledge",skills:"skills",mcp:"mcp",modules:"extensions",plugins:"extensions",extensions:"extensions"};
-const settingsSections=new Set(["general","agent","models","memory","web","agents","subagents","tools","mcp","skills","commands","toolpacks","knowledge","extensions","account","remote"]);
+const settingsSections=new Set(["general","agent","models","memory","web","agents","subagents","tools","mcp","skills","commands","toolpacks","knowledge","extensions","local-models","account","remote"]);
 const domainNames={
   "zh-CN":{storage:"本地存储",sessions:"会话",schedules:"计划任务",modules:"扩展加载",skills:"Skill",mcp:"MCP",plugins:"插件",extensions:"扩展",knowledge:"知识库"},
   "en-US":{storage:"Local storage",sessions:"Conversations",schedules:"Scheduled tasks",modules:"Extension loading",skills:"Skills",mcp:"MCP",plugins:"Plugins",extensions:"Extensions",knowledge:"Knowledge"},
