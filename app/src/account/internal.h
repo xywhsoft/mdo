@@ -94,6 +94,8 @@ cstr MdoAccountText(const xvalue* Value, cstr Key, size_t Limit);
 void MdoAccountSecretValueRelease(xvalue* Value);
 xvalue* MdoAccountClient(cstr Origin, cstr Path, cstr Method, const xvalue* Body,
     cstr Access, xcancel* Cancel, uint16* Status);
+xvalue* MdoAccountClientDetailed(cstr Origin, cstr Path, cstr Method, const xvalue* Body,
+    cstr Access, xcancel* Cancel, uint16* Status, MdoAccountTransport* Transport);
 /* First-party service JSON. Fixed native authority, no redirect/retry; callers
  * constrain their own paths and inspect 200/201, including null-data replies. */
 xvalue* MdoAccountServiceJson(cstr Path, cstr Method, const xvalue* Body,

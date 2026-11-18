@@ -147,6 +147,11 @@ xvalue* MdoAccountClient(cstr Origin, cstr Path, cstr Method, const xvalue* Body
 {
     return MdoAccountJsonClient(Origin,Path,Method,Body,Access,Cancel,Status,false,NULL);
 }
+xvalue* MdoAccountClientDetailed(cstr Origin, cstr Path, cstr Method, const xvalue* Body,
+    cstr Access, xcancel* Cancel, uint16* Status, MdoAccountTransport* Transport)
+{
+    return MdoAccountJsonClient(Origin,Path,Method,Body,Access,Cancel,Status,false,Transport);
+}
 xvalue* MdoAccountServiceJson(cstr Path, cstr Method, const xvalue* Body,
     const MdoAccountLease* Lease, uint16* Status)
 {

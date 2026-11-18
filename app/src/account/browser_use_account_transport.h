@@ -8,6 +8,7 @@ typedef struct MdoAccountTransport {
     uint32 Attempts, Failures, CauseCount;
     uint64 ElapsedMs;
     bool Retryable;
+    bool SystemTrustFailed;
     struct { int32 Kind, Code, SystemCode; bool Fetch; cstr Domain; } Causes[8];
 } MdoAccountTransport;
 

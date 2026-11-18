@@ -5,7 +5,9 @@
     "commit": "f49b186de53221d67babe29591fc71e2e0672e13",
     "version": "2.0.0-dev",
     "single_header_sha256": "14afd7c681efe005d055c0f435995e17843377aaca1fbcb52ba5c48b4f562369",
-    "upstream_fixes": [],
+    "upstream_fixes": [
+      "54c59c14491dcac91e56ba24925d95afafbfdf0f"
+    ],
     "declarations_sha256": "33587f175ebad3b27861284137f38b25dfe76cf2047c7719f6be584e83a861c9"
   },
   "xserver": {
@@ -75,10 +77,10 @@
   },
   "sdk_overlay": {
     "path": "tools/dependencies/xwork-mcp.patch",
-    "sha256": "ffc291267cf7ce1f03c8ad6f460deeb6863c721964943e852050c06e0630bcbf",
+    "sha256": "5fd4b9857c256232aaf0d7c3ffbdb89f16a87c84c84ba1d68bbe6e57f232f513",
     "base_commit": "e9a3551a5a533de34e2ca4291a8def71612fbf35",
     "purpose": "Pinned XRT agent exports, native browser automation, lifecycle/transfer guards and model media compatibility",
-    "xrt_single_header_sha256": "f99fe10ea60b5cb48217be91bc786620b683aae8a7af1b582329c210aa9da83f",
+    "xrt_single_header_sha256": "8d03abdfce40217279dfaee5df7e4b2b71ee7f5c2efea9cb5020e5913397cca1",
     "native_sources": {
       "src/webview/xs_browser.inc.hpp": {
         "path": "tools/native/xs_browser.inc.hpp",

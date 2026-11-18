@@ -122,7 +122,11 @@ static void MdoUpdateDoCheck(MdoUpdateStatus* Status)
         goto done;
     }
     if (!Ok || Response.Status != 200) {
-        MdoUpdateComplete(Status,"error","Update service is unavailable; retry checking"); goto done;
+        bool TrustFailed = !Ok &&
+            xrtErrorFind(xrtGetError(), "xrt.x509", X509_ERROR_TRUST_STORE_SYSTEM) != NULL;
+        MdoUpdateComplete(Status,"error",TrustFailed ? "system_trust_failed" :
+            "Update service is unavailable; retry checking");
+        goto done;
     }
     xrtJsonReadConfigInit(&Config); Config.MaxInputBytes = 8192;
     Config.MaxDepth = 4; Config.MaxValues = 64;

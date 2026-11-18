@@ -123,6 +123,7 @@
   "account.login_expired": "Sign-in expired. Please sign in again.",
   "account.service_update_required": "The application sign-in endpoint is not deployed. Update xadmin first.",
   "account.account_connection_failed": "Cannot connect to the account service. Check your network and try again.",
+  "account.system_trust_failed": "Could not load the device’s system certificates. Update the operating system or contact mdo support.",
   "account.account_renewal_pending": "Cannot reach the account service. Sign-in is saved and will resume automatically when connected.",
   "account.local_logout_only": "Signed out locally. Server sign-out is unconfirmed; revoke this device on the website.",
   "error.backupUploadInvalid": "The backup upload metadata or chunk format is invalid. Select the original backup file again.",

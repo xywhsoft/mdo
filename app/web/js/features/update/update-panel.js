@@ -96,7 +96,10 @@ export function createUpdatePanel({ root, entries = [], transport = api, openDev
     const blocked = !!status?.blocked;
     let stateText = status ? (blocked && status.status === "error" ? words.requiredError : words[status.status]) ?? words.failed : words.checking;
     if (status?.available && words[status.edition]) stateText += " · " + words[status.edition] + (status.build_id ? " · " + status.build_id : "");
-    if (status?.message) stateText += " · " + status.message;
+    if (status?.message) {
+      stateText += " · " + (status.message === "system_trust_failed"
+        ? uiErrorText("account.system_trust_failed") : status.message);
+    }
     if (status?.last_install_message) stateText += " · " + status.last_install_message;
     if (status?.ready && targetState().selected) stateText += " · " + words.native;
     if (failure) stateText += " · " + failure;

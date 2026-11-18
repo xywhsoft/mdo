@@ -45,6 +45,10 @@ mdo 的 native overlay 另包含浏览器面板与窗口位置记忆。窗口状
 `python tools/native/update_browser_patch.py` 再构建宿主。构建盘空间不足时，
 可将 `MDO_SDK_OVERLAY_CACHE` 指向另一个磁盘的 SDK 缓存目录；仍校验锁定提交和补丁摘要。
 
+HarmonyOS 的系统 CA 导入修复通过 SDK overlay 回移到产品宿主，来源提交记录
+在 `deps.lock.xrt.upstream_fixes`。此补丁只修改自动发现的 POSIX 哈希证书目录。
+显式 CA 配置和 TLS 对端验证沿用原有规则。需要重新构建宿主。
+
 The preceding lock used `xs-regex-acceptance.bundle` on `refs/heads/master`.
 It retains XRT `3d55ec41` with the upstream DFA acceptance fix from
 `xrt@a539c579` and records that backport in `deps.lock.xrt.upstream_fixes`.

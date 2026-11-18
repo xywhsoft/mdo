@@ -1,7 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { updateActions, updateAvailable, createUpdatePanel } from "../app/web/js/features/update/update-panel.js";
+import { loadLocale } from "../app/web/js/i18n.js";
 import { TestElement, testDocument } from "./helpers/extension-dom.mjs";
+
+const initialFetch = globalThis.fetch;
+try {
+  globalThis.fetch = async path => ({
+    ok: true, json: async () => JSON.parse(await readFile(new URL("../app/web" + path, import.meta.url), "utf8"))
+  });
+  await loadLocale("en-US");
+} finally { globalThis.fetch = initialFetch; }
 
 test("installation is offered only for an enabled, idle, verified package", () => {
   assert.equal(updateActions({ enabled: true, ready: false }).install, false);
@@ -44,6 +54,9 @@ test("shared update window has no snooze, retains the badge on close, and enforc
     await panel.refresh(); await flush(); assert.equal(dialog(), null); assert.equal(badge.hidden,false);
     data = { ...data, available:false, status:"current" };
     await panel.refresh(); assert.equal(badge.hidden,true);
+    data = { ...data, status:"error", message:"system_trust_failed" };
+    await panel.refresh();
+    assert.match(root.querySelector("[data-update-status]").textContent, /Could not load the device.s system certificates/);
   } finally { panel.destroy(); Object.assign(globalThis, previous); }
 });
 test("transient operation errors preserve the required update actions and badge", () => {

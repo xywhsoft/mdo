@@ -129,6 +129,7 @@ static int32 MdoAccountWorker(void* Unused)
         g_MdoAccount.Busy = true; g_MdoAccount.BusyKind = work.Kind;
         cancel = xrtCancelCreate(); g_MdoAccount.WorkCancel = cancel;
         MdoAccountChangedLocked(); xrtMutexUnlock(g_MdoAccount.Lock);
+        MdoAccountTransport transport = {0};
         if (cancel && (work.Kind == MDO_ACCOUNT_WORK_EXCHANGE || work.Kind == MDO_ACCOUNT_WORK_REFRESH ||
             work.Kind == MDO_ACCOUNT_WORK_PASSWORD)) {
             body = xrtValueObject();
@@ -143,9 +144,9 @@ static int32 MdoAccountWorker(void* Unused)
                     MdoAccountSetString(body, "password", work.Password);
             } else if (body) ok = MdoAccountSetString(body, "refresh_token", work.Tokens.Refresh) &&
                 MdoAccountSetBool(body, "persistent", true);
-            if (ok) data = MdoAccountClient(work.Origin, work.Kind == MDO_ACCOUNT_WORK_EXCHANGE ?
+            if (ok) data = MdoAccountClientDetailed(work.Origin, work.Kind == MDO_ACCOUNT_WORK_EXCHANGE ?
                 "/api/v1/auth/token" : work.Kind == MDO_ACCOUNT_WORK_PASSWORD ? "/api/v1/login" :
-                "/api/v1/token/refresh", "POST", body, NULL, cancel, &status);
+                "/api/v1/token/refresh", "POST", body, NULL, cancel, &status, &transport);
             xrtSecureZero(work.Password, sizeof(work.Password));
             ok = MdoAccountClientTokens(data, &tokens) &&
                 (work.Kind != MDO_ACCOUNT_WORK_REFRESH || tokens.MemberId == work.Tokens.MemberId);
@@ -207,7 +208,8 @@ static int32 MdoAccountWorker(void* Unused)
                             g_MdoAccount.NextRefresh = MdoDeadlineAfterUs(delay * 1000u);
                         }
                     }
-                    strcpy(g_MdoAccount.Message, work.Kind == MDO_ACCOUNT_WORK_PASSWORD && (status == 400 || status == 401) ? "invalid_credentials" :
+                    strcpy(g_MdoAccount.Message, !status && transport.SystemTrustFailed ? "system_trust_failed" :
+                        work.Kind == MDO_ACCOUNT_WORK_PASSWORD && (status == 400 || status == 401) ? "invalid_credentials" :
                         status == 429 ? "login_rate_limited" : (status == 401 || status == 410) && !g_MdoAccount.Tokens.Refresh[0] ? "login_expired" :
                         status == 404 ? "service_update_required" : work.Kind == MDO_ACCOUNT_WORK_REFRESH ?
                         "account_renewal_pending" : "account_connection_failed");

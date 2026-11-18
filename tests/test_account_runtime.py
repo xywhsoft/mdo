@@ -65,6 +65,9 @@ static bool AccountTestRoute(MdoApiContext* c) {
     } else if (c->Target.Query.Size == 9 && !memcmp(c->Target.Query.Data,"faultwait",9)) {
         xrtAtomic32Store(&AccountFault,3,XMEMORY_RELEASE);
         MdoAccountSetBool(out,"set",true);
+    } else if (c->Target.Query.Size == 10 && !memcmp(c->Target.Query.Data,"faulttrust",10)) {
+        xrtAtomic32Store(&AccountFault,4,XMEMORY_RELEASE);
+        MdoAccountSetBool(out,"set",true);
     } else if (c->Target.Query.Size == 10 && !memcmp(c->Target.Query.Data,"faultclear",10)) {
         xrtAtomic32Store(&AccountFault,0,XMEMORY_RELEASE);
         MdoAccountSetBool(out,"set",true);
@@ -109,10 +112,32 @@ static bool AccountTestRoute(MdoApiContext* c) {
 }
 '''
 
-FAULT_CLIENT = r'''
+FAULT_FETCH = r'''
 static xatomic32 AccountFault;
-xvalue* MdoAccountClient(cstr Origin,cstr Path,cstr Method,const xvalue* Body,
-    cstr Access,xcancel* Cancel,uint16* Status)
+static bool AccountTestFetch(const XS_FetchRequest* Request, XS_FetchResponse* Response)
+{
+    if (xrtAtomic32Load(&AccountFault,XMEMORY_ACQUIRE) == 4 &&
+        !strcmp(Request->Method,"POST") && strstr(Request->Url,"/api/v1/login")) {
+        xerrordesc Desc = {0};
+        Desc.Kind = XERR_PROTOCOL;
+        Desc.Domain = "xrt.x509";
+        Desc.Code = X509_ERROR_TRUST_STORE_SYSTEM;
+        Desc.Message = "test system certificate error";
+        xerror* Error = xrtErrorBuild(&Desc);
+        xrtSetError(Error);
+        xrtErrorFree(Error);
+        return false;
+    }
+    return xsFetch(Request,Response);
+}
+#define xsFetch AccountTestFetch
+#include "browser_use_account_fetch.inc.c"
+#undef xsFetch
+'''
+
+FAULT_CLIENT = r'''
+xvalue* MdoAccountClientDetailed(cstr Origin,cstr Path,cstr Method,const xvalue* Body,
+    cstr Access,xcancel* Cancel,uint16* Status,MdoAccountTransport* Transport)
 {
     int fault = !strcmp(Path,"/api/v1/token/refresh") ?
         xrtAtomic32Load(&AccountFault,XMEMORY_ACQUIRE) : 0;
@@ -121,7 +146,7 @@ xvalue* MdoAccountClient(cstr Origin,cstr Path,cstr Method,const xvalue* Body,
         while (!xrtCancelRequested(Cancel)) xrtSleep(10);
         *Status = 0; return NULL;
     }
-    xvalue* data = AccountRealClient(Origin,Path,Method,Body,Access,Cancel,Status);
+    xvalue* data = AccountRealClient(Origin,Path,Method,Body,Access,Cancel,Status,Transport);
     if (fault == 2) {
         xrtAtomic32Store(&AccountFault,0,XMEMORY_RELEASE);
         MdoAccountSecretValueRelease(data); *Status = 0; return NULL;
@@ -240,8 +265,10 @@ def run(host):
             unity = site/'generated/mdo_unity.c'
             unity.write_text('#define MDO_ACCOUNT_SERVICE_ORIGIN '+json.dumps(origin)+'\n#include <xsbase.h>\nstatic bool TestOpenUrl(cstr s){(void)s;return true;}\n#define xsOpenExternalUrl TestOpenUrl\n'+unity.read_text(encoding='utf-8'),encoding='utf-8')
             client = site/'src/account/client.c'
-            client.write_text(client.read_text(encoding='utf-8').replace(
-                'xvalue* MdoAccountClient(', 'xvalue* AccountRealClient(', 1) + FAULT_CLIENT, encoding='utf-8')
+            client_source = client.read_text(encoding='utf-8').replace(
+                '#include "browser_use_account_fetch.inc.c"', FAULT_FETCH, 1)
+            client.write_text(client_source.replace(
+                'xvalue* MdoAccountClientDetailed(', 'xvalue* AccountRealClient(', 1) + FAULT_CLIENT, encoding='utf-8')
             router = site/'src/api/router.c'; source = router.read_text(); source = source.replace('static const MdoApiRoute g_MdoApiRoutes[]',HOOK+'\nstatic const MdoApiRoute g_MdoApiRoutes[]')
             source = source.replace('static const MdoApiRoute g_MdoApiRoutes[] = {','static const MdoApiRoute g_MdoApiRoutes[] = {\n {"/api/v1/test-account", XHTTP_METHOD_GET, "GET", AccountTestRoute, false},')
             router.write_text(source)
@@ -355,6 +382,11 @@ def run(host):
             app('POST','/account/login',{'identifier':'mdo_other_test','password':'wrong-password','remember':True})
             state = wait_state('signed_in')
             assert state['profile']['username'] == 'mdo_login_test' and state['message'] == 'invalid_credentials', state
+            assert app('GET', '/test-account?faulttrust')['set']
+            app('POST','/account/login',{'identifier':'mdo_other_test','password':PASSWORD,'remember':True})
+            state = wait_state('signed_in')
+            assert state['profile']['username'] == 'mdo_login_test' and state['message'] == 'system_trust_failed', state
+            assert app('GET', '/test-account?faultclear')['set']
             app('POST','/account/login',{'identifier':'mdo_other_test','password':PASSWORD,'remember':False})
             state = wait_state('signed_in'); assert state['profile']['username'] == 'mdo_other_test' and not saved.exists()
             assert app('GET','/test-account')['cancelled'], 'account switch must cancel service leases'

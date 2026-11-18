@@ -2,7 +2,7 @@
  * 15s budget. Effectful account/device calls are always attempted once. */
 static cstr MdoAccountErrorDomain(cstr Domain)
 {
-    static const char* const known[] = {"xs.fetch","xrt.net","xrt.tls","xrt.future","xrt.io",
+    static const char* const known[] = {"xs.fetch","xrt.net","xrt.tls","xrt.x509","xrt.future","xrt.io",
         "xrt.http1","xrt.http.decode","xrt.http.client","xrt.http.client.response","xrt.http.call","xrt.http.exchange"};
     for (size_t i = 0u; Domain && i < sizeof(known)/sizeof(known[0]); i++)
         if (!strcmp(Domain,known[i])) return known[i];
@@ -14,6 +14,7 @@ static void MdoAccountTransportFailure(MdoAccountTransport* Info)
     xerrkind kind = first ? xrtErrorKind(first) : XERR_INTERNAL;
     bool specific = false, transient = false;
     Info->Phase = "transport"; Info->Failures++; Info->CauseCount = 0u;
+    Info->SystemTrustFailed = xrtErrorFind(first, "xrt.x509", X509_ERROR_TRUST_STORE_SYSTEM) != NULL;
     for (const xerror* cause = first; cause && Info->CauseCount < 8u; cause = xrtErrorCause(cause)) {
         uint32 i = Info->CauseCount++; xerrkind nested = xrtErrorKind(cause);
         Info->Causes[i].Kind = nested; Info->Causes[i].Code = xrtErrorCode(cause);
