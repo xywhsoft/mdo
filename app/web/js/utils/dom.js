@@ -155,6 +155,7 @@ const API_ERROR_COPY = Object.freeze({
   restore_preview_unavailable: ["error.backupPreviewUnavailable", "备份预览暂不可用。"],
   restore_partial_backup: ["error.restorePartial", "旧版不完整导出不能恢复完整会话。"],
   restore_busy: ["error.restoreBusy", "另一项恢复或审核仍在进行。"],
+  ecosystem_catalog_busy: ["error.ecosystemCatalogBusy", "商店正在处理其他请求，请稍后刷新。"],
   restore_result_unavailable: ["error.restoreResultUnavailable", "结果暂不可读，请保留原 ID 查询。"],
   restore_unavailable: ["error.restoreResultUnavailable", "恢复暂不可用，请保留原 ID 查询。"],
   restore_request_not_found: ["error.restoreNotFound", "暂未找到原请求，请保留原 ID 核对。"],

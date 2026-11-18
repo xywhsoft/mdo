@@ -10,6 +10,12 @@
 #include "tasks_internal.h"
 
 #define MDO_EXT_SERVICE "/api/v1/mdo/extensions"
+#define MDO_EXT_CATALOG MDO_EXT_SERVICE "/catalog"
+static bool MdoExtServiceCatalogPath(cstr Path)
+{
+ const size_t Size=sizeof(MDO_EXT_CATALOG)-1u;
+ return Path&&!strncmp(Path,MDO_EXT_CATALOG,Size)&&(Path[Size]=='?'||!Path[Size]);
+}
 static bool MdoExtServiceError(char Error[512],cstr Message){if(Error)snprintf(Error,512,"%s",Message);return false;}
 static bool MdoExtServiceId(cstr Id){return Id&&strlen(Id)==32&&MdoExtensionDirectoryId(Id);}
 static bool MdoExtServicePut(xvalue* V,cstr K,cstr Text){return Text&&xrtValueObjectSetNew(V,xrtStrView(K),xrtValueString(xrtStrView(Text)));}
@@ -55,7 +61,15 @@ static bool MdoExtServiceFetchAttempt(cstr Path,cstr Method,const void* Body,siz
  bool Ok=Url&&Path&&(!strncmp(Path,MDO_EXT_SERVICE,sizeof(MDO_EXT_SERVICE)-1)||!strncmp(Path,"/api/v1/mdo/local-models/",sizeof("/api/v1/mdo/local-models/")-1))&&Bytes<=1048576&&(!Cancel||!xrtCancelRequested(Cancel));
  if(Ok&&Lease&&Lease->Managed){Ok=Lease->AccessToken&&strlen(Lease->AccessToken)<=4096;if(Ok){snprintf(Authorization,sizeof(Authorization),"Bearer %s",Lease->AccessToken);Headers[Count++]=(XS_FetchHeader){"Authorization",Authorization};}}
  bool ArchiveRead=Binary&&!strcmp(Method,"GET");
- XS_FetchRequest Request={0};Request.Size=sizeof(Request);Request.Version=XS_FETCH_REQUEST_VERSION;Request.Url=Url;Request.Method=Method;Request.Headers=Headers;Request.HeaderCount=Count;Request.Body=Body;Request.BodySize=Bytes;Request.Timeout=ArchiveRead?120000000:30000000;Request.IdleTimeout=ArchiveRead?30000000:10000000;Request.MaxBodyBytes=Binary?1048576:8u*1024u*1024u;Request.Cancel=Lease&&Lease->Managed?Lease->Cancel:Cancel;Response->Size=sizeof(*Response);
+ bool Catalog=MdoExtServiceCatalogPath(Path);
+ XS_FetchRequest Request={0};
+ Request.Size=sizeof(Request);Request.Version=XS_FETCH_REQUEST_VERSION;
+ Request.Url=Url;Request.Method=Method;Request.Headers=Headers;Request.HeaderCount=Count;
+ Request.Body=Body;Request.BodySize=Bytes;
+ Request.Timeout=Catalog?5000000:ArchiveRead?120000000:30000000;
+ Request.IdleTimeout=Catalog?5000000:ArchiveRead?30000000:10000000;
+ Request.MaxBodyBytes=Binary?1048576:8u*1024u*1024u;
+ Request.Cancel=Lease&&Lease->Managed?Lease->Cancel:Cancel;Response->Size=sizeof(*Response);
  bool Read=Ok&&!strcmp(Method,"GET");if(Ok){xrtClearError();Ok=MdoDownloadFetch(&Request,Response);}
  bool Cancelled=Request.Cancel&&xrtCancelRequested(Request.Cancel);
  if(Retryable&&Read&&!Cancelled&&!Response->Redirects)*Retryable=!Ok?MdoExtServiceTransientTransport(xrtGetError()):Response->Status==408||Response->Status==425||Response->Status==500||Response->Status==502||Response->Status==503||Response->Status==504;
@@ -66,9 +80,10 @@ static bool MdoExtServiceFetchAttempt(cstr Path,cstr Method,const void* Body,siz
  return true;
 }
 static bool MdoExtServiceFetch(cstr Path,cstr Method,const void* Body,size_t Bytes,bool Binary,const MdoAccountLease* Lease,xcancel* Cancel,XS_FetchResponse* Response,char Error[512]){
+ const unsigned Limit=MdoExtServiceCatalogPath(Path)?1u:MDO_EXT_INSTALL_RETRIES;
  for(unsigned Retry=0;;Retry++){
   bool Transient=false;if(MdoExtServiceFetchAttempt(Path,Method,Body,Bytes,Binary,Lease,Cancel,Response,&Transient,Error))return true;
-  if(!Transient||Retry==MDO_EXT_INSTALL_RETRIES)return false;
+  if(!Transient||Retry==Limit)return false;
   MdoDownloadFetchUnit(Response);Response->Size=sizeof(*Response);
   if(!MdoExtServiceWaitRetry(Retry,Lease&&Lease->Managed?Lease->Cancel:Cancel,Error))return false;
  }
@@ -102,7 +117,8 @@ static char* MdoExtServiceQuery(cstr Base,const xvalue* Input){
 static bool MdoExtServiceReadAttempt(const xvalue* Input,xcancel* Cancel,xvalue** Result,bool* Retryable,char Error[512]){
  *Result=NULL;if(Error)Error[0]=0;cstr Action=MdoExtensionText(Input,"action",24),Kind=MdoExtensionText(Input,"kind",32),Version=MdoExtensionText(Input,"version_id",32);if(!Action||(Kind&&Kind[0]&&!MdoExtensionDirectoryKind(Kind)))return MdoExtServiceError(Error,"Choose an extension service action and type");
  bool Required=!strcmp(Action,"mine")||!strcmp(Action,"profile")||!strcmp(Action,"requests");char* Base=NULL;
- if(!strcmp(Action,"catalog"))Base=xrtStrDup(MDO_EXT_SERVICE "/catalog");
+ bool Catalog=!strcmp(Action,"catalog");
+ if(Catalog)Base=xrtStrDup(MDO_EXT_CATALOG);
  else if(!strcmp(Action,"updates"))Base=xrtStrDup(MDO_EXT_SERVICE "/updates");
  else if(!strcmp(Action,"resolve")&&MdoExtensionRefValid(MdoExtensionText(Input,"ref",MDO_EXTENSION_REF_BYTES)))Base=xrtStrDup(MDO_EXT_SERVICE "/resolve");
  else if(!strcmp(Action,"plan")&&MdoExtServiceId(Version))Base=xrtFormat(MDO_EXT_SERVICE "/plan?version=%s",Version);
@@ -111,8 +127,13 @@ static bool MdoExtServiceReadAttempt(const xvalue* Input,xcancel* Cancel,xvalue*
  if(!Base)return MdoExtServiceError(Error,"Unsupported extension read; no arbitrary service URL is accepted");
  char* Path=MdoExtServiceQuery(Base,Input);
  xrtFree(Base);
- if(Path&&(!strcmp(Action,"catalog")||!strcmp(Action,"plan")||!strcmp(Action,"resolve")||!strcmp(Action,"updates"))&&!xrtValueObjectHas(Input,XRT_STR_LITERAL("platform"))){char* Filtered=xrtFormat("%s%cplatform=%s",Path,strchr(Path,'?')?'&':'?',MdoExtensionRuntimePlatform());xrtFree(Path);Path=Filtered;}
- MdoAccountLease Lease={0};bool Ok=Path&&MdoExtServiceLease(Cancel,Required,&Lease,Error);if(Ok)*Result=MdoExtServiceJsonAttempt(Path,"GET",NULL,&Lease,Cancel,Retryable,Error);MdoAccountRelease(&Lease);xrtFree(Path);return *Result!=NULL;
+ if(Path&&(Catalog||!strcmp(Action,"plan")||!strcmp(Action,"resolve")||!strcmp(Action,"updates"))&&!xrtValueObjectHas(Input,XRT_STR_LITERAL("platform"))){char* Filtered=xrtFormat("%s%cplatform=%s",Path,strchr(Path,'?')?'&':'?',MdoExtensionRuntimePlatform());xrtFree(Path);Path=Filtered;}
+ /* Published catalog rows are identical for anonymous and signed-in clients. */
+ MdoAccountLease Lease={0};
+ if(Path&&(Catalog||MdoExtServiceLease(Cancel,Required,&Lease,Error)))
+  *Result=MdoExtServiceJsonAttempt(Path,"GET",NULL,&Lease,Cancel,Retryable,Error);
+ MdoAccountRelease(&Lease);xrtFree(Path);
+ return *Result!=NULL;
 }
 bool MdoExtensionServiceRead(const xvalue* Input,xcancel* Cancel,xvalue** Result,char Error[512]){return MdoExtServiceReadAttempt(Input,Cancel,Result,NULL,Error);}
 static bool MdoExtServiceReadBudget(const xvalue* Input,xcancel* Cancel,xvalue** Result,unsigned* Retries,char Error[512]){

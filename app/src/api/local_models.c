@@ -16,5 +16,5 @@ bool MdoApiLocalModelsRoute(MdoApiContext* C){
   * transfer occupies the single network operation worker. These operations
   * do no nested HTTP and only mutate short, locked state. */
  cstr Action=MdoExtensionText(Input,"action",32);if(Action&&(!strcmp(Action,"start")||!strcmp(Action,"stop")||!strcmp(Action,"logs")||!strcmp(Action,"web_access")))return LmApiInput(C,Input);
- return MdoApiQueueOperation(C,Input,LmApiInput);
+ return MdoApiQueueOperation(C,Input,LmApiInput,Action&&!strcmp(Action,"catalog"));
 }

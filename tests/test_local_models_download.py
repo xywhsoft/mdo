@@ -1,5 +1,6 @@
 """Full installation through an owned HTTPS/proxy store; no external traffic."""
 import argparse, copy, datetime, hashlib, io, json, os, select, socket, socketserver, ssl, subprocess, tempfile, threading, time, zipfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
@@ -39,6 +40,9 @@ DOC,RUNTIME,MODEL,PLAN,ARCHIVES=fixtures()
 
 class Publisher(BaseHTTPRequestHandler):
     ranges=[];hits=0;cut=True;bad=False;slow=True
+    catalog_retry_hits=0
+    plan_entered=threading.Event()
+    release_plan=threading.Event()
     def log_message(self,*args):pass
     def do_GET(self):
         p=urlsplit(self.path);query=parse_qs(p.query)
@@ -60,8 +64,16 @@ class Publisher(BaseHTTPRequestHandler):
         if p.path.endswith('/archive'):
             data=ARCHIVES[query['version'][0]];offset=int(query.get('offset',['0'])[0]);chunk=data[offset:offset+1048576];self.send_response(200);self.send_header('Content-Type','application/zip');self.send_header('Content-Length',str(len(chunk)));self.end_headers();self.wfile.write(chunk);return
         if p.path.endswith('/updates'):value=dict(items=[MODEL],platform='windows-x86_64')
-        elif p.path.endswith('/catalog'):value=dict(items=[MODEL],total=1,offset=0,limit=100)
-        elif p.path.endswith('/plan'):value=PLAN
+        elif p.path.endswith('/catalog'):
+            if query.get('q')==['qa-transient']:
+                type(self).catalog_retry_hits+=1
+                if type(self).catalog_retry_hits==1:return self.send_error(503)
+            value=dict(items=[MODEL],total=1,offset=0,limit=100)
+        elif p.path.endswith('/plan'):
+            if query.get('profile')==['qa-hold']:
+                self.plan_entered.set()
+                self.release_plan.wait(8)
+            value=PLAN
         elif p.path.endswith('/detail'):value=RUNTIME if query['version'][0]==RUNTIME_VERSION else MODEL
         else:return self.send_error(404)
         data=json.dumps(dict(code=0,data=value),ensure_ascii=False,separators=(',',':')).encode();self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
@@ -150,6 +162,19 @@ def main():
             raise AssertionError('partial model file never became resumable')
         try:
             start();result=call(dict(action='catalog',limit=100));check(result['items'][0]['id']==MODEL['id'],result)
+            with ThreadPoolExecutor(max_workers=1) as worker:
+                held=worker.submit(call,dict(action='plan',version=MODEL_VERSION,profile='qa-hold'),422)
+                try:
+                    check(Publisher.plan_entered.wait(3),'model plan did not reach fixture')
+                    result=call(dict(action='catalog',limit=50,q='qa'))
+                    check(result['total']==1,'catalog was blocked behind model planning')
+                    result=call(dict(action='catalog',kind='local-models',limit=50),path='/ecosystem')
+                    check(result['total']==1,'shared catalog was blocked behind model planning')
+                finally:
+                    Publisher.release_plan.set()
+                held.result()
+            result=call(dict(action='catalog',limit=50,q='qa-transient'))
+            check(result['total']==1 and Publisher.catalog_retry_hits==2,'catalog did not recover from a temporary upstream failure')
             call(dict(action='plan',version='E'*32,profile='default'),status=422)
             call(dict(action='plan',version=MODEL_VERSION,profile='unselected'),status=422)
             store=base/'weights';store.mkdir();call(dict(action='storage',path=str(store)))
@@ -204,7 +229,6 @@ def main():
                 checked=call(dict(action='verify',id=did));check(checked['verified'] and checked['reply'] and checked['tools'],checked)
                 access=call(dict(action='web_access',id=did));check(access['key'] not in json.dumps(call()),'web credential leaked into snapshots')
                 # A live request owns a lease; a graceful stop drains it.
-                from concurrent.futures import ThreadPoolExecutor
                 control.write_text('{"slow_call":true}')
                 with ThreadPoolExecutor(max_workers=1) as pool:
                     task=pool.submit(call,dict(action='verify',id=did));end=time.monotonic()+5

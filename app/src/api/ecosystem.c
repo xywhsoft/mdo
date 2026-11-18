@@ -34,15 +34,20 @@ static bool EcoHandleInput(MdoApiContext* C,xvalue* Input){
  return MdoApiReplyError(C,422,"extension_service_failed",Error[0]?Error:"Choose a directory store action; JSON packages and embedded file payloads are unsupported",NULL);
 }
 
+typedef struct EcoApiQueue {
+    xtaskpool* Pool;
+    size_t Count;
+} EcoApiQueue;
 typedef struct EcoApiJob {
     MdoApiContext Context;
     XS_HttpReq Request;
     xhttp1head Head;
     xvalue* Input;
     bool (*Handler)(MdoApiContext*,xvalue*);
+    EcoApiQueue* Queue;
     bool Sent;
 } EcoApiJob;
-static struct { xmutex* Lock;xtaskpool* Pool;size_t Count;bool Stopping; } EcoApi;
+static struct { xmutex* Lock;EcoApiQueue Operations,Catalog;bool Stopping; } EcoApi;
 bool MdoApiEcosystemInit(void)
 {if(EcoApi.Lock)return true;EcoApi.Lock=xrtMutexCreate();return EcoApi.Lock!=NULL;}
 static void EcoApiDrop(ptr value,ptr user)
@@ -51,7 +56,7 @@ static void EcoApiDrop(ptr value,ptr user)
     MdoApiWriteLeave(&job->Context);xrtValueRelease(job->Input);
     if(job->Request.tls){if(job->Sent)xrtTlsStreamClose(job->Request.tls);else xrtTlsStreamAbort(job->Request.tls);xrtTlsStreamDestroy(job->Request.tls);}
     if(job->Request.tcp){if(job->Sent)xrtNetStreamClose(job->Request.tcp);else xrtNetStreamAbort(job->Request.tcp);xrtNetStreamDestroy(job->Request.tcp);}
-    xrtMutexLock(EcoApi.Lock);--EcoApi.Count;xrtMutexUnlock(EcoApi.Lock);xrtFree(job);
+    xrtMutexLock(EcoApi.Lock);--job->Queue->Count;xrtMutexUnlock(EcoApi.Lock);xrtFree(job);
 }
 static xtaskoutcome EcoApiRun(xcancel* cancel,ptr value,xtaskvalue* out)
 {
@@ -64,8 +69,17 @@ static xtaskoutcome EcoApiRun(xcancel* cancel,ptr value,xtaskvalue* out)
 void MdoApiEcosystemUnit(void)
 {
     if(!EcoApi.Lock)return;
-    xrtMutexLock(EcoApi.Lock);EcoApi.Stopping=true;xtaskpool* pool=EcoApi.Pool;xrtMutexUnlock(EcoApi.Lock);
-    if(pool){xrtTaskPoolCancel(pool);xrtTaskPoolWait(pool);xrtTaskPoolDestroy(pool);}
+    xrtMutexLock(EcoApi.Lock);
+    EcoApi.Stopping=true;
+    xtaskpool* pools[]={EcoApi.Operations.Pool,EcoApi.Catalog.Pool};
+    xrtMutexUnlock(EcoApi.Lock);
+    for(size_t i=0;i<sizeof(pools)/sizeof(*pools);++i)
+        if(pools[i])xrtTaskPoolCancel(pools[i]);
+    for(size_t i=0;i<sizeof(pools)/sizeof(*pools);++i){
+        if(!pools[i])continue;
+        xrtTaskPoolWait(pools[i]);
+        xrtTaskPoolDestroy(pools[i]);
+    }
     xrtMutexDestroy(EcoApi.Lock);memset(&EcoApi,0,sizeof(EcoApi));
 }
 bool MdoApiEcosystemRoute(MdoApiContext* c)
@@ -76,10 +90,11 @@ bool MdoApiEcosystemRoute(MdoApiContext* c)
     xjsonreadconfig limits;xrtJsonReadConfigInit(&limits);limits.MaxInputBytes=65536;limits.MaxStringBytes=8192;limits.MaxDepth=8;limits.MaxValues=1024;
     xvalue* input=xrtJsonRead(xrtStrViewN(raw,length),&limits);xrtFree(raw);
     if(!input)return MdoApiReplyError(c,422,"ecosystem_request_invalid","Expected a bounded JSON object",NULL);
-    return MdoApiQueueOperation(c,input,EcoHandleInput);
+    cstr action=MdoExtensionText(input,"action",24);
+    return MdoApiQueueOperation(c,input,EcoHandleInput,action&&!strcmp(action,"catalog"));
 }
 
-bool MdoApiQueueOperation(MdoApiContext* c,xvalue* input,bool (*Handler)(MdoApiContext*,xvalue*)){
+bool MdoApiQueueOperation(MdoApiContext* c,xvalue* input,bool (*Handler)(MdoApiContext*,xvalue*),bool catalog){
     if(c->ApplicationResponse)return Handler(c,input);
     EcoApiJob* job=xrtCalloc(1,sizeof(*job));xfuture* future=NULL;
     if(!job||!EcoApi.Lock)goto failed;
@@ -91,14 +106,31 @@ bool MdoApiQueueOperation(MdoApiContext* c,xvalue* input,bool (*Handler)(MdoApiC
     /* Transfer the admitted write count to the owned job. Home purge/import
      * stays fenced until network work and any resource publication finish. */
     job->Context.WriteShared=c->WriteShared;job->Context.WriteExclusive=c->WriteExclusive;
+    /* Public catalog reads stay responsive even when a deployment plan or
+     * another long extension operation is holding the operations worker. */
+    EcoApiQueue* queue=catalog?&EcoApi.Catalog:&EcoApi.Operations;
+    const size_t threads=catalog?2u:1u, waiting=2u;
+    job->Queue=queue;
     xrtMutexLock(EcoApi.Lock);
-    if(!EcoApi.Stopping&&EcoApi.Count<3){
-        if(!EcoApi.Pool){xtaskpoolconfig config={0};config.Threads=1;config.QueueLimit=2;EcoApi.Pool=xrtTaskPoolCreate(&config);}
-        if(EcoApi.Pool){xtaskargs args={0};args.Destroy=EcoApiDrop;++EcoApi.Count;future=xrtTaskSubmit(EcoApi.Pool,EcoApiRun,job,&args);if(!future)--EcoApi.Count;}
+    if(!EcoApi.Stopping&&queue->Count<threads+waiting){
+        if(!queue->Pool){
+            xtaskpoolconfig config={0};
+            config.Threads=threads;
+            config.QueueLimit=waiting;
+            queue->Pool=xrtTaskPoolCreate(&config);
+        }
+        if(queue->Pool){
+            xtaskargs args={0};
+            args.Destroy=EcoApiDrop;
+            ++queue->Count;
+            future=xrtTaskSubmit(queue->Pool,EcoApiRun,job,&args);
+            if(!future)--queue->Count;
+        }
     }
     xrtMutexUnlock(EcoApi.Lock);
     if(future){c->WriteShared=c->WriteExclusive=false;c->Takeover=true;xrtFutureDestroy(future);return true;}
 failed:
     if(job){xrtTlsStreamDestroy(job->Request.tls);xrtNetStreamDestroy(job->Request.tcp);xrtFree(job);}xrtValueRelease(input);
+    if(catalog)return MdoApiReplyError(c,503,"ecosystem_catalog_busy","The store is handling other requests. Refresh in a moment.",NULL);
     return MdoApiReplyError(c,503,"ecosystem_busy","Extension operation unavailable; retry shortly",NULL);
 }
