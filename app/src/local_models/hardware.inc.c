@@ -34,8 +34,10 @@ static xvalue* LmHardware(void){
  if(Program)Out=LmHardwareRun(Program,Args,sizeof(Args)/sizeof(*Args));
  xrtFree(Program);xrtFree(System);
 #elif defined(__linux__)
- xfile F=xrtFileOpen("/proc/meminfo",XFILE_READ);char Buffer[32768]={0};int64 N=F?xrtRead(F,Buffer,sizeof(Buffer)-1):0;xrtClose(F);uint64 Total=0,Available=0;
- if(N>0){cstr T=strstr(Buffer,"MemTotal:"),A=strstr(Buffer,"MemAvailable:");unsigned long long X=0,Y=0;if(T&&A&&sscanf(T,"MemTotal: %llu",&X)==1&&sscanf(A,"MemAvailable: %llu",&Y)==1){Total=X*1024;Available=Y*1024;}}
+ xfile F=xrtOpen("/proc/meminfo",XFILE_READ);char Buffer[32768]={0};size_t N=0;
+ bool Read=F&&xrtRead(F,Buffer,sizeof(Buffer)-1,&N);xrtClose(F);
+ uint64 Total=0,Available=0;
+ if(Read&&N>0){cstr T=strstr(Buffer,"MemTotal:"),A=strstr(Buffer,"MemAvailable:");unsigned long long X=0,Y=0;if(T&&A&&sscanf(T,"MemTotal: %llu",&X)==1&&sscanf(A,"MemAvailable: %llu",&Y)==1){Total=X*1024;Available=Y*1024;}}
  Out=xrtValueObject();xrtValueObjectSetNew(Out,XRT_STR_LITERAL("ram_bytes"),xrtValueUInt(Total));xrtValueObjectSetNew(Out,XRT_STR_LITERAL("available_ram_bytes"),xrtValueUInt(Available));
 #elif defined(__APPLE__)
  const cstr Args[]={"-c","p=$(/usr/sbin/sysctl -n hw.pagesize);t=$(/usr/sbin/sysctl -n hw.memsize);f=$(/usr/bin/vm_stat | /usr/bin/awk '/Pages free|Pages inactive|Pages speculative/ {gsub(/[^0-9]/,\"\",$NF);s+=$NF} END {printf \"%.0f\",s}');printf '{\"ram_bytes\":%s,\"available_ram_bytes\":%s,\"unified_memory\":true}' \"$t\" \"$((p*f))\""};

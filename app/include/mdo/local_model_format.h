@@ -20,7 +20,7 @@ static bool LmHost(cstr S){
  return Letter&&strcmp(S,"localhost.localdomain")&&(N<6||strcmp(S+N-6,".local"));
 }
 static bool LmUrl(cstr S){
- if(!S||strlen(S)>2048||strncmp(S,"https://",8)||strpbrk(S,"?#@\\"))return false;
+ if(!S||strlen(S)>2048||strncmp(S,"https://",8)||S[strcspn(S,"?#@\\")])return false;
  cstr P=S+8;size_t N=strcspn(P,"/");char Host[254];if(N>=sizeof(Host))return false;memcpy(Host,P,N);Host[N]=0;
  if(!LmHost(Host))return false;
  for(;*P;P++)if((unsigned char)*P<=32||(unsigned char)*P>=127)return false;
