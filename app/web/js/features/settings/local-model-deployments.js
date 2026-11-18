@@ -14,34 +14,40 @@ export function createLocalModelDeployments({ tr, bytes, button, layer, field, t
   let pending = 0;
   function wrapped(run) { return async () => { const valid = current(); pending++; try { await run(valid); } finally { pending--; } }; }
   async function command(body, valid) { const data = await call(body); if (!valid()) return null; await loadModels(); if (valid()) await load(); return data; }
-  function actions(card, row) {
-    const bar = element("div", { className: "extension-toolbar" });
+  function presentation(row) {
+    const actions = [];
     const running = ["starting", "loading", "ready", "stopping"].includes(row.service_state);
     const proof = row.verification?.fingerprint === row.fingerprint ? row.verification : null;
-    card.append(element("h4", { text: row.name }), element("p", { text: `${tr(`service.${row.service_state}`)} · ${row.runtime.engine} ${row.runtime.build} · ${row.runtime.backend}` }),
-      element("p", { text: `${tr("context")}: ${row.config.context_tokens.toLocaleString()} · ${tr("parallel")}: ${row.config.parallel} · ${tr("activeRequests")}: ${row.active_requests || 0}` }),
-      element("p", { text: proof?.reply ? tr(proof.tools ? "verifiedTools" : "verifiedReply") : tr("unverified") }));
-    if (row.service_error) card.append(element("p", { className: "extension-error", text: row.service_error }));
     const act = (key, body) => button(key, wrapped(async valid => { try { await command(body, valid); } catch (e) { if (valid()) showError(e); } }));
+    let primary, configure;
     if (running) {
-      bar.append(act("stop", { action: "stop", id: row.id }));
-      bar.append(button("forceStop", () => confirm("forceStopNotice", { action: "stop", id: row.id, force: true })));
+      primary = act("stop", { action: "stop", id: row.id });
+      actions.push(button("forceStop", () => confirm("forceStopNotice", { action: "stop", id: row.id, force: true })));
     } else {
-      bar.append(row.runtime.backend === "cpu" || row.config.allow_uncertain_resources ? act("start", { action: "start", id: row.id }) : button("start", () => confirm("resourceAttemptNotice", {action:"start",id:row.id,allow_unknown:true})));
-      bar.append(button("configure", () => edit(row.installation, row)), button("duplicate", () => edit(row.installation, row, true)));
-      if (snapshot().installations[row.installation]?.recipe_ref) bar.append(button("switchVersion", () => switchVersion(row)));
-      if (row.can_rollback) bar.append(button("rollback", () => confirm("rollbackNotice", { action: "deployment_rollback", id: row.id, deployment_revision: row.revision })));
-      bar.append(button("deleteDeployment", () => confirm("deleteDeploymentNotice", { action: "deployment_delete", id: row.id, deployment_revision: row.revision })));
+      primary = row.runtime.backend === "cpu" || row.config.allow_uncertain_resources
+        ? act("start", { action: "start", id: row.id })
+        : button("start", () => confirm("resourceAttemptNotice", { action: "start", id: row.id, allow_unknown: true }));
+      configure = button("configure", () => edit(row.installation, row));
+      actions.push(button("duplicate", () => edit(row.installation, row, true)));
+      if (snapshot().installations[row.installation]?.recipe_ref) actions.push(button("switchVersion", () => switchVersion(row)));
+      if (row.can_rollback) actions.push(button("rollback", () => confirm("rollbackNotice", { action: "deployment_rollback", id: row.id, deployment_revision: row.revision })));
+      actions.push(button("deleteDeployment", () => confirm("deleteDeploymentNotice", { action: "deployment_delete", id: row.id, deployment_revision: row.revision })));
     }
     if (row.service_state === "ready") {
-      bar.append(button("verify", wrapped(async valid => { const view = layer(tr("verify")), text = element("p", { text: tr("verifying"), attrs: { role: "status" } }); view.body.append(text); view.update({ beforeClose: () => !text.dataset.busy }); text.dataset.busy = "1";
-        try { const result = await command({ action: "verify", id: row.id }, valid); if (valid() && result) text.textContent = result.verified ? tr(result.tools ? "verifiedTools" : "verifiedReply") : result.error || tr("unverified"); }
-        catch (e) { if (valid()) text.textContent = errorMessage(e); } finally { delete text.dataset.busy; } })), button("chat", wrapped(async valid => {
+      actions.unshift(button("chat", wrapped(async valid => {
         try { await loadModels(); if (!valid()) return; const session = await createSession({ project_id: navigation.workspace().projectId || "default", model_id: "local-model." + row.id, title: row.name }); if (valid()) navigation.select(session.project_id, session.id); }
         catch (e) { if (valid()) showError(e); }
-      })), button("web", () => web(row)));
+      })), button("web", () => web(row)), button("verify", wrapped(async valid => { const view = layer(tr("verify")), text = element("p", { text: tr("verifying"), attrs: { role: "status" } }); view.body.append(text); view.update({ beforeClose: () => !text.dataset.busy }); text.dataset.busy = "1";
+        try { const result = await command({ action: "verify", id: row.id }, valid); if (valid() && result) text.textContent = result.verified ? tr(result.tools ? "verifiedTools" : "verifiedReply") : result.error || tr("unverified"); }
+        catch (e) { if (valid()) text.textContent = errorMessage(e); } finally { delete text.dataset.busy; } })));
     }
-    bar.append(button("logs", () => logs(row))); card.append(bar);
+    actions.push(button("logs", () => logs(row)));
+    return {
+      primary, configure, actions,
+      badge: { text: tr(`service.${row.service_state}`), tone: row.service_state === "failed" ? "error" : "" },
+      runtime: `${row.runtime.engine} ${row.runtime.build} · ${row.runtime.backend}`,
+      verification: proof?.reply ? tr(proof.tools ? "verifiedTools" : "verifiedReply") : tr("unverified"),
+    };
   }
   function switchVersion(row) {
     const installed = snapshot().installations, ref = installed[row.installation]?.recipe_ref;
@@ -97,5 +103,5 @@ export function createLocalModelDeployments({ tr, bytes, button, layer, field, t
       view.footer.append(button("copyKey", async () => { try { await copyText(key.value); status.textContent = tr("keyCopied"); } catch(e) { status.textContent = errorMessage(e); } }), button(isRemoteTarget() ? "openTargetWeb" : "openWeb", async () => { try { if (valid()) await createApplicationClient().call("system.open", { target:access.url }); } catch(e) { if (valid()) status.textContent = errorMessage(e); } }));
     } catch(e) { if (valid()) status.textContent = errorMessage(e); }
   }
-  return { actions, edit, hasPendingChanges: () => pending > 0 };
+  return { presentation, edit, hasPendingChanges: () => pending > 0 };
 }
