@@ -79,7 +79,7 @@
   },
   "sdk_overlay": {
     "path": "tools/dependencies/xwork-mcp.patch",
-    "sha256": "f1402af71614f323704b7c2590f3c2c3d3745942f0e7543a5cdda37cee95ea0d",
+    "sha256": "053c678831fba58f410219b743ec18bfe14bebad77fd9d2b66893454f864bb7d",
     "base_commit": "e9a3551a5a533de34e2ca4291a8def71612fbf35",
     "purpose": "Pinned XRT agent exports, native browser automation, lifecycle/transfer guards and model media compatibility",
     "xrt_single_header_sha256": "1dcba425a378d4e29504d1fbec721f90b544b687e39d44221a35937e7fc5834a",
