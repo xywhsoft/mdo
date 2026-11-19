@@ -1,9 +1,11 @@
 """Check release probe dispatch without requiring a device or a compiler."""
 from pathlib import Path
 import ast
+import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,10 +13,33 @@ sys.path.insert(0, str(ROOT / "tools"))
 import qa_release
 import prepare_release
 import build_mdo
+import extension_builtins
 from test_optional_tools_runtime import run as optional_tool_probe
 
 
 class ReleaseGateTests(unittest.TestCase):
+    def test_builtin_zip_modes_use_git_index_instead_of_mount_permissions(self):
+        with tempfile.TemporaryDirectory(prefix="builtin-zip-modes-") as raw:
+            root = Path(raw)
+            extension = root / "app/default-home/commands/mode-test"
+            extension.mkdir(parents=True)
+            (extension / "extension.json").write_text('{"kind":"commands","entry":"command.c"}')
+            entry = extension / "command.c"
+            helper = extension / "run helper"
+            entry.write_text("/* normal source */\n")
+            helper.write_text("#!/bin/sh\n")
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "add", "--chmod=-x", "app"], cwd=root, check=True)
+            subprocess.run(["git", "add", "--chmod=+x", helper.relative_to(root).as_posix()], cwd=root, check=True)
+
+            entry.chmod(0o755)
+            helper.chmod(0o644)
+            extension_builtins.generate(root)
+            archive_path = root / "app/generated/builtin-extensions/commands-mode-test.zip"
+            with zipfile.ZipFile(archive_path) as archive:
+                self.assertEqual(archive.getinfo("command.c").external_attr >> 16, 0o100644)
+                self.assertEqual(archive.getinfo("run helper").external_attr >> 16, 0o100755)
+
     def test_download_gate_runs_both_engines_or_reports_missing_artifact(self):
         class Inventory:
             def glob(self, pattern):

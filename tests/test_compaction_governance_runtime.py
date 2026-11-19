@@ -3,7 +3,7 @@
 Only disposable Home/workspace and a synthetic loopback model are used.
 """
 from __future__ import annotations
-import argparse,hashlib,json,os,shutil,subprocess,tempfile,threading,time,uuid
+import argparse,hashlib,json,os,shutil,subprocess,tempfile,threading,time
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 from model_fixture import conversation_catalog
@@ -47,12 +47,14 @@ def main():
     try:
       with tempfile.TemporaryDirectory(dir=a.work_root,prefix='compaction-governance-') as raw:
         base=Path(raw);home=base/'home';workspace=base/'workspace';workspace.mkdir();port=free_port()
-        config=base/'xs.json' if a.packed else ROOT/'app'/('.context-qa-'+uuid.uuid4().hex+'.json')
+        directory=base if a.packed else base/'site'
+        if not a.packed:shutil.copytree(ROOT/'app',directory)
+        config=directory/'xs.json'
         config.write_text(json.dumps({'engine':{'workers':2},'services':[{'enabled':True,'class':'http','name':'context-qa','ip':'127.0.0.1','port':port,'host_default':{'enabled':True,'name':'mdo','path':'web','devlang':'c','devfile':'generated/mdo_unity.c'}}]}),encoding='utf-8')
         if a.packed:
-            exe=base/'mdo.exe';shutil.copyfile(a.packed.resolve(),exe);command=[str(exe)];directory=base
+            exe=base/'mdo.exe';shutil.copyfile(a.packed.resolve(),exe);command=[str(exe)]
             if os.name!='nt':exe.chmod(0o700)
-        else:command=[str(a.host.resolve()),str(config),'--','--home',str(home)];directory=ROOT/'app'
+        else:command=[str(a.host.resolve()),str(config),'--','--home',str(home)]
         with (base/'runtime.log').open('wb') as log:
           child=subprocess.Popen(command,cwd=directory,env=dict(os.environ,MDO_HOME=str(home),USE_WEBVIEW='0',MDO_CONTEXT_FIXTURE_KEY='fixture-only'),stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
           try:
@@ -115,6 +117,5 @@ def main():
             child.terminate()
             try:child.wait(8)
             except subprocess.TimeoutExpired:child.kill();child.wait(5)
-            if not a.packed:config.unlink(missing_ok=True)
     finally:server.shutdown();server.server_close()
 if __name__=='__main__':main()
