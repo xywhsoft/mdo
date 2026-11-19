@@ -53,6 +53,7 @@ typedef struct MdoAccountManager {
     xcancel* WorkCancel;
     xcancel* SessionCancel;
     MdoAccountTokens Tokens;
+    uint64 ExpiredMemberId;
     MdoAccountAuthorization Authorization;
     MdoAccountWork Work;
     xvalue* Profile;

@@ -25,6 +25,7 @@ static void MdoAccountClearTokensLocked(void)
 {
     xrtSecureZero(&g_MdoAccount.Tokens, sizeof(g_MdoAccount.Tokens));
     g_MdoAccount.Saved = false;
+    g_MdoAccount.ExpiredMemberId = 0;
     g_MdoAccount.NextRefresh = 0;
     g_MdoAccount.RefreshFailures = 0;
     MdoAccountClearModelsLocked();
@@ -181,7 +182,7 @@ static int32 MdoAccountWorker(void* Unused)
                     bool replaced = work.Kind != MDO_ACCOUNT_WORK_REFRESH ||
                         strcmp(tokens.Refresh, work.Tokens.Refresh) != 0;
                     if (work.Kind == MDO_ACCOUNT_WORK_EXCHANGE || work.Kind == MDO_ACCOUNT_WORK_PASSWORD) {
-                        uint64 Previous=g_MdoAccount.Tokens.MemberId;
+                        uint64 Previous=g_MdoAccount.Tokens.MemberId ? g_MdoAccount.Tokens.MemberId : g_MdoAccount.ExpiredMemberId;
                         if(!Previous)(void)MdoAccountGetUInt(xrtValueObjectGet(g_MdoAccount.Profile,XRT_STR_LITERAL("id")),&Previous);
                         if(Previous!=tokens.MemberId)MdoAccountNewSessionLocked();
                         xrtValueRelease(g_MdoAccount.Profile); g_MdoAccount.Profile = NULL;
@@ -190,16 +191,20 @@ static int32 MdoAccountWorker(void* Unused)
                         MdoAccountClearBalanceLocked();
                         g_MdoAccount.Remember = work.Kind == MDO_ACCOUNT_WORK_PASSWORD ? work.Remember : work.Authorization.Remember;
                     }
-                    g_MdoAccount.Tokens = tokens; g_MdoAccount.Message[0] = 0;
+                    g_MdoAccount.Tokens = tokens; g_MdoAccount.ExpiredMemberId = 0;
+                    g_MdoAccount.Message[0] = 0;
                     ++g_MdoAccount.ModelCredentialRevision;
                     g_MdoAccount.NextRefresh = 0; g_MdoAccount.RefreshFailures = 0;
                     (void)MdoAccountCredentialSaveLocked(replaced);
                     (void)MdoAccountQueueLocked(MDO_ACCOUNT_WORK_PROFILE);
                 } else {
                     if (work.Kind == MDO_ACCOUNT_WORK_REFRESH) {
-                        /* Exhaustion retains the same refresh identity. Only
-                         * an explicit revocation may erase its credentials. */
-                        if (status == 410) MdoAccountClearTokensLocked();
+                        /* Keep the account binding so a paused run can resume
+                         * when the same member signs in again. */
+                        if (status == 410) {
+                            MdoAccountClearTokensLocked();
+                            g_MdoAccount.ExpiredMemberId = work.Tokens.MemberId;
+                        }
                         else {
                             if (status == 401) g_MdoAccount.Tokens.Expires = 0;
                             if (g_MdoAccount.RefreshFailures < UINT32_MAX) ++g_MdoAccount.RefreshFailures;
@@ -314,7 +319,7 @@ xvalue* MdoAccountSnapshot(void)
         (g_MdoAccount.Busy && g_MdoAccount.BusyKind == MDO_ACCOUNT_WORK_PASSWORD)) ? "signing_in" :
         g_MdoAccount.Authorization.State[0] ? "authorizing" :
         g_MdoAccount.Tokens.Refresh[0] && !live ? "refreshing" : live ? "signed_in" :
-        g_MdoAccount.Profile ? "expired" : "signed_out";
+        g_MdoAccount.ExpiredMemberId || g_MdoAccount.Profile ? "expired" : "signed_out";
     xvalue *out = xrtValueObject(), *pending = xrtValueArray(); size_t i;
     bool ok = out && pending && MdoAccountSetString(out, "state", state) &&
         MdoAccountSetString(out, "origin", g_MdoAccount.Origin) &&

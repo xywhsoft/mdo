@@ -17,6 +17,7 @@ class RecoveryService(Service):
     calls=0;refreshes=0;tool_results=0
     refresh_status=503
     refresh_failures=2
+    profile_unavailable=False
 
     def handle(self):
         try:super().handle()
@@ -27,6 +28,11 @@ class RecoveryService(Service):
         self.send_response(status)
         self.send_header("Content-Type","text/event-stream" if stream else "application/json")
         self.send_header("Content-Length",str(len(payload)));self.end_headers();self.wfile.write(payload)
+
+    def do_GET(self):
+        if self.profile_unavailable and self.path=="/api/v1/profile":
+            return self.raw(503,{"code":503,"message":"Fixture profile unavailable"})
+        return super().do_GET()
 
     def do_POST(self):
         if self.path not in ("/api/v1/token/refresh","/api/v1/ai/chat/completions"):
@@ -71,6 +77,7 @@ def main():
     if args.storage_cancel:args.storage_fault=True
     RecoveryService.refresh_status=args.refresh_status
     RecoveryService.refresh_failures=args.refresh_failures
+    RecoveryService.profile_unavailable=args.relogin
     Service.login.set();Service.catalog.set()
     for e in (RecoveryService.first,RecoveryService.advance,RecoveryService.renewing,RecoveryService.renew):e.clear()
     RecoveryService.calls=RecoveryService.refreshes=RecoveryService.tool_results=0
@@ -142,6 +149,11 @@ static bool ProbeEventWrite(xfile F,const char* J,size_t S){
             assert not call('GET','/runs/'+run['id'])['terminal'],'Background renewal interrupted the Agent'
             RecoveryService.renew.set()
             if args.relogin:
+                def expired_account():
+                    account=call('GET','/account')
+                    return account if account.get('message')=='login_expired' else None
+                expired=until(expired_account)
+                assert expired['state']=='expired' and not expired['refresh_available'] and 'profile' not in expired,expired
                 until(lambda:any(e.get('model_error_kind') in ('waiting_account','waiting_model') for e in session_events(port,'/api/v1'+path)))
                 assert not call('GET','/runs/'+run['id'])['terminal']
                 call('POST','/account/login',{'identifier':'fixture','password':'fixture-only','remember':False})

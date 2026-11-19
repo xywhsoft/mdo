@@ -79,7 +79,8 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
       intro.append(status, text("p", copy("description"), "account-note account-benefits")); nodes.push(intro);
       if (snapshot.profile) nodes.push(renderProfile());
     }
-    if (snapshot.message) nodes.push(text("p", copy(snapshot.message), "account-hint"));
+    const message = snapshot.message ? copy(snapshot.message) : "";
+    if (message && message !== stateText) nodes.push(text("p", message, "account-hint"));
     if ([403, 429, 503].includes(snapshot.search_status))
       nodes.push(text("p", copy(`search${snapshot.search_status}`), "account-hint"));
     if (signedIn()) nodes.push(renderSearchQuota());
