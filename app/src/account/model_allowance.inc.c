@@ -100,6 +100,10 @@ static bool MdoAccountModelPin(xcancel* Cancel,MdoModelOnlineAccess* Access)
     bool Ok=false;
     xrtMutexLock(g_MdoAccount.Lock);
     uint64 Member=g_MdoAccount.Tokens.MemberId;
+    /* Refresh revocation preserves the member binding without credentials.
+     * A call starting in this gap must keep the same cancellation fence so
+     * it can wait for its member to sign in again. */
+    if(!Member)Member=g_MdoAccount.ExpiredMemberId;
     if(!Member)(void)MdoAccountGetUInt(xrtValueObjectGet(g_MdoAccount.Profile,XRT_STR_LITERAL("id")),&Member);
     if(!g_MdoAccount.Stopping&&g_MdoAccount.SessionCancel&&Member&&
         (!Cancel||!xrtCancelRequested(Cancel))){

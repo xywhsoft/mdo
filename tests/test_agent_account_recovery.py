@@ -144,16 +144,16 @@ static bool ProbeEventWrite(xfile F,const char* J,size_t S){
                 raise AssertionError('initial model request did not start')
             call('POST','/account/refresh',{})
             assert RecoveryService.renewing.wait(5)
-            RecoveryService.advance.set()
-            time.sleep(.1)
-            assert not call('GET','/runs/'+run['id'])['terminal'],'Background renewal interrupted the Agent'
-            RecoveryService.renew.set()
             if args.relogin:
+                # Revoke while the first response is held. The next model call
+                # must create its pin after the credentials have been cleared.
+                RecoveryService.renew.set()
                 def expired_account():
                     account=call('GET','/account')
                     return account if account.get('message')=='login_expired' else None
                 expired=until(expired_account)
                 assert expired['state']=='expired' and not expired['refresh_available'] and 'profile' not in expired,expired
+                RecoveryService.advance.set()
                 def waiting_for_account():
                     events=session_events(port,'/api/v1'+path)
                     state=call('GET','/runs/'+run['id'])
@@ -162,6 +162,11 @@ static bool ProbeEventWrite(xfile F,const char* J,size_t S){
                 until(waiting_for_account)
                 assert not call('GET','/runs/'+run['id'])['terminal']
                 call('POST','/account/login',{'identifier':'fixture','password':'fixture-only','remember':False})
+            else:
+                RecoveryService.advance.set()
+                time.sleep(.1)
+                assert not call('GET','/runs/'+run['id'])['terminal'],'Background renewal interrupted the Agent'
+                RecoveryService.renew.set()
             if args.exhausted:
                 until(lambda:RecoveryService.refreshes>=args.retries+1)
                 until(lambda:any(e.get('model_error_kind')=='waiting_account' for e in session_events(port,'/api/v1'+path)))
