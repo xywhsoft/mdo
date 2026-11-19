@@ -2069,7 +2069,21 @@ diff --git a/lib/xrt.h b/lib/xrt.h
  		int Stdin;
  		int Stdout;
  		int Stderr;
-@@ -245342,11 +245343,12 @@
+@@ -162453,6 +162454,13 @@
+ 		return;
+ 	}
+ 	if ( pStream->Socket != NULL ) {
++		/* A partial ready event may have left the other direction armed
++		 * after WatchPending was cleared. Retire it before reusing the fd. */
++		xnetport* pPort = __xrtNetWorkerPortBorrow(pStream->Worker);
++		if ( (xrtNetPortCapabilities(pPort) & XNET_PORT_CAP_READINESS) != 0 &&
++			 !xrtNetPortUnwatch(pPort, pStream->Socket) ) {
++			xrtClearError();
++		}
+ 		if ( pStream->AbortRequested ) {
+ 			(void)xrtNetSocketSet(
+ 				pStream->Socket,
+@@ -245342,11 +245350,12 @@
  
  
  
@@ -2084,7 +2098,7 @@ diff --git a/lib/xrt.h b/lib/xrt.h
  )
  {
  	xdir Dir = xrtDirOpen(sPath, XDIR_STAT | XDIR_FOLLOW_LINKS);
-@@ -245369,7 +245371,22 @@
+@@ -245369,7 +245378,22 @@
  			return false;
  		}
  		if ( !xrtX509StoreAddFile(pStore, sCertificate, NULL) ) {
@@ -2107,7 +2121,7 @@ diff --git a/lib/xrt.h b/lib/xrt.h
  			__xrtX509StoreSystemDirCleanup(Dir);
  			return false;
  		}
-@@ -245415,7 +245432,7 @@
+@@ -245415,7 +245439,7 @@
  				);
  				return false;
  			}
@@ -2116,7 +2130,7 @@ diff --git a/lib/xrt.h b/lib/xrt.h
  				xrtFree(sPath);
  				return false;
  			}
-@@ -245426,6 +245443,42 @@
+@@ -245426,6 +245450,42 @@
  		}
  		iStart = iEnd + 1u;
  	}
@@ -2159,7 +2173,7 @@ diff --git a/lib/xrt.h b/lib/xrt.h
  	return true;
  }
  
-@@ -245488,21 +245541,10 @@
+@@ -245488,21 +245548,10 @@
  			}
  			return false;
  		}
@@ -2185,7 +2199,17 @@ diff --git a/lib/xrt.h b/lib/xrt.h
  	}
  	if ( !bFound ) {
  		__xrtX509StoreSystemError(
-@@ -326044,7 +326086,7 @@
+@@ -253139,6 +253188,9 @@
+ 	}
+ 	if ( bCurrent && (Result == XNET_RESULT_OK) &&
+ 		 __xrtNetDialCanDrive(pDial) ) {
++		if ( !pDial->WinnerPending && (pDial->NextAddress < pDial->Count) ) {
++			(void)__xrtNetDialLaunchOne(pDial);
++		}
+ 		__xrtNetDialDrive(pDial);
+ 	} else if ( bCurrent && (Result == XNET_RESULT_ERROR) &&
+ 		 __xrtNetDialCanDrive(pDial) ) {
+@@ -326044,7 +326096,7 @@
  		return false;
  	}
  	(void)xrtMutexLock(&pProcess->Lock);
@@ -2194,7 +2218,7 @@ diff --git a/lib/xrt.h b/lib/xrt.h
  		(void)xrtMutexUnlock(&pProcess->Lock);
  		return true;
  	}
-@@ -327298,7 +327340,8 @@
+@@ -327298,7 +327350,8 @@
  			);
  			goto cleanup;
  		}
@@ -2204,7 +2228,7 @@ diff --git a/lib/xrt.h b/lib/xrt.h
  	}
  	if ( !CreateProcessW(
  		sProgram,
-@@ -329204,12 +329247,20 @@
+@@ -329204,12 +329257,20 @@
  	xprocessstatus* pStatus
  )
  {
@@ -2229,7 +2253,7 @@ diff --git a/lib/xrt.h b/lib/xrt.h
  	if ( iResult < 0 ) {
  		int iError = errno;
  
-@@ -329399,6 +329450,12 @@
+@@ -329399,6 +329460,12 @@
  /* 释放全部 POSIX 父端 fd。 */
  void __xrtProcessPlatformUnit(xprocess* pProcess)
  {
@@ -2242,7 +2266,7 @@ diff --git a/lib/xrt.h b/lib/xrt.h
  	__xrtProcessFdClose(&pProcess->Stdin);
  	__xrtProcessFdClose(&pProcess->Stdout);
  	__xrtProcessFdClose(&pProcess->Stderr);
-@@ -330158,6 +330215,10 @@
+@@ -330158,6 +330225,10 @@
  			__xrtProcessRunFail(&State, xrtTakeError());
  		}
  	}
@@ -2253,8 +2277,6 @@ diff --git a/lib/xrt.h b/lib/xrt.h
  	if ( !__xrtProcessRunThreadsJoin(&State) ) {
  		__xrtProcessRunFail(&State, xrtTakeError());
  	}
-diff --git a/lib/xwork/UPSTREAM.txt b/lib/xwork/UPSTREAM.txt
-index eb38380..f8d1b8a 100644
 --- a/lib/xwork/UPSTREAM.txt
 +++ b/lib/xwork/UPSTREAM.txt
 @@ -1,7 +1,7 @@
@@ -7814,10 +7836,9 @@ index 0000000..cf3fa2c
 +    if(!SetWindowSubclass(window,xws_proc,(UINT_PTR)state,(DWORD_PTR)state)){xrtFree(state->Parent);free(state->Path);free(state);}
 +}
 diff --git a/tools/extensions.json b/tools/extensions.json
-index 7f2dd84..a20506b 100644
 --- a/tools/extensions.json
 +++ b/tools/extensions.json
-@@ -664,6 +664,35 @@
+@@ -664,6 +664,64 @@
       "-include",
       "lib/xhttp/include/xhttp/features.h"
      ]
@@ -7850,14 +7871,194 @@ index 7f2dd84..a20506b 100644
 +     "-include",
 +     "lib/xhttp/include/xhttp/features.h"
 +    ]
++   },
++   {
++    "path": "lib/xhttp/src/http/http_client_pool.c",
++    "flags": [
++     "-Ilib/xhttp/include",
++     "-Ilib/xrtshim",
++     "-DXHTTP_FEATURE_HTTP_BODY",
++     "-DXHTTP_FEATURE_HTTP_CLIENT",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_DECOMPRESS",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_EASY",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_EASY_FUTURE",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_FUTURE",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_HTTPS",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_PREPARE",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_REDIRECT",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_REQUEST",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_RESPONSE",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_STREAM",
++     "-DXHTTP_FEATURE_HTTP_CLIENT_TLS",
++     "-DXHTTP_FEATURE_HTTP_EXCHANGE",
++     "-DXHTTP_FEATURE_HTTP_HEADERS",
++     "-DXHTTP_FEATURE_HTTP_SSE",
++     "-DXHTTP_FEATURE_HTTP_SSE_PARSER",
++     "-DXHTTP_FEATURE_URL",
++     "-include",
++     "lib/xwork/xwork-xrt-roots.h",
++     "-include",
++     "lib/xhttp/include/xhttp/features.h"
++    ]
     }
    ],
    "symbols": "src/script/import_xwork.inc",
-@@ -677,6 +706,7 @@
+@@ -676,7 +734,9 @@
+    "XHTTP_FEATURE_HTTP_CLIENT_EASY_FUTURE",
     "XHTTP_FEATURE_HTTP_CLIENT_FUTURE",
     "XHTTP_FEATURE_HTTP_CLIENT_HTTPS",
++   "XHTTP_FEATURE_HTTP_CLIENT_POOL",
     "XHTTP_FEATURE_HTTP_CLIENT_PREPARE",
 +   "XHTTP_FEATURE_HTTP_CLIENT_PROXY",
     "XHTTP_FEATURE_HTTP_CLIENT_REDIRECT",
     "XHTTP_FEATURE_HTTP_CLIENT_REQUEST",
     "XHTTP_FEATURE_HTTP_CLIENT_RESPONSE",
+--- a/src/core/config.h
++++ b/src/core/config.h
+@@ -27,6 +27,10 @@
+ 	uint32			ServerCount;
+ 	XS_ServerInfo**		Servers;
+ 	xnetengine*		Engine;			/* 引擎装配后由 engine.h 回填 */
++#if defined(XS_USE_XWORK)
++	xmutex*			FetchClientLock;
++	xhttpclient*		FetchClients[2]; /* ordinary and public-only resolver */
++#endif
+ 	uint32			TakenCount;		/* 持有的独立 xvalue 子树（services/hosts/...） */
+ 	xvalue**			Taken;
+ } XS_App;
+--- a/src/core/engine.h
++++ b/src/core/engine.h
+@@ -115,6 +115,9 @@
+ 	for ( i = 0; i < pApp->ServerCount; i++ ) {
+ 		pApp->Servers[i]->Engine = pApp->Engine;
+ 	}
++#if defined(XS_USE_XWORK)
++	pApp->FetchClientLock = xrtMutexCreate();
++#endif
+ 	printf("[xs] engine started, workers=%u\n", xrtNetEngineWorkerCount(pApp->Engine));
+ 	return true;
+ }
+@@ -129,6 +132,15 @@
+ 	if ( pApp->Engine == NULL ) {
+ 		return;
+ 	}
++#if defined(XS_USE_XWORK)
++	/* All service generations have drained before engine shutdown. */
++	for (size_t i = 0; i < 2; ++i) {
++		if (pApp->FetchClients[i]) xrtHttpClientDestroy(pApp->FetchClients[i]);
++		pApp->FetchClients[i] = NULL;
++	}
++	if (pApp->FetchClientLock) xrtMutexDestroy(pApp->FetchClientLock);
++	pApp->FetchClientLock = NULL;
++#endif
+ 	for ( ; ; ) {
+ 		for ( ; ; ) {
+ 			memset(&tStats, 0, sizeof(tStats));
+--- a/src/core/api.h
++++ b/src/core/api.h
+@@ -177,6 +177,22 @@
+ 	xrtFree(pAddresses);
+ 	xrtNetAddrListDestroy(pResolved);
+ 	return pFiltered;
++}
++
++/* Fixed-policy fetches reuse connections and DNS. Keep the public resolver
++ * separate so a private connection can never satisfy a public-only request. */
++static xhttpclient* XS_FetchClientAcquire(XS_App* pApp, const xhttpclientconfig* pConfig,
++	bool bShared, bool bPublic)
++{
++	if (!bShared || !pApp->FetchClientLock)
++		return xrtHttpClientCreate(pApp->Engine,pConfig);
++	size_t i = bPublic ? 1u : 0u;
++	xrtMutexLock(pApp->FetchClientLock);
++	if (!pApp->FetchClients[i])
++		pApp->FetchClients[i] = xrtHttpClientCreate(pApp->Engine,pConfig);
++	xhttpclient* pClient = pApp->FetchClients[i] ? xrtHttpClientRef(pApp->FetchClients[i]) : NULL;
++	xrtMutexUnlock(pApp->FetchClientLock);
++	return pClient;
+ }
+ 
+ static str XS_FetchCopyText(const char* pData, size_t iSize)
+@@ -346,7 +362,17 @@
+ 		ClientConfig.Decompress.Enabled =
+ 			(pRequest->Flags & XS_FETCH_DECOMPRESS) != 0u;
+ 		ClientConfig.Decompress.MaxBody = (uint64)pRequest->MaxBodyBytes;
+-		pClient = xrtHttpClientCreate(g_XS_App->Engine, &ClientConfig);
++		bool bShared = !(pRequest->Flags & (XS_FETCH_DECOMPRESS | XS_FETCH_FOLLOW_REDIRECTS));
++		if (bShared) {
++			ClientConfig.Retry.MaxRetries = 0;
++			ClientConfig.Pool.MaxConnections=24;
++			ClientConfig.Pool.MaxConnectionsPerOrigin=8;
++			ClientConfig.Pool.MaxIdle=12;
++			ClientConfig.Pool.MaxIdlePerOrigin=4;
++			ClientConfig.Pool.IdleTimeout=UINT64_C(15000000); ClientConfig.Pool.MaxWaiting=48; ClientConfig.Pool.MaxWaitingPerOrigin=16;
++		}
++		pClient = XS_FetchClientAcquire(g_XS_App,&ClientConfig,bShared,
++			(pRequest->Flags & XS_FETCH_PUBLIC_ADDRESSES_ONLY) != 0u);
+ 		if ( pClient == NULL ) goto Failed;
+ 
+ 		pHttpRequest = xrtHttpRequestCreate(
+diff --git a/lib/xhttp/src/http/http_client_pool.c b/lib/xhttp/src/http/http_client_pool.c
+--- a/lib/xhttp/src/http/http_client_pool.c
++++ b/lib/xhttp/src/http/http_client_pool.c
+@@ -53,7 +53,7 @@
+ 	#if defined(XHTTP_FEATURE_HTTP_CLIENT_HTTPS)
+ 		xtlsstream* Tls;
+ 	#endif
+-	xdeadline Deadline;
++	uint64 Deadline;
+ 	__xrt_http_client_idle_state State;
+ 	bool Released;
+ };
+@@ -1019,7 +1019,7 @@
+ 	Id = xrtNetEngineSchedule(
+ 		pClient->Engine,
+ 		pShard->Index % xrtNetEngineWorkerCount(pClient->Engine),
+-		pShard->IdleTail->Deadline,
++		__xhttpWaitMs(pShard->IdleTail->Deadline),
+ 		__xrtHttpPoolTimer,
+ 		pShard
+ 	);
+@@ -1393,7 +1393,7 @@
+ 		(__xrt_http_client_pool_shard*)pData;
+ 	xhttpclient* pClient = pShard->Client;
+ 	__xrt_http_pool_batch Batch;
+-	xdeadline iNow = xrtClock();
++	uint64 iNow = __xhttpTimerUs();
+ 	bool bMatched;
+ 
+ 	(void)pWorker;
+@@ -1569,7 +1569,7 @@
+ 	__xrt_http_pool_batch Batch;
+ 	__xrt_http_client_origin* pOrigin;
+ 	__xrt_http_client_idle* pIdle;
+-	xdeadline iNow;
++	uint64 iNow;
+ 	bool bResult = true;
+ 
+ 	memset(&Batch, 0, sizeof(Batch));
+@@ -1596,7 +1596,7 @@
+ 	}
+ 	pCall->PoolOrigin = pOrigin;
+ 	if ( pClient->Config.Pool.IdleTimeout != 0 ) {
+-		iNow = xrtClock();
++		iNow = __xhttpTimerUs();
+ 		while ( (pShard->IdleTail != NULL) &&
+ 			(pShard->IdleTail->Deadline <= iNow) ) {
+ 			__xrtHttpPoolEvict(
+@@ -1958,12 +1958,9 @@
+ 			pClient->Config.Pool.MaxIdle
+ 		);
+ 		if ( bKeep ) {
+-			pIdle->Deadline =
+-				pClient->Config.Pool.IdleTimeout == 0 ?
+-					XRT_DEADLINE_NEVER :
+-					xrtDeadlineAfter(
+-						pClient->Config.Pool.IdleTimeout
+-					);
++			uint64 now = __xhttpTimerUs();
++			uint64 idle = pClient->Config.Pool.IdleTimeout;
++			pIdle->Deadline = !idle || idle >= UINT64_MAX - now ? UINT64_MAX : now + idle;
+ 			__xrtHttpPoolIdleInsert(pShard, pIdle);
+ 		}
+ 		if ( bKeep ) {

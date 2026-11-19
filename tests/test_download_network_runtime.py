@@ -25,8 +25,15 @@ PAYLOAD=b'download-network-fixture\n'*8192
 HASH=hashlib.sha256(PAYLOAD).hexdigest()
 class Publisher(BaseHTTPRequestHandler):
     hits=0
+    reuse_ports=[]
     def log_message(self,*_):pass
     def do_GET(self):
+        if self.path=='/reuse':
+            Publisher.reuse_ports.append(self.client_address[1])
+            self.protocol_version='HTTP/1.1';self.close_connection=len(Publisher.reuse_ports)==2
+            self.send_response(200);self.send_header('Content-Length','2')
+            if self.close_connection:self.send_header('Connection','close')
+            self.end_headers();self.wfile.write(b'ok');return
         if self.path=='/short':
             self.send_response(200);self.send_header('Content-Length','11');self.end_headers();self.wfile.write(b'{}');return
         redirects={'/redirect':'/file','/forbidden':'https://blocked.invalid/file','/downgrade':'http://127.0.0.1/file','/loop':'/loop'}
@@ -65,17 +72,23 @@ static bool QaSecure=true;static uint16 QaPort={publisher.server_port};
 #include "generated/mdo_unity.c"
 #undef ServiceInit
 #undef RequestProc
-static xnetengine* QaEngine;static xvalue* QaValue;
+static xnetengine* QaEngine;
 void ServiceInit(XS_HostInfo* H){{char* Plain=xrtEnvGet("QA_PLAIN");if(Plain){{QaSecure=false;QaPort=(uint16)atoi(Plain);}}xrtFree(Plain);QaEngine=H->Server->Engine;QaInit(H);char* Enabled=xrtEnvGet("QA_ARIA");
  if(Enabled){{char E[512]={{0}};xvalue* V=NULL;MdoExtensionsInstall("external-tools","{'A'*32}","data/aria.zip",NULL,true,NULL,&V,E);xrtValueRelease(V);MdoExtensionsSetEnabled("external-tools","{'A'*32}",true,E);MdoCliReload();}}xrtFree(Enabled);
 }}
-static int32 QaRun(void* Unused){{(void)Unused;
-  MdoTransferReport Report={{0}};bool Ok=MdoTransferDownloadReport(QaEngine,"/file","data/downloads/network.bin",{len(PAYLOAD)},"{HASH}",NULL,NULL,NULL,&Report);
+static bool QaRun(MdoApiContext* C,xvalue* Input){{xrtValueRelease(Input);
+  char* Mode=xrtEnvGet("QA_REUSE");bool ReuseOnly=Mode!=NULL;xrtFree(Mode);
+  MdoTransferReport Report={{0}};bool Ok=ReuseOnly||MdoTransferDownloadReport(QaEngine,"/file","data/downloads/network.bin",{len(PAYLOAD)},"{HASH}",NULL,NULL,NULL,&Report);
   char FetchUrl[160];snprintf(FetchUrl,sizeof(FetchUrl),"%s://127.0.0.1:%u/meta",QaSecure?"https":"http",(unsigned)QaPort);
   XS_FetchRequest F={{0}};F.Url=FetchUrl;F.Method="GET";F.Timeout=3000000;F.IdleTimeout=1000000;F.MaxBodyBytes=4096;XS_FetchResponse Out={{0}};
-  bool Fetch=MdoDownloadFetch(&F,&Out)&&Out.Status==200&&Out.BodySize==11;MdoDownloadFetchUnit(&Out);
+  bool Fetch=ReuseOnly||(MdoDownloadFetch(&F,&Out)&&Out.Status==200&&Out.BodySize==11);MdoDownloadFetchUnit(&Out);
+  bool Reuse=true;
+  if(ReuseOnly){{
+    snprintf(FetchUrl,sizeof(FetchUrl),"http://127.0.0.1:%u/reuse",(unsigned)QaPort);
+    for(size_t I=0;I<2;I++){{Reuse=MdoDownloadFetch(&F,&Out)&&Out.Status==200&&Out.BodySize==2&&Reuse;MdoDownloadFetchUnit(&Out);xrtSleep(75);}}
+  }}
   bool ShortRetry=true;
-  if(Ok){{snprintf(FetchUrl,sizeof(FetchUrl),"%s://127.0.0.1:%u/short",QaSecure?"https":"http",(unsigned)QaPort);xrtClearError();
+  if(Ok&&!ReuseOnly){{snprintf(FetchUrl,sizeof(FetchUrl),"%s://127.0.0.1:%u/short",QaSecure?"https":"http",(unsigned)QaPort);xrtClearError();
    bool Read=MdoDownloadFetch(&F,&Out);ShortRetry=!Read&&MdoExtServiceTransientTransport(xrtGetError());
    if(!ShortRetry){{fprintf(stderr,"Short fixture accepted=%u bytes=%zu\\n",Read,Out.BodySize);for(const xerror* E=xrtGetError();E;E=xrtErrorCause(E))fprintf(stderr,"Short cause %s kind=%d code=%d\\n",xrtErrorDomain(E),(int)xrtErrorKind(E),(int)xrtErrorCode(E));}}
    MdoDownloadFetchUnit(&Out);xrtClearError();}}
@@ -90,21 +103,22 @@ static int32 QaRun(void* Unused){{(void)Unused;
   }}
   xvalue* V=xrtValueObject();MdoApiValueSetBool(V,"download",Ok);MdoApiValueSetBool(V,"fetch",Fetch);MdoApiValueSetString(V,"code",Report.Code);
   MdoApiValueSetBool(V,"sources",Sources);
+  MdoApiValueSetBool(V,"reuse",Reuse);
   MdoApiValueSetBool(V,"short_retry",ShortRetry);
-  xvalue* Tasks=MdoDownloadsList();MdoApiValueSetTake(V,"tasks",&Tasks);QaValue=V;return 0;
+  xvalue* Tasks=MdoDownloadsList();MdoApiValueSetTake(V,"tasks",&Tasks);return MdoApiReplySuccessTake(C,200,V,NULL);
 }}
 XS_RequestResult RequestProc(XS_HttpReq* R){{
  if(xrtStrEqual(R->head->Target,XRT_STR_LITERAL("/qa/run"))){{
-  xthread* T=xrtThreadCreate(QaRun,NULL,0);if(T){{xrtThreadWait(T);xrtThreadDestroy(T);}}
-  MdoApiContext C={{0}};C.Request=R;MdoApiRequestId(C.RequestId);MdoApiReplySuccessTake(&C,200,QaValue,NULL);QaValue=NULL;return XS_OK;
+  MdoApiContext C={{0}};C.Request=R;MdoApiRequestId(C.RequestId);
+  MdoApiQueueOperation(&C,xrtValueObject(),QaRun,false);return C.Takeover?XS_TAKEOVER:XS_OK;
  }}return QaRequest(R);
 }}
 ''',encoding='utf-8')
         config.write_text(json.dumps(dict(engine=dict(workers=3),services=[dict(enabled=True,**{'class':'http'},name='qa',ip='127.0.0.1',port=port,host_default=dict(enabled=True,name='mdo',path='web',devlang='c',devfile=source.name))])))
         try:
-            cases=[('http-connect','',True,False,True,False),('socks5','',True,False,True,False),('http-connect','127.0.0.1',True,False,True,False),('http-connect','',False,False,False,False)]
+            cases=[('http-connect','',True,False,True,False),('socks5','',True,False,True,False),('http-connect','127.0.0.1',True,False,True,False),('http-connect','',False,False,False,False),('none','',False,False,True,True)]
             if os.name=='nt' and aria.is_file():cases += [('http-connect','',True,True,True,False),('socks5','',True,True,True,False),('http-connect','',False,True,True,True),('socks5','',False,True,True,True)]
-            if args.source_only:cases=cases[:1]
+            if args.source_only:cases=[cases[0],next(row for row in cases if row[0]=='none')]
             for kind,bypass,ca,managed,expected,plaintext in cases:
                 with LocalProxy(('127.0.0.1',0),DownloadProxy) as proxy:
                     proxy.kind=kind;proxy.target_port=plain.server_port if plaintext else publisher.server_port;proxy.connections=0;proxy.errors=[]
@@ -118,6 +132,7 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
                     env=dict(os.environ,MDO_HOME=str(home),MDO_TEST_PROXY_PASSWORD='bounded-password')
                     if managed:env['QA_ARIA']='1'
                     if plaintext:env['QA_PLAIN']=str(plain.server_port)
+                    if kind=='none':env['QA_REUSE']='1'
                     with (base/'runtime.log').open('wb') as log:
                         process=subprocess.Popen([str(args.host.resolve()),str(config)],cwd=ROOT/'app',env=env,stdout=log,stderr=log,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
                         try:
@@ -128,7 +143,12 @@ XS_RequestResult RequestProc(XS_HttpReq* R){{
                             assert status==200,(status,raw)
                             result=json.loads(raw)['data'];assert result['download']==expected and result['fetch']==expected,(kind,managed,result)
                             assert result['sources'],result
+                            assert result['reuse'],result
                             assert result['short_retry'],result
+                            if kind=='none':
+                                assert len(Publisher.reuse_ports)==2 and len(set(Publisher.reuse_ports))==1,Publisher.reuse_ports
+                                print('PASS native HTTP reused one connection after idle time',flush=True)
+                                continue
                             if expected and kind=='http-connect' and not managed and not bypass:
                                 task=next(row for row in result['tasks'] if row['identity'].endswith('/loop'))
                                 status,_,body=request(port,'POST',f"/api/v1/download-tasks/{task['id']}/retry",body=b'{}',headers={'Content-Type':'application/json'})

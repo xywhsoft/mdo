@@ -291,12 +291,12 @@ bool MdoDownloadsAction(cstr Id,cstr Action,char Error[512]){
     return Ok;
 }
 bool MdoDownloadsInit(xnetengine* Engine){
-    MdoDownloadNetworkSetEngine(Engine);
     if(MdoDownloads.Lock)return true;
     MdoDownloads.Lock=xrtMutexCreate();
     MdoDownloads.Cancel=xrtCancelCreate();
     MdoDownloads.Engine=Engine;
     if(!MdoDownloads.Lock||!MdoDownloads.Cancel)return false;
+    MdoDownloadNetworkSetEngine(Engine);
     xvalue* A=DlRead(DL_RECORD);bool Exists=false;xfileinfo Info;size_t N=xrtValueCount(A);
     bool Repair=Exists&&xrtValueType(A)!=XVALUE_ARRAY;size_t Loaded=0;
     if(!MdoHomeExternalStat(DL_RECORD,&Exists,&Info))MdoDownloads.StorageFault=true;
@@ -330,5 +330,6 @@ void MdoDownloadsUnit(void){
     }
     for(;;){bool Active=false;xrtMutexLock(MdoDownloads.Lock);for(size_t I=0;I<DL_COUNT;I++)Active=Active||MdoDownloads.Tasks[I].Active;xrtMutexUnlock(MdoDownloads.Lock);if(!Active)break;xrtSleep(25);}
     for(size_t I=0;I<DL_COUNT;I++){xrtValueRelease(MdoDownloads.Tasks[I].Record);xrtCancelDestroy(MdoDownloads.Tasks[I].DispatchCancel);}
+    MdoDownloadNetworkSetEngine(NULL);
     xrtCancelDestroy(MdoDownloads.Cancel);xrtMutexDestroy(MdoDownloads.Lock);memset(&MdoDownloads,0,sizeof(MdoDownloads));
 }
