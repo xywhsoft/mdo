@@ -84,6 +84,7 @@
   "account.title": "Account",
   "account.description": "Sign in for online models, web search and the extension store. Local projects, sessions and your own model providers do not require sign-in.",
   "account.login": "Sign in",
+  "account.signInAgain": "Sign in again",
   "account.signedIn": "Signed in",
   "account.signedOut": "Signed out",
   "account.waitingBrowser": "Finish signing in and approving access in your browser, then return to mdo.",

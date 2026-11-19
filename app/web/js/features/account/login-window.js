@@ -15,13 +15,14 @@ export function createLoginWindow({ request, scope, allowBrowser = () => false, 
   function render(own) {
     if (!current(own)) return;
     const state = own.snapshot || {};
-    own.layer.update({ title: copy("login") });
+    own.layer.update({ title: copy(state.state === "expired" ? "signInAgain" : "login") });
     for (const [node, key] of own.labels) node.textContent = copy(key);
     own.remember.disabled = own.pending || state.persistence_available === false;
     if (state.persistence_available === false) own.remember.checked = false;
     own.storage.textContent = copy(state.persistence_available === false ? "storageUnavailable" : "storage");
     own.status.textContent = own.error || own.readError || copy(state.state === "signing_in" ? "signingIn" :
-      state.state === "authorizing" ? "waitingBrowser" : own.attempted && state.message ? state.message : "directDescription");
+      state.state === "authorizing" ? "waitingBrowser" : own.attempted && state.message ? state.message :
+      state.state === "expired" ? "expired" : "directDescription");
     own.status.setAttribute("role", own.error || own.readError ? "alert" : "status");
     own.form.hidden = state.state === "authorizing";
     own.submit.disabled = own.pending || state.state === "signing_in";

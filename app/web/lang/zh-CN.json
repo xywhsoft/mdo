@@ -84,6 +84,7 @@
   "account.title": "账号",
   "account.description": "登录网站账号以使用在线模型、联网搜索和扩展商店。本地项目、会话及个人配置的模型无需登录。",
   "account.login": "登录账号",
+  "account.signInAgain": "重新登录",
   "account.signedIn": "已登录",
   "account.signedOut": "未登录",
   "account.waitingBrowser": "请在浏览器中完成登录并确认授权，然后返回墨斗。",

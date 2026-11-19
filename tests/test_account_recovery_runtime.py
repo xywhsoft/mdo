@@ -22,6 +22,7 @@ def main():
         ('test_agent_account_recovery.py', ['--storage-fault']),
         ('test_agent_account_recovery.py', ['--storage-cancel']),
         ('test_agent_account_recovery.py', ['--refresh-status', '401']),
+        ('test_agent_account_recovery.py', ['--refresh-status', '401','--refresh-failures','1','--relogin']),
         ('test_agent_account_recovery.py', ['--refresh-status', '410','--refresh-failures','1','--relogin']),
         ('test_agent_account_recovery.py', ['--refresh-status', '401',
              '--refresh-failures', '99', '--exhausted']),

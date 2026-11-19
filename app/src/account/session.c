@@ -328,10 +328,11 @@ static int32 MdoAccountWorker(void* Unused)
                     if (work.Kind == MDO_ACCOUNT_WORK_EXCHANGE) MdoAccountClearAuthorizationLocked();
                     MdoAccountDispatchReadsLocked();
                 } else {
+                    bool revoked = work.Kind == MDO_ACCOUNT_WORK_REFRESH && (status == 410 || transport.RefreshRejected);
                     if (work.Kind == MDO_ACCOUNT_WORK_REFRESH) {
                         /* Keep the account binding so a paused run can resume
                          * when the same member signs in again. */
-                        if (status == 410) {
+                        if (revoked) {
                             MdoAccountClearTokensLocked();
                             g_MdoAccount.ExpiredMemberId = work.Tokens.MemberId;
                         }
@@ -343,7 +344,7 @@ static int32 MdoAccountWorker(void* Unused)
                             g_MdoAccount.NextRefresh = MdoDeadlineAfterUs(delay * 1000u);
                         }
                     }
-                    strcpy(g_MdoAccount.Message, !status && transport.SystemTrustFailed ? "system_trust_failed" :
+                    strcpy(g_MdoAccount.Message, revoked ? "login_expired" : !status && transport.SystemTrustFailed ? "system_trust_failed" :
                         work.Kind == MDO_ACCOUNT_WORK_PASSWORD && (status == 400 || status == 401) ? "invalid_credentials" :
                         status == 429 ? "login_rate_limited" : (status == 401 || status == 410) && !g_MdoAccount.Tokens.Refresh[0] ? "login_expired" :
                         status == 404 ? "service_update_required" : work.Kind == MDO_ACCOUNT_WORK_REFRESH ?

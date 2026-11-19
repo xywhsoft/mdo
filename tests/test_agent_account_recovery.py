@@ -17,6 +17,7 @@ class RecoveryService(Service):
     calls=0;refreshes=0;tool_results=0
     refresh_status=503
     refresh_failures=2
+    legacy_revocation=False
     profile_unavailable=False
 
     def handle(self):
@@ -42,7 +43,8 @@ class RecoveryService(Service):
         if self.path=="/api/v1/token/refresh":
             cls.refreshes+=1;cls.renewing.set();assert cls.renew.wait(15)
             if cls.refreshes<=cls.refresh_failures:
-                return self.raw(cls.refresh_status,{"code":cls.refresh_status,"message":"Fixture renewal rejection"})
+                message="refresh token invalid" if cls.legacy_revocation else "Fixture renewal rejection"
+                return self.raw(cls.refresh_status,{"code":cls.refresh_status,"msg":message})
             return self.reply({"id":1,"access_token":"fresh-fixture-token","refresh_token":"b"*64,
                                "token_type":"Bearer","expires_in":900})
         cls.calls+=1
@@ -77,6 +79,7 @@ def main():
     if args.storage_cancel:args.storage_fault=True
     RecoveryService.refresh_status=args.refresh_status
     RecoveryService.refresh_failures=args.refresh_failures
+    RecoveryService.legacy_revocation=args.relogin and args.refresh_status==401
     RecoveryService.profile_unavailable=args.relogin
     Service.login.set();Service.catalog.set()
     for e in (RecoveryService.first,RecoveryService.advance,RecoveryService.renewing,RecoveryService.renew):e.clear()
@@ -125,8 +128,12 @@ static bool ProbeEventWrite(xfile F,const char* J,size_t S){
                 if process.poll() is None:process.terminate();process.wait(timeout=5)
             lifetime.callback(stop_native)
             wait_ready(port,process)
-            call('POST','/account/login',{'identifier':'fixture','password':'fixture-only','remember':False})
+            call('POST','/account/login',{'identifier':'fixture','password':'fixture-only','remember':args.relogin})
             until(lambda:call('GET','/models')['login_state']=='ready')
+            account=call('GET','/account')
+            saved=base/'home/data/account/session.bin'
+            if args.relogin and account['persistence_available']:
+                assert account['remembered'] and saved.is_file()
             session=call('POST','/sessions',{'project_id':'default','model_id':ONLINE,'reasoning_effort':'none','title':'Recovery fixture'},201)
             path='/projects/default/sessions/'+session['id']
             run=call('POST',path+'/runs',{'prompt':'List the workspace once, then summarize.'},202)
@@ -153,6 +160,7 @@ static bool ProbeEventWrite(xfile F,const char* J,size_t S){
                     return account if account.get('message')=='login_expired' else None
                 expired=until(expired_account)
                 assert expired['state']=='expired' and not expired['refresh_available'] and 'profile' not in expired,expired
+                assert not expired['remembered'] and not saved.exists()
                 RecoveryService.advance.set()
                 def waiting_for_account():
                     events=session_events(port,'/api/v1'+path)
@@ -161,6 +169,7 @@ static bool ProbeEventWrite(xfile F,const char* J,size_t S){
                     return any(e.get('model_error_kind') in ('waiting_account','waiting_model') for e in events)
                 until(waiting_for_account)
                 assert not call('GET','/runs/'+run['id'])['terminal']
+                assert RecoveryService.refreshes==1,"revoked credential was retried"
                 call('POST','/account/login',{'identifier':'fixture','password':'fixture-only','remember':False})
             else:
                 RecoveryService.advance.set()

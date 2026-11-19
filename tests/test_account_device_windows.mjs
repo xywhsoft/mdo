@@ -102,6 +102,21 @@ test("account renewal backoff does not look like a pending membership read", asy
  assert.equal(sidebar.querySelector(".account-group").textContent, "Unavailable");
 });
 
+test("a revoked account prompts for sign-in again and goes directly to the login form", async t => {
+ const env = await setup(t);
+ env.model.target = {...signedIn(9), state: "expired", refresh_available: false, message: "login_expired"};
+ await env.account.refresh();
+ const sidebar = env.ids.get("open-account"), panel = env.ids.get("account-panel");
+ assert.equal(sidebar.querySelector("[data-account-name]").textContent, "Sign in again");
+ assert.equal(sidebar.querySelector(".account-group").hidden, true);
+ assert.equal(panel.querySelectorAll("button").find(button => button.dataset.accountAction === "login").textContent, "Sign in again");
+ sidebar.click();
+ const dialog = env.doc.body.querySelector("dialog");
+ assert.equal(dialog.id, "account-login-dialog");
+ assert.equal(dialog.querySelector("[data-account-progress]").textContent, "Your session is no longer valid. Please sign in again.");
+ assert.deepEqual(env.calls.filter(call => call.path === "/account/refresh"), []);
+});
+
 test("account shows plan expiry and remaining VIP time, then clears the countdown after expiry",async t=>{
  const env=await setup(t),now=Math.floor(Date.now()/1000);
  env.model.target={...signedIn(9),models_status:200,model_allowance:{is_vip:true,group_id:"vip",plan_id:"vip",plan_expires_at:now+2*86400+3*3600+300,updated_at:now,daily_quotas:[]}};

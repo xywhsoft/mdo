@@ -113,7 +113,11 @@ static xvalue* MdoAccountJsonClient(cstr Origin, cstr Path, cstr Method, const x
     if (!MdoAccountFetch(&request,&response,read_only,Transport)) goto done;
     if (Transport) Transport->Phase = "http";
     if (Status) *Status = response.Status;
-    if ((response.Status != 200 && !(Service && response.Status == 201)) || !response.Body ||
+    /* Older account servers use a specific 401 envelope for an invalid
+     * refresh credential. Other 401s remain eligible for recovery. */
+    bool legacy_refresh = Transport && response.Status == 401 && !Service &&
+        !strcmp(Method, "POST") && !strcmp(Path, "/api/v1/token/refresh");
+    if ((!legacy_refresh && response.Status != 200 && !(Service && response.Status == 201)) || !response.Body ||
         !xrtUtf8Valid((xstrview){(cstr)response.Body, response.BodySize}, NULL)) goto done;
     if (Transport) Transport->Phase = "json";
     xjsonreadconfig limits; xrtJsonReadConfigInit(&limits);
@@ -121,6 +125,12 @@ static xvalue* MdoAccountJsonClient(cstr Origin, cstr Path, cstr Method, const x
     limits.MaxValues=Service||!strncmp(Path,"/api/v1/ai/",11)?2048u:256u;limits.MaxStringBytes=8192;
     envelope = xrtJsonRead((xstrview){(cstr)response.Body, response.BodySize}, &limits);
     uint64 code = 1;
+    if (legacy_refresh) {
+        cstr message = MdoAccountText(envelope, "msg", 64);
+        Transport->RefreshRejected = message && !strcmp(message, "refresh token invalid") &&
+            MdoAccountGetUInt(xrtValueObjectGet(envelope, XRT_STR_LITERAL("code")), &code) && code == 401;
+        goto done;
+    }
     if (!envelope || !MdoAccountGetUInt(xrtValueObjectGet(envelope, xrtStrView("code")), &code) || code != 0) {
         if (Status) *Status = 502;
         goto done;

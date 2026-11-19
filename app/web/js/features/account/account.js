@@ -48,7 +48,8 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     const focused = document.activeElement;
     const focusOwner = panel.contains(focused) ? panel : notice.contains(focused) ? notice : null;
     const focusAction = focused?.dataset?.accountAction, focusId = focused?.dataset?.id;
-    sidebar.querySelector("[data-account-name]").textContent = signedIn() ? displayName() : copy("login");
+    const loginLabel = snapshot.state === "expired" ? "signInAgain" : "login";
+    sidebar.querySelector("[data-account-name]").textContent = signedIn() ? displayName() : copy(loginLabel);
     const avatar = sidebar.querySelector("[data-account-avatar]");
     avatar.replaceChildren(document.createTextNode(signedIn() ? [...displayName()][0]?.toUpperCase() || "◉" : "◉"), vipBadge);
     const now = Date.now() / 1000;
@@ -63,7 +64,7 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     sidebarQuota.hidden = !signedIn() || (restoring && !allowance);
     if (!sidebarQuota.hidden) renderQuotas(sidebarQuota, allowance, allowanceLoading, true);
     else sidebarQuota.replaceChildren();
-    sidebar.title = signedIn() ? copy("title") : copy("login");
+    sidebar.title = signedIn() ? copy("title") : copy(loginLabel);
     if (signedIn()) { sidebar.removeAttribute("aria-haspopup"); sidebar.removeAttribute("aria-controls"); }
     else { sidebar.setAttribute("aria-haspopup", "dialog"); sidebar.setAttribute("aria-controls", "account-login-dialog"); }
     const body = panel.querySelector("[data-account-body]");
@@ -94,7 +95,7 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     if (signedIn() || snapshot.state === "refreshing")
       nodes.push(text("p", copy(snapshot.remembered ? "remembered" : "temporary"), "account-note"));
     const actions = text("div", "", "account-actions");
-    actions.append(button(copy(signedIn() ? "switch" : "login"), "login", true));
+    actions.append(button(copy(signedIn() ? "switch" : loginLabel), "login", true));
     if (snapshot.state === "authorizing") actions.append(button(copy("cancel"), "cancel"));
     if (signedIn() || snapshot.state === "expired" || snapshot.state === "refreshing") {
       actions.append(button(copy("manage"), "website"), button(copy("logout"), "logout"));
