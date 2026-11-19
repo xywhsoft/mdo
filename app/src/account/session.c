@@ -456,6 +456,8 @@ xvalue* MdoAccountSnapshot(void)
     if(ok&&g_MdoAccount.Allowance)ok=xrtValueObjectSetNew(out,XRT_STR_LITERAL("model_allowance"),xrtValueClone(g_MdoAccount.Allowance));
     if(ok&&live&&g_MdoAccount.Balance)ok=xrtValueObjectSetNew(out,XRT_STR_LITERAL("balance"),xrtValueClone(g_MdoAccount.Balance));
     if(ok)ok=MdoAccountSetUInt(out,"balance_status",g_MdoAccount.BalanceStatus);
+    if(ok)ok=MdoAccountSetBool(out,"model_allowance_pending",
+        live&&!g_MdoAccount.Allowance&&!g_MdoAccount.ModelsStatus&&g_MdoAccount.Reads[MDO_ACCOUNT_READ_ALLOWANCE].Cancel);
     if(ok)ok=MdoAccountSetUInt(out,"models_status",g_MdoAccount.ModelsStatus)&&MdoAccountSetUInt(out,"model_generation",MdoModelManagerGeneration());
     if(ok)ok=MdoAccountSetString(out,"model_catalog_state",MdoModelLoginStateName(MdoAccountModelStateLocked()));
     for (i = 0; ok && i < MDO_ACCOUNT_WAIT_MAX; i++) if (g_MdoAccount.Waiters[i].Id && !g_MdoAccount.Waiters[i].Skipped) {

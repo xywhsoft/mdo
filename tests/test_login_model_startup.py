@@ -28,6 +28,9 @@ class Service(BaseHTTPRequestHandler):
     catalog = threading.Event()
     login_started = threading.Event()
     catalog_started = threading.Event()
+    allowance_started = threading.Event()
+    allowance_allowed = threading.Event()
+    allowance_allowed.set()
     search_started = threading.Event()
     search_allowed = threading.Event()
     search_allowed.set()
@@ -89,6 +92,8 @@ class Service(BaseHTTPRequestHandler):
             self.search_allowed.wait(10)
             self.reply(dict.fromkeys(("minute_used", "minute_limit", "daily_used", "daily_limit", "daily_reset_at"), 0))
         elif self.path == "/api/v1/ai/allowance":
+            self.allowance_started.set()
+            assert self.allowance_allowed.wait(10), "fixture allowance was not released"
             self.reply({"member_id": 1, "plan_id": "fixture", "group_id": "fixture", "is_vip": False,
                         "plan_expires_at": 0, "updated_at": 1, "daily_quotas": []})
         elif self.path == "/api/v1/ai/catalog":
@@ -118,6 +123,8 @@ def until(probe):
 def check(host: Path, base: Path, unconfigured=False):
     for event in (Service.login, Service.catalog, Service.login_started, Service.catalog_started): event.clear()
     Service.search_started.clear()
+    Service.allowance_started.clear()
+    Service.allowance_allowed.clear()
     Service.refresh_started.clear()
     Service.search_allowed.clear()
     Service.removed=False; Service.catalog_status=200; Service.model_calls=0
@@ -203,6 +210,10 @@ def check(host: Path, base: Path, unconfigured=False):
         Service.login.set()
         assert Service.catalog_started.wait(3)
         assert call("GET", "/account")["state"] == "signed_in"
+        assert Service.allowance_started.wait(3)
+        pending_account = call("GET", "/account")
+        assert pending_account["model_allowance_pending"] and "model_allowance" not in pending_account
+        Service.allowance_allowed.set()
         assert call("GET", "/models")["login_state"] == "pending"
         if unconfigured:
             reject("/sessions","login_pending",method="POST",body={"project_id":"default"})
@@ -211,6 +222,7 @@ def check(host: Path, base: Path, unconfigured=False):
         catalog = until(ready)
         assert Service.search_started.wait(3), "search usage read was never attempted"
         until(lambda: call("GET", "/account").get("model_allowance"))
+        assert not call("GET", "/account")["model_allowance_pending"]
         call("POST", "/account/refresh", {})
         assert Service.refresh_started.wait(3), "search usage blocked credential renewal"
         Service.search_allowed.set()
@@ -234,6 +246,8 @@ def check(host: Path, base: Path, unconfigured=False):
         Service.login_started.clear(); Service.catalog_started.clear()
         start()
         assert Service.login_started.wait(3), "remembered account did not restore"
+        recovering = call("GET", "/account")
+        assert recovering["state"] == "refreshing" and not recovering["model_allowance_pending"]
         reject(path + "/recovery", "login_pending")
         reject(path + "/runs", "login_pending", method="POST", body={"prompt": "Must wait"})
         assert Service.model_calls == 0

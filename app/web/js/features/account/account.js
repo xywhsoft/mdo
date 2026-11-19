@@ -52,28 +52,35 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     const avatar = sidebar.querySelector("[data-account-avatar]");
     avatar.replaceChildren(document.createTextNode(signedIn() ? [...displayName()][0]?.toUpperCase() || "◉" : "◉"), vipBadge);
     const now = Date.now() / 1000;
+    const restoring = snapshot.state === "refreshing";
+    const recoveryLabel = snapshot.busy ? "refreshing" : "waitingToRestore";
+    const allowanceLoading = snapshot.state === "signed_in" && snapshot.model_allowance_pending === true;
     const allowance = signedIn() ? allowanceView(snapshot.model_allowance, now) : null;
+    const groupName = !allowance ? copy(allowanceLoading ? "groupLoading" : "groupUnavailable") :
+      allowance.group === "vip" ? "VIP" : allowance.group === "free" ? copy("freeGroup") : allowance.group;
     const vip = Boolean(allowance?.vip); sidebar.classList.toggle("is-vip", vip); vipBadge.hidden = !vip;
-    group.hidden = !signedIn(); group.textContent = !allowance ? copy(snapshot.models_status ? "groupUnavailable" : "groupLoading") : allowance.group === "vip" ? "VIP" :
-      allowance.group === "free" ? copy("freeGroup") : allowance.group;
-    renderQuotas(sidebarQuota, allowance, true);
-    sidebarQuota.hidden = !signedIn();
+    group.hidden = !signedIn(); group.textContent = restoring ? copy(recoveryLabel) : groupName;
+    sidebarQuota.hidden = !signedIn() || (restoring && !allowance);
+    if (!sidebarQuota.hidden) renderQuotas(sidebarQuota, allowance, allowanceLoading, true);
+    else sidebarQuota.replaceChildren();
     sidebar.title = signedIn() ? copy("title") : copy("login");
     if (signedIn()) { sidebar.removeAttribute("aria-haspopup"); sidebar.removeAttribute("aria-controls"); }
     else { sidebar.setAttribute("aria-haspopup", "dialog"); sidebar.setAttribute("aria-controls", "account-login-dialog"); }
     const body = panel.querySelector("[data-account-body]");
     const stateText = copy(snapshot.state === "signing_in" ? "signingIn" : snapshot.state === "signed_in" ? "signedIn" :
-      snapshot.state === "authorizing" ? "waitingBrowser" : snapshot.state === "refreshing" ? "refreshing" :
+      snapshot.state === "authorizing" ? "waitingBrowser" : restoring ? recoveryLabel :
       snapshot.state === "expired" ? "expired" : "signedOut");
     const status = text("p", stateText, "account-state");
     status.setAttribute("role", "status");
     const nodes = [];
     if (signedIn()) {
-      nodes.push(renderIdentity(allowance, status, now));
+      nodes.push(renderIdentity(allowance, status, now, groupName, allowanceLoading));
       const overview = text("div", "", "account-overview");
       overview.append(renderBalance(), renderProfile()); nodes.push(overview);
-      const meters = text("section", "", "account-model-allowance");
-      renderQuotas(meters, allowance, false); nodes.push(meters);
+      if (!restoring || allowance) {
+        const meters = text("section", "", "account-model-allowance");
+        renderQuotas(meters, allowance, allowanceLoading, false); nodes.push(meters);
+      }
     } else {
       const intro = text("section", "", "account-signin");
       intro.append(status, text("p", copy("description"), "account-note account-benefits")); nodes.push(intro);
@@ -83,7 +90,7 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     if (message && message !== stateText) nodes.push(text("p", message, "account-hint"));
     if ([403, 429, 503].includes(snapshot.search_status))
       nodes.push(text("p", copy(`search${snapshot.search_status}`), "account-hint"));
-    if (signedIn()) nodes.push(renderSearchQuota());
+    if (signedIn() && (!restoring || snapshot.usage)) nodes.push(renderSearchQuota());
     if (signedIn() || snapshot.state === "refreshing")
       nodes.push(text("p", copy(snapshot.remembered ? "remembered" : "temporary"), "account-note"));
     const actions = text("div", "", "account-actions");
@@ -106,7 +113,8 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     if (focusOwner && focusAction) [...focusOwner.querySelectorAll("[data-account-action]")]
       .find((node) => node.dataset.accountAction === focusAction && node.dataset.id === focusId)?.focus({ preventScroll: true });
   }
-  function renderIdentity(allowance, status, now) {
+  function renderIdentity(allowance, status, now, groupName, allowanceLoading) {
+    const restoring = snapshot.state === "refreshing";
     const hero = text("section", "", "account-summary");
     hero.classList.toggle("is-vip", Boolean(allowance?.vip));
     const avatar = text("div", [...displayName()][0]?.toUpperCase() || "◉", "account-profile-avatar");
@@ -115,15 +123,17 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     status.className = "account-session-state";
     identity.append(status, text("h3", displayName()));
     if (snapshot.profile?.username) identity.append(text("p", `@${snapshot.profile.username}`, "account-note"));
+    hero.append(avatar, identity);
+    if (restoring && !allowance) return hero;
     const membership = text("div", "", "account-membership");
     membership.append(text("span", copy("userGroup"), "account-membership-label"));
-    const badge = text("strong", group.textContent, "account-membership-badge");
+    const badge = text("strong", groupName, "account-membership-badge");
     membership.append(badge);
     const plan = membershipView(snapshot.model_allowance, now);
-    if (!plan) membership.append(text("p", copy(snapshot.models_status ? "membershipUnavailable" : "membershipLoading"), "account-note"));
+    if (!plan) membership.append(text("p", copy(allowanceLoading ? "membershipLoading" : "membershipUnavailable"), "account-note"));
     else {
       membership.dataset.state = plan.state;
-      const stale = plan.stale || snapshot.models_status !== 200;
+      const stale = restoring || plan.stale || snapshot.models_status !== 200;
       if (plan.state === "active") {
         const number = value => value.toLocaleString(currentLocale());
         const remaining = stale ? copy("membershipUpdating") : plan.days ?
@@ -139,7 +149,7 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
         expiry.setAttribute("datetime", date.toISOString()); membership.append(expiry);
       }
     }
-    hero.append(avatar, identity, membership); return hero;
+    hero.append(membership); return hero;
   }
   function renderProfile() {
     const card = text("section", "", "account-profile-card");
@@ -178,15 +188,15 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     if (balance.stale) card.append(text("p", copy("balanceStale"), "account-hint"));
     return card;
   }
-  function renderQuotas(parent, allowance, compact) {
+  function renderQuotas(parent, allowance, loading, compact) {
     parent.replaceChildren(); parent.setAttribute("aria-label", copy("modelAllowance"));
-    if (!allowance) { parent.append(text("span", copy(snapshot?.models_status && snapshot.models_status !== 200 ? "allowanceUnavailable" : "allowanceLoading"), "account-quota-note")); return; }
+    if (!allowance) { parent.append(text("span", copy(loading ? "allowanceLoading" : "allowanceUnavailable"), "account-quota-note")); return; }
     if (!compact) parent.append(text("h3", copy("modelAllowance")), text("p", copy("tokenReset"), "account-note"));
     for (const q of allowance.quotas) {
       const counts = q.unlimited ? copy("tokensUsed", { count: q.used_tokens.toLocaleString(currentLocale()) }) :
         copy("tokensRemaining", { remaining: q.remaining_tokens.toLocaleString(currentLocale()), limit: q.limit_tokens.toLocaleString(currentLocale()) });
       const title = q.models ? copy("sharedAllowance") : q.title;
-      const row = quotaRow({ ...q, title }, copy("modelRemaining", { model: title }));
+      const row = quotaRow({ ...q, title, stale: q.stale || snapshot.state === "refreshing" }, copy("modelRemaining", { model: title }));
       row.title = counts + " · " + copy("tokenReset");
       if (!compact) {
         row.append(text("p", q.models && !q.unlimited ? copy("standardTokensRemaining", { remaining: q.remaining_tokens.toLocaleString(currentLocale()), limit: q.limit_tokens.toLocaleString(currentLocale()) }) : counts, "account-note"));

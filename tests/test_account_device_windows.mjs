@@ -78,6 +78,30 @@ test("account readiness refreshes models even when login state changes without a
  await env.account.refresh();assert.equal(env.modelChanges.length,before+3);
 });
 
+test("account renewal backoff does not look like a pending membership read", async t => {
+ const env = await setup(t);
+ const sidebar = env.ids.get("open-account"), panel = env.ids.get("account-panel");
+ env.model.target = {...signedIn(9), state: "refreshing", refresh_available: true,
+   message: "account_renewal_pending", models_status: 0};
+ await env.account.refresh();
+ assert.equal(sidebar.querySelector("[data-account-name]").textContent, "User 9");
+ assert.equal(sidebar.querySelector(".account-group").textContent, "Waiting to restore sign-in");
+ assert.equal(panel.querySelector(".account-session-state").textContent, "Waiting to restore sign-in");
+ assert.equal(panel.querySelector(".account-membership"), null);
+ assert.equal(env.doc.body.querySelector(".sidebar-model-allowance").hidden, true);
+
+ env.model.target.busy = true;
+ await env.account.refresh();
+ assert.equal(sidebar.querySelector(".account-group").textContent, "Restoring sign-in…");
+
+ env.model.target = {...signedIn(9), models_status: 0, model_allowance_pending: true};
+ await env.account.refresh();
+ assert.equal(sidebar.querySelector(".account-group").textContent, "Loading group…");
+ env.model.target.model_allowance_pending = false;
+ await env.account.refresh();
+ assert.equal(sidebar.querySelector(".account-group").textContent, "Unavailable");
+});
+
 test("account shows plan expiry and remaining VIP time, then clears the countdown after expiry",async t=>{
  const env=await setup(t),now=Math.floor(Date.now()/1000);
  env.model.target={...signedIn(9),models_status:200,model_allowance:{is_vip:true,group_id:"vip",plan_id:"vip",plan_expires_at:now+2*86400+3*3600+300,updated_at:now,daily_quotas:[]}};
