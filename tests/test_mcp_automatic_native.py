@@ -58,6 +58,10 @@ xvalue* QaProductContract(const xvalue* P,xvfs V){
  bool Changed=MdoHomeAtomicWrite("mcp/qa-auto/support/banner.txt","tampered",8,false)&&MdoMcpManagerReload();S=MdoMcpExtensionStatus(Ref);State=SdkField(S,"state");MdoMcpServerStatus Blocked={0};Blocked.Size=sizeof(Blocked);Changed=Changed&&State&&(!strcmp(State,"failed")||!strcmp(State,"needs_approval"))&&!MdoMcpManagerGetStatus(AutoId,&Blocked);xrtValueRelease(S);xrtValueObjectSetNew(R,XRT_STR_LITERAL("modified_directory_is_not_autoapproved"),xrtValueBool(Changed));
  bool Back=QaAutoInstall(Id,"data/ready.zip",Error)&&QaAutoReady(Ref);char Digest[65];Back=Back&&MdoExtensionsFingerprint("mcp",Id,Digest,NULL,Error);xvalue* Input=xrtValueObject(),*Result=NULL;SdkPut(Input,"kind","mcp");SdkPut(Input,"id",Id);SdkPut(Input,"action","remove");SdkPut(Input,"expected_revision",Digest);bool Gone=Back&&MdoExtensionsManage(Input,NULL,NULL,&Result,Error);xrtValueRelease(Input);xrtValueRelease(Result);
  Gone=Gone&&MdoHomeExternalStat(Path,&Exists,&Info)&&!Exists;Rows=MdoMcpConnections(NULL,Error);Gone=Gone&&Rows&&xrtValueCount(Rows)==5;xrtValueRelease(Rows);xrtValueObjectSetNew(R,XRT_STR_LITERAL("uninstall_retires_process_and_private_override"),xrtValueBool(Gone));
+ MdoMcpManagerUnit();
+ bool Parallel=QaAutoInstall("qa-a-slow","data/slow.zip",Error)&&QaAutoInstall("qa-z-fast","data/fast.zip",Error)&&MdoMcpManagerInit(Runtime);
+ Parallel=Parallel&&QaAutoReady("mcp:qa.z-fast-fixture")&&QaAutoReady("mcp:qa.a-slow-fixture");
+ xrtValueObjectSetNew(R,XRT_STR_LITERAL("independent_http_servers_discover_tools"),xrtValueBool(Parallel));
  SdkPut(R,"error",Error);SdkPut(R,"work_error",E.sMessage);xrtFree(Path);MdoMcpManagerUnit();xrtEnvSet("MDO_QA_AUTO_TOKEN",NULL);if(Runtime)xworkRuntimeRelease(Runtime);MdoExtensionsUnit();MdoConfigUnit();if(Home)MdoHomeUnit();return R;
 }
 '''
@@ -65,10 +69,23 @@ class Peer(BaseHTTPRequestHandler):
  retry_initializes=0
  auth_requests=0
  limit_requests=0
+ slow_started=threading.Event()
+ fast_discovered=threading.Event()
+ discovered_during_slow_handshake=False
  def log_message(self,*_):pass
  def do_POST(self):
   body=json.loads(self.rfile.read(int(self.headers.get('Content-Length',0))));method=body.get('method');status=200
   if self.path=='/auth':Peer.auth_requests+=1;status=401;result={}
+  elif self.path in ('/slow','/fast'):
+   if method=='initialize':
+    if self.path=='/slow':
+     Peer.slow_started.set()
+     Peer.discovered_during_slow_handshake=Peer.fast_discovered.wait(3)
+    result=dict(protocolVersion='2025-11-25',serverInfo=dict(name='parallel',version='1'),capabilities=dict(tools={}))
+   elif method=='tools/list':
+    if self.path=='/fast' and Peer.slow_started.wait(2):Peer.fast_discovered.set()
+    result={'tools':[]}
+   else:result={}
   elif self.path=='/limit':
    if method=='initialize':Peer.limit_requests+=1
    status=503 if Peer.limit_requests<=3 else 200
@@ -86,13 +103,13 @@ def main():
  out=ROOT/'.build/mcp-auto-native';out.mkdir(exist_ok=True);fixture=out/('home-'+uuid.uuid4().hex[:10]);(fixture/'data').mkdir(parents=True)
  binary=out/'server.exe';subprocess.run([a.cc,'-Os','-s','-DQA_AUTO',str(ROOT/'tests/fixtures/mcp-directory-server.c'),'-o',str(binary)],check=True,capture_output=True)
  peer=ThreadingHTTPServer(('127.0.0.1',0),Peer);threading.Thread(target=peer.serve_forever,daemon=True).start()
- def archive(file,alias,marker,remote=False,oauth=False,limit=False,secret=False,changed=False):
+ def archive(file,alias,marker,remote=False,oauth=False,limit=False,secret=False,changed=False,endpoint=None):
   t=template(alias,'stdio');t['inputs']=[dict(id='marker',type='text',label='Marker',description='Test',required=True,secret=False,**({'default':marker} if marker else {})),dict(id='unused',type='text',label='Unused advanced key',description='Not used',required=True,secret=True)]
   t['variants'][0]['config']['transport']=dict(type='stdio',program='bin/server.exe',arguments=[dict(input='marker')],environment=[],inherit_environment=False)
   if secret:
    t['inputs'].append(dict(id='token',type='text',label='Token',description='Private fixture credential',required=True,secret=True));t['variants'][0]['config']['transport']['environment']=[dict(name='QA_PRIVATE_TOKEN',secret_ref='input:token')];t['variants'][0]['config']['transport']['arguments'].append('new-grant' if changed else 'require-token')
   if remote:
-   t['inputs']=[dict(id='endpoint',type='text',label='Endpoint',description='Local fixture',required=True,secret=False,default=f'http://127.0.0.1:{peer.server_port}/'+('auth' if oauth else 'limit' if limit else 'retry'))];t['variants'][0]['config']['transport']=dict(type='streamable-http',endpoint=dict(input='endpoint'),headers=[])
+   t['inputs']=[dict(id='endpoint',type='text',label='Endpoint',description='Local fixture',required=True,secret=False,default=f'http://127.0.0.1:{peer.server_port}/'+(endpoint or ('auth' if oauth else 'limit' if limit else 'retry')))];t['variants'][0]['config']['transport']=dict(type='streamable-http',endpoint=dict(input='endpoint'),headers=[])
    if oauth:t['variants'][0]['config']['oauth']=dict(enabled=True,client_id='fixture',scope='read')
   m=dict(kind='mcp',id='mcp:qa.'+alias,name=alias,alias=alias,entry='mcp.json',platforms=['windows-x86_64'])
   with zipfile.ZipFile(fixture/'data'/file,'w',zipfile.ZIP_DEFLATED) as z:
@@ -101,9 +118,11 @@ def main():
  archive('retry.zip','retry-fixture',None,remote=True);archive('oauth.zip','oauth-fixture',None,remote=True,oauth=True)
  archive('secret.zip','secret-fixture','alpha',secret=True);archive('secret-update.zip','secret-fixture','alpha',secret=True);archive('secret-target.zip','secret-fixture','alpha',secret=True,changed=True)
  archive('limit.zip','limit-fixture',None,remote=True,limit=True)
+ archive('slow.zip','a-slow-fixture',None,remote=True,endpoint='slow');archive('fast.zip','z-fast-fixture',None,remote=True,endpoint='fast')
  try:
-  result=product(a,fixture,CONTRACT,out/'result.json');print(json.dumps(result,ensure_ascii=False));assert all(v for k,v in result.items() if k not in ('error','work_error')),result
-  assert Peer.retry_initializes==3,Peer.retry_initializes
+  result=product(a,fixture,CONTRACT,out/'result.json');print(json.dumps(result,ensure_ascii=False));assert all(v is True for k,v in result.items() if k not in ('error','work_error')),result
+  assert Peer.retry_initializes>=3,Peer.retry_initializes
+  assert Peer.discovered_during_slow_handshake,'Slow initialize blocked another MCP tools/list'
   # Subsequent explicit catalogue reloads may start another bounded batch.
   assert Peer.limit_requests<=15 and Peer.limit_requests>=3,Peer.limit_requests
  finally:

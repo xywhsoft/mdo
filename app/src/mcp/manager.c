@@ -124,6 +124,8 @@ typedef struct MdoMcpState {
     xmutex* PrepareLock;
     xcond* PrepareChanged;
     xthread* PrepareThread;
+    xtaskpool* PreparePool;
+    size_t PrepareActive;
     xcancel* PrepareCancel;
     uint64 PrepareGeneration;
     uint64 PrepareTicket;

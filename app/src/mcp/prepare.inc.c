@@ -1,6 +1,8 @@
 #include "../../include/mdo/recovery.h"
 #include "../../include/mdo/diagnostics.h"
-/* One host-owned initialization worker. No tool calls are replayed here. */
+/* A single sweep owns a catalogue snapshot. Independently scoped servers
+ * share a bounded pool and publish their own results. */
+#define MCP_PREPARE_PARALLELISM 4u
 static bool McpPreparePause(void)
 {
     if(!g_MdoMcp.PrepareLock)return true;
@@ -19,18 +21,17 @@ static void McpPrepareSchedule(void)
         xrtCondBroadcast(g_MdoMcp.PrepareChanged);}
     xrtMutexUnlock(g_MdoMcp.PrepareLock);
 }
-static void McpPrepareResult(cstr Id,uint64 Generation,cstr State,cstr Error,unsigned Attempt,uint64 RetryAt)
+static void McpPrepareResult(cstr Id,uint64 Ticket,uint64 Generation,cstr State,cstr Error,unsigned Attempt,uint64 RetryAt)
 {
-    xrtMutexLock(g_MdoMcp.PrepareLock);
-    const xvalue* Existing=xrtValueObjectGet(g_MdoMcp.PrepareResults,xrtStrView(Id));
-    cstr OldState=MdoExtensionText(Existing,"state",32);
-    bool Unchanged=OldState&&!strcmp(OldState,"ready")&&!strcmp(State,"ready");
-    xrtMutexUnlock(g_MdoMcp.PrepareLock);
-    if(Unchanged)return;
     xvalue* Row=xrtValueObject();bool Ok=Row&&McpDirectoryPut(Row,"state",State)&&McpDirectoryPut(Row,"error",Error?Error:"")&&
         xrtValueObjectSetNew(Row,XRT_STR_LITERAL("attempt"),xrtValueUInt(Attempt))&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("retry_at"),xrtValueUInt(RetryAt))&&xrtValueObjectSetNew(Row,XRT_STR_LITERAL("generation"),xrtValueUInt(Generation));
     xrtMutexLock(g_MdoMcp.PrepareLock);
-    if(Ok&&Generation==g_MdoMcp.PrepareGeneration&&!g_MdoMcp.PrepareStopping)
+    const xvalue* Existing=xrtValueObjectGet(g_MdoMcp.PrepareResults,xrtStrView(Id));
+    cstr OldState=MdoExtensionText(Existing,"state",32);
+    uint64 OldGeneration=0;
+    xrtValueGetUInt(xrtValueObjectGet(Existing,XRT_STR_LITERAL("generation")),&OldGeneration);
+    bool Unchanged=Generation==OldGeneration&&OldState&&!strcmp(OldState,"ready")&&!strcmp(State,"ready");
+    if(Ok&&!Unchanged&&Ticket==g_MdoMcp.PrepareTicket&&!g_MdoMcp.PrepareStopping&&!g_MdoMcp.PrepareSuspended)
         (void)xrtValueObjectSet(g_MdoMcp.PrepareResults,xrtStrView(Id),Row);
     xrtMutexUnlock(g_MdoMcp.PrepareLock);xrtValueRelease(Row);
 }
@@ -40,6 +41,46 @@ static bool McpPrepareTransient(const xwork_error* Error)
     if(Error->eCode==XWORK_ERROR_IO&&strstr(Error->sMessage,"failed to start MCP stdio server"))return false;
     return Error->eCode==XWORK_ERROR_IO||Error->eCode==XWORK_ERROR_TIMEOUT;
 }
+typedef struct McpPrepareJob {
+    const MdoMcpServerEntry* Entry;
+    uint64 Ticket,Generation;
+    unsigned Attempt;
+} McpPrepareJob;
+
+static void McpPrepareJobDrop(ptr Data,ptr Unused)
+{
+    (void)Unused;
+    xrtFree(Data);
+    xrtMutexLock(g_MdoMcp.PrepareLock);
+    --g_MdoMcp.PrepareActive;
+    xrtCondBroadcast(g_MdoMcp.PrepareChanged);
+    xrtMutexUnlock(g_MdoMcp.PrepareLock);
+}
+
+static xtaskoutcome McpPrepareJobRun(xcancel* Cancel,ptr Data,xtaskvalue* Result)
+{
+    (void)Result;
+    McpPrepareJob* Job=Data;
+    const MdoMcpServerEntry* Entry=Job->Entry;
+    uint64 Ms=(uint64)Entry->StartupTimeoutMilliseconds+Entry->RequestTimeoutMilliseconds;
+    uint64 Deadline=MdoDeadlineAfterUs((Ms>60000?60000:Ms)*1000);
+    McpPrepareResult(Entry->Id,Job->Ticket,Job->Generation,"starting","",Job->Attempt-1,0);
+    xwork_error Error;xworkErrorInit(&Error);
+    bool Ok=xworkRuntimeRefreshMcpServer(g_MdoMcp.Runtime,Entry->Id,Cancel,Deadline,&Error);
+    if(xrtCancelRequested(Cancel))return XTASK_CANCELLED;
+    if(Ok){MdoMcpServerStatus Ready={0};Ready.Size=sizeof(Ready);(void)MdoMcpManagerGetStatus(Entry->Id,&Ready);}
+    xvalue* Auth=MdoMcpAuthorizationStatus(Entry->Id);
+    bool Login=MdoMcpTemplateFlag(Auth,"needs_authorization",false);xrtValueRelease(Auth);
+    bool Retry=!Ok&&!Login&&McpPrepareTransient(&Error);
+    uint32 Limit=MdoRecoveryRetryLimit();
+    uint64 Delay=Job->Attempt>Limit?MDO_RECOVERY_WAIT_MS:(Job->Attempt>6?30000u:(1000u<<(Job->Attempt-1u)));
+    cstr State=Ok?"ready":Login||Error.uHttpStatus==401?Entry->OAuthJson?"needs_authorization":"needs_configuration":
+        Retry?Job->Attempt>Limit?"waiting":"starting":"failed";
+    McpPrepareResult(Entry->Id,Job->Ticket,Job->Generation,State,Error.sMessage,
+        Ok?0:Job->Attempt,Retry?MdoDeadlineAfterUs(Delay*1000):0);
+    return XTASK_SUCCESS;
+}
+
 static int32 McpPrepareWorker(void* Data)
 {
     (void)Data;uint64 Ticket=0;
@@ -55,7 +96,7 @@ static int32 McpPrepareWorker(void* Data)
         for(size_t I=0;Catalog&&I<Catalog->Count&&!xrtCancelRequested(Cancel);I++){
             const MdoMcpServerEntry* Entry=&Catalog->Entries[I];if(!Entry->Enabled)continue;
             MdoMcpServerStatus Status={0};Status.Size=sizeof(Status);
-            if(MdoMcpManagerGetStatus(Entry->Id,&Status)&&Status.Connected&&Status.ToolsDiscovered){McpPrepareResult(Entry->Id,Completed,"ready","",0,0);continue;}
+            if(MdoMcpManagerGetStatus(Entry->Id,&Status)&&Status.Connected&&Status.ToolsDiscovered){McpPrepareResult(Entry->Id,Ticket,Completed,"ready","",0,0);continue;}
             xrtMutexLock(g_MdoMcp.PrepareLock);
             const xvalue* Previous=xrtValueObjectGet(g_MdoMcp.PrepareResults,xrtStrView(Entry->Id));
             uint64 Attempt=0,RetryAt=0;xrtValueGetUInt(xrtValueObjectGet(Previous,XRT_STR_LITERAL("attempt")),&Attempt);
@@ -66,24 +107,28 @@ static int32 McpPrepareWorker(void* Data)
             xrtMutexUnlock(g_MdoMcp.PrepareLock);
             if(ManualOnly||AwaitConfiguration||(RetryAt&&!MdoDeadlineExpired(RetryAt)))continue;
             if(Attempt<UINT32_MAX)Attempt++;
-            uint64 Milliseconds=(uint64)Entry->StartupTimeoutMilliseconds+Entry->RequestTimeoutMilliseconds;
-            if(Milliseconds>60000)Milliseconds=60000;
-            uint64 Deadline=MdoDeadlineAfterUs(Milliseconds*1000);
-            {
-                McpPrepareResult(Entry->Id,Completed,"starting","",(unsigned)Attempt,0);
-                xwork_error Error;xworkErrorInit(&Error);
-                bool Ok=xworkRuntimeRefreshMcpServer(g_MdoMcp.Runtime,Entry->Id,Cancel,Deadline,&Error);
-                if(Ok){MdoMcpServerStatus Ready={0};Ready.Size=sizeof(Ready);(void)MdoMcpManagerGetStatus(Entry->Id,&Ready);}
-                if(xrtCancelRequested(Cancel))break;
-                xvalue* Auth=MdoMcpAuthorizationStatus(Entry->Id);bool Login=MdoMcpTemplateFlag(Auth,"needs_authorization",false);xrtValueRelease(Auth);
-                bool Retry=!Ok&&!Login&&McpPrepareTransient(&Error);
-                uint32 Limit=MdoRecoveryRetryLimit();
-                uint64 Delay=Attempt>Limit?MDO_RECOVERY_WAIT_MS:(Attempt>6?30000u:(1000u<<((unsigned)Attempt-1u)));
-                McpPrepareResult(Entry->Id,Completed,Ok?"ready":Login||Error.uHttpStatus==401?Entry->OAuthJson?"needs_authorization":"needs_configuration":Retry?Attempt>Limit?"waiting":"starting":"failed",Error.sMessage,Ok?0:(unsigned)Attempt,Retry?MdoDeadlineAfterUs(Delay*1000):0);
+            McpPrepareJob* Job=xrtMalloc(sizeof(*Job));
+            if(!Job)continue;
+            *Job=(McpPrepareJob){Entry,Ticket,Completed,(unsigned)Attempt};
+            xtaskargs Args={.Cancel=Cancel,.Destroy=McpPrepareJobDrop};
+            xrtMutexLock(g_MdoMcp.PrepareLock);
+            while(g_MdoMcp.PrepareActive>=MCP_PREPARE_PARALLELISM&&!xrtCancelRequested(Cancel))
+                xrtCondWait(g_MdoMcp.PrepareChanged,g_MdoMcp.PrepareLock);
+            xfuture* Future=NULL;
+            if(!xrtCancelRequested(Cancel)){
+                ++g_MdoMcp.PrepareActive;
+                Future=xrtTaskSubmit(g_MdoMcp.PreparePool,McpPrepareJobRun,Job,&Args);
+                if(!Future)--g_MdoMcp.PrepareActive;
             }
+            xrtMutexUnlock(g_MdoMcp.PrepareLock);
+            if(Future)xrtFutureDestroy(Future);else xrtFree(Job);
         }
+        xrtMutexLock(g_MdoMcp.PrepareLock);
+        while(g_MdoMcp.PrepareActive)xrtCondWait(g_MdoMcp.PrepareChanged,g_MdoMcp.PrepareLock);
+        g_MdoMcp.PrepareCancel=NULL;
+        xrtCondBroadcast(g_MdoMcp.PrepareChanged);
+        xrtMutexUnlock(g_MdoMcp.PrepareLock);
         MdoMcpCatalogRelease(Catalog);
-        xrtMutexLock(g_MdoMcp.PrepareLock);g_MdoMcp.PrepareCancel=NULL;xrtCondBroadcast(g_MdoMcp.PrepareChanged);xrtMutexUnlock(g_MdoMcp.PrepareLock);
         xrtCancelDestroy(Cancel);
     }
     return 0;
@@ -141,6 +186,8 @@ static bool McpPrepareInit(void)
 {
     g_MdoMcp.PrepareLock=xrtMutexCreate();g_MdoMcp.PrepareChanged=xrtCondCreate();g_MdoMcp.PrepareResults=xrtValueObject();
     if(!g_MdoMcp.PrepareLock||!g_MdoMcp.PrepareChanged||!g_MdoMcp.PrepareResults)return false;
+    xtaskpoolconfig Pool={.Threads=MCP_PREPARE_PARALLELISM,.QueueLimit=MCP_PREPARE_PARALLELISM};
+    g_MdoMcp.PreparePool=xrtTaskPoolCreate(&Pool);if(!g_MdoMcp.PreparePool)return false;
     g_MdoMcp.PrepareThread=xrtThreadCreate(McpPrepareWorker,NULL,0);return g_MdoMcp.PrepareThread!=NULL;
 }
 static void McpPrepareUnit(void)
@@ -150,6 +197,7 @@ static void McpPrepareUnit(void)
         if(g_MdoMcp.PrepareChanged)xrtCondBroadcast(g_MdoMcp.PrepareChanged);
         xrtMutexUnlock(g_MdoMcp.PrepareLock);}
     if(g_MdoMcp.PrepareThread){xrtThreadWait(g_MdoMcp.PrepareThread);xrtThreadDestroy(g_MdoMcp.PrepareThread);}
+    if(g_MdoMcp.PreparePool){xrtTaskPoolDestroy(g_MdoMcp.PreparePool);g_MdoMcp.PreparePool=NULL;}
     xrtValueRelease(g_MdoMcp.PrepareResults);if(g_MdoMcp.PrepareChanged)xrtCondDestroy(g_MdoMcp.PrepareChanged);if(g_MdoMcp.PrepareLock)xrtMutexDestroy(g_MdoMcp.PrepareLock);
     g_MdoMcp.PrepareLock=NULL;g_MdoMcp.PrepareChanged=NULL;g_MdoMcp.PrepareThread=NULL;g_MdoMcp.PrepareResults=NULL;
 }
