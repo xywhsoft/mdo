@@ -154,7 +154,12 @@ static bool ProbeEventWrite(xfile F,const char* J,size_t S){
                     return account if account.get('message')=='login_expired' else None
                 expired=until(expired_account)
                 assert expired['state']=='expired' and not expired['refresh_available'] and 'profile' not in expired,expired
-                until(lambda:any(e.get('model_error_kind') in ('waiting_account','waiting_model') for e in session_events(port,'/api/v1'+path)))
+                def waiting_for_account():
+                    events=session_events(port,'/api/v1'+path)
+                    state=call('GET','/runs/'+run['id'])
+                    assert not state['terminal'], (state,[(e.get('kind'), e.get('model_error_kind')) for e in events[-12:]])
+                    return any(e.get('model_error_kind') in ('waiting_account','waiting_model') for e in events)
+                until(waiting_for_account)
                 assert not call('GET','/runs/'+run['id'])['terminal']
                 call('POST','/account/login',{'identifier':'fixture','password':'fixture-only','remember':False})
             if args.exhausted:

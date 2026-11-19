@@ -46,10 +46,21 @@ typedef struct MdoAccountWaiter {
     bool Skipped;
     char Query[1001];
 } MdoAccountWaiter;
+typedef enum MdoAccountReadKind {
+    MDO_ACCOUNT_READ_PROFILE, MDO_ACCOUNT_READ_SEARCH, MDO_ACCOUNT_READ_ALLOWANCE,
+    MDO_ACCOUNT_READ_CATALOG, MDO_ACCOUNT_READ_BALANCE, MDO_ACCOUNT_READ_COUNT
+} MdoAccountReadKind;
+typedef struct MdoAccountReadSlot {
+    xcancel* Cancel;
+    uint64 Next;
+    uint64 LastStarted;
+} MdoAccountReadSlot;
 typedef struct MdoAccountManager {
     xmutex* Lock;
     xcond* Changed;
     xthread* Worker;
+    xtaskpool* ReadPool;
+    MdoAccountReadSlot Reads[MDO_ACCOUNT_READ_COUNT];
     xcancel* WorkCancel;
     xcancel* SessionCancel;
     MdoAccountTokens Tokens;
@@ -60,7 +71,7 @@ typedef struct MdoAccountManager {
     xvalue* Usage;
     xvalue* Allowance;
     xvalue* Balance;
-    uint64 NextProfile, NextRefresh;
+    uint64 NextRefresh;
     unsigned RefreshFailures;
     uint64 ModelCredentialRevision; /* successful identity material changes only */
     uint16 ModelsStatus;
@@ -79,7 +90,7 @@ typedef struct MdoAccountManager {
 
 extern MdoAccountManager g_MdoAccount;
 enum { MDO_ACCOUNT_WORK_NONE, MDO_ACCOUNT_WORK_EXCHANGE, MDO_ACCOUNT_WORK_REFRESH,
-    MDO_ACCOUNT_WORK_PROFILE, MDO_ACCOUNT_WORK_LOGOUT, MDO_ACCOUNT_WORK_PASSWORD };
+    MDO_ACCOUNT_WORK_LOGOUT, MDO_ACCOUNT_WORK_PASSWORD };
 
 bool MdoAccountOrigin(cstr Url, char Output[MDO_ACCOUNT_ORIGIN_LIMIT]);
 bool MdoAccountRandom(char Output[65]);

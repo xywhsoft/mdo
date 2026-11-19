@@ -150,14 +150,19 @@ static bool MdoAccountModelAccess(xcancel* Cancel,uint64 Deadline,MdoModelOnline
 static void MdoAccountModelRelease(MdoModelOnlineAccess* Access,int Status)
 {
     MdoAccountLease* Lease=Access->Handle;if(Status==401)(void)MdoAccountRejectAccess(Lease);
+    if(Lease&&g_MdoAccount.Initialized&&Status!=401){
+        xrtMutexLock(g_MdoAccount.Lock);
+        if(Lease->Generation==g_MdoAccount.Epoch&&Lease->MemberId==g_MdoAccount.Tokens.MemberId){
+            MdoAccountRequestReadLocked(MDO_ACCOUNT_READ_ALLOWANCE);
+            MdoAccountRequestReadLocked(MDO_ACCOUNT_READ_BALANCE);
+        }
+        xrtMutexUnlock(g_MdoAccount.Lock);
+    }
     MdoAccountRelease(Lease);xrtFree(Lease);memset(Access,0,sizeof(*Access));
-    if(!g_MdoAccount.Initialized)return;
-    xrtMutexLock(g_MdoAccount.Lock);if(g_MdoAccount.Tokens.Access[0])g_MdoAccount.NextProfile=0;
-    (void)MdoAccountQueueLocked(MDO_ACCOUNT_WORK_PROFILE);xrtMutexUnlock(g_MdoAccount.Lock);
 }
 static void MdoAccountClearModelsLocked(void)
 {
     xrtValueRelease(g_MdoAccount.Allowance);g_MdoAccount.Allowance=NULL;
-    g_MdoAccount.OnlineVersion[0]=0;g_MdoAccount.ModelsStatus=0;g_MdoAccount.CatalogStatus=0;g_MdoAccount.NextProfile=0;
+    g_MdoAccount.OnlineVersion[0]=0;g_MdoAccount.ModelsStatus=0;g_MdoAccount.CatalogStatus=0;
     (void)MdoModelManagerSetOnlineCatalog(NULL);
 }

@@ -8,21 +8,30 @@
 static bool MdoAccountLeaseLocked(xcancel*,MdoAccountLease*);
 static bool MdoAccountQueueLocked(unsigned);
 static void MdoAccountCancelLease(void*);
+static void MdoAccountRequestReadLocked(MdoAccountReadKind);
 #include "model_allowance.inc.c"
 #include "balance.inc.c"
 
 MdoAccountManager g_MdoAccount;
 
-/* All session transitions and the single pending job belong to Lock. The
- * worker alone performs identity HTTP requests, outside Lock. Epoch prevents
- * a late response from resurrecting an account after logout or a new login. */
+/* Session transitions belong to Lock. Credential changes are serialized by
+ * the account worker. Each background read has at most one job in flight. */
 static void MdoAccountChangedLocked(void)
 {
     ++g_MdoAccount.Revision;
     xrtCondBroadcast(g_MdoAccount.Changed);
 }
+static void MdoAccountResetReadsLocked(void)
+{
+    for (size_t i = 0; i < MDO_ACCOUNT_READ_COUNT; ++i) {
+        MdoAccountReadSlot* slot = &g_MdoAccount.Reads[i];
+        xrtCancelRequest(slot->Cancel);
+        slot->Next = slot->LastStarted = 0;
+    }
+}
 static void MdoAccountClearTokensLocked(void)
 {
+    MdoAccountResetReadsLocked();
     xrtSecureZero(&g_MdoAccount.Tokens, sizeof(g_MdoAccount.Tokens));
     g_MdoAccount.Saved = false;
     g_MdoAccount.ExpiredMemberId = 0;
@@ -55,7 +64,6 @@ static bool MdoAccountQueueLocked(unsigned Kind)
          g_MdoAccount.Work.Kind == MDO_ACCOUNT_WORK_REFRESH ||
          g_MdoAccount.Work.Kind == MDO_ACCOUNT_WORK_EXCHANGE ||
          g_MdoAccount.Work.Kind == MDO_ACCOUNT_WORK_PASSWORD)) return true;
-    if (Kind == MDO_ACCOUNT_WORK_PROFILE && (g_MdoAccount.Busy || g_MdoAccount.Work.Kind)) return true;
     if (Kind == MDO_ACCOUNT_WORK_REFRESH && !g_MdoAccount.Tokens.Refresh[0]) return false;
     if (Kind == MDO_ACCOUNT_WORK_REFRESH && !MdoDeadlineExpired(g_MdoAccount.NextRefresh)) return true;
     xrtSecureZero(&g_MdoAccount.Work, sizeof(g_MdoAccount.Work));
@@ -99,14 +107,152 @@ static void MdoAccountSecretValueUnit(xvalue* Data)
 {
     MdoAccountSecretValueRelease(Data);
 }
+
+typedef struct MdoAccountReadJob {
+    MdoAccountReadKind Kind;
+    xcancel* Cancel;
+    uint64 Epoch, CredentialRevision, Member;
+    char Access[MDO_ACCOUNT_TOKEN_LIMIT];
+} MdoAccountReadJob;
+
+static const struct {
+    cstr Path;
+    uint64 IntervalUs;
+} MdoAccountReadConfig[MDO_ACCOUNT_READ_COUNT] = {
+    [MDO_ACCOUNT_READ_PROFILE] = {"/api/v1/profile", 60000000},
+    [MDO_ACCOUNT_READ_SEARCH] = {"/api/v1/search/usage", 60000000},
+    [MDO_ACCOUNT_READ_ALLOWANCE] = {"/api/v1/ai/allowance", 30000000},
+    [MDO_ACCOUNT_READ_CATALOG] = {"/api/v1/ai/catalog", 300000000},
+    [MDO_ACCOUNT_READ_BALANCE] = {"/api/v1/billing/account", 60000000}
+};
+
+static void MdoAccountRequestReadLocked(MdoAccountReadKind Kind)
+{
+    /* Coalesce completion bursts without losing a change during a read. */
+    MdoAccountReadSlot* slot = &g_MdoAccount.Reads[Kind];
+    uint64 due = slot->LastStarted + 3000000u;
+    if (slot->Next > due) {
+        slot->Next = due;
+        xrtCondBroadcast(g_MdoAccount.Changed);
+    }
+}
+
+static void MdoAccountReadDrop(ptr Data, ptr Unused)
+{
+    (void)Unused;
+    MdoAccountReadJob* job = Data;
+    xrtMutexLock(g_MdoAccount.Lock);
+    g_MdoAccount.Reads[job->Kind].Cancel = NULL;
+    xrtCondBroadcast(g_MdoAccount.Changed);
+    xrtMutexUnlock(g_MdoAccount.Lock);
+    xrtCancelDestroy(job->Cancel);
+    xrtSecureZero(job, sizeof(*job));
+    xrtFree(job);
+}
+
+static xtaskoutcome MdoAccountReadRun(xcancel* Cancel, ptr Data, xtaskvalue* Out)
+{
+    (void)Out;
+    MdoAccountReadJob* job = Data;
+    uint16 status = 0;
+    xvalue* data = MdoAccountClient(g_MdoAccount.Origin,
+        MdoAccountReadConfig[job->Kind].Path, "GET", NULL, job->Access, Cancel, &status);
+    xvalue* value = NULL;
+    switch (job->Kind) {
+    case MDO_ACCOUNT_READ_PROFILE: value = MdoAccountProfile(data, job->Member); break;
+    case MDO_ACCOUNT_READ_SEARCH: value = MdoAccountUsage(data); break;
+    case MDO_ACCOUNT_READ_ALLOWANCE: value = MdoAccountAllowance(data, job->Member); break;
+    case MDO_ACCOUNT_READ_BALANCE: value = MdoAccountBalance(data, job->Member); break;
+    case MDO_ACCOUNT_READ_CATALOG: break;
+    default: break;
+    }
+    xrtMutexLock(g_MdoAccount.Lock);
+    if (!g_MdoAccount.Stopping && !xrtCancelRequested(Cancel) &&
+        job->Epoch == g_MdoAccount.Epoch && job->Member == g_MdoAccount.Tokens.MemberId &&
+        job->CredentialRevision == g_MdoAccount.ModelCredentialRevision) {
+        xvalue** target = NULL;
+        bool save_profile = false;
+        switch (job->Kind) {
+        case MDO_ACCOUNT_READ_PROFILE:
+            target = &g_MdoAccount.Profile;
+            save_profile = value && !*target && g_MdoAccount.Remember;
+            break;
+        case MDO_ACCOUNT_READ_SEARCH:
+            target = &g_MdoAccount.Usage;
+            if (status) g_MdoAccount.SearchStatus = status;
+            break;
+        case MDO_ACCOUNT_READ_ALLOWANCE:
+            target = &g_MdoAccount.Allowance;
+            g_MdoAccount.ModelsStatus = !value && status == 200 ? 502 : status;
+            break;
+        case MDO_ACCOUNT_READ_BALANCE:
+            target = &g_MdoAccount.Balance;
+            g_MdoAccount.BalanceStatus = !value && status == 200 ? 502 : status;
+            break;
+        case MDO_ACCOUNT_READ_CATALOG: {
+            cstr version = MdoAccountText(data, "version", 64);
+            bool ok = status == 200 && version && strlen(version) == 64;
+            if (ok && strcmp(version, g_MdoAccount.OnlineVersion)) {
+                ok = MdoModelManagerSetOnlineCatalog(data);
+                if (ok) strcpy(g_MdoAccount.OnlineVersion, version);
+            }
+            g_MdoAccount.CatalogStatus = ok ? 200u : status && status != 200 ? status : 502u;
+            if (!ok) g_MdoAccount.Reads[MDO_ACCOUNT_READ_CATALOG].Next = MdoDeadlineAfterUs(30000000u);
+            break;
+        }
+        default: break;
+        }
+        if (target && value) {
+            xrtValueRelease(*target);
+            *target = value;
+            value = NULL;
+        }
+        if (save_profile) (void)MdoAccountCredentialSaveLocked(false);
+        MdoAccountChangedLocked();
+    }
+    xrtMutexUnlock(g_MdoAccount.Lock);
+    xrtValueRelease(value);
+    xrtValueRelease(data);
+    return XTASK_SUCCESS;
+}
+
+static void MdoAccountDispatchReadsLocked(void)
+{
+    if (!g_MdoAccount.ReadPool || g_MdoAccount.Stopping || !g_MdoAccount.Tokens.Access[0] ||
+        MdoDeadlineExpired(g_MdoAccount.Tokens.Expires) || g_MdoAccount.Authorization.State[0]) return;
+    for (size_t i = 0; i < MDO_ACCOUNT_READ_COUNT; ++i) {
+        MdoAccountReadSlot* slot = &g_MdoAccount.Reads[i];
+        if (slot->Cancel || !MdoDeadlineExpired(slot->Next)) continue;
+        slot->Next = MdoDeadlineAfterUs(1000000u);
+        MdoAccountReadJob* job = xrtCalloc(1, sizeof(*job));
+        if (job) job->Cancel = xrtCancelCreate();
+        if (!job || !job->Cancel) { xrtFree(job); continue; }
+        job->Kind = (MdoAccountReadKind)i;
+        job->Epoch = g_MdoAccount.Epoch;
+        job->CredentialRevision = g_MdoAccount.ModelCredentialRevision;
+        job->Member = g_MdoAccount.Tokens.MemberId;
+        strcpy(job->Access, g_MdoAccount.Tokens.Access);
+        xtaskargs args = {.Cancel = job->Cancel, .Destroy = MdoAccountReadDrop};
+        xfuture* future = xrtTaskSubmit(g_MdoAccount.ReadPool, MdoAccountReadRun, job, &args);
+        if (!future) {
+            xrtCancelDestroy(job->Cancel);
+            xrtSecureZero(job, sizeof(*job));
+            xrtFree(job);
+            continue;
+        }
+        slot->Cancel = job->Cancel;
+        slot->LastStarted = MdoMonotonicUs();
+        slot->Next = MdoDeadlineAfterUs(MdoAccountReadConfig[i].IntervalUs);
+        xrtFutureDestroy(future);
+    }
+}
+
 static int32 MdoAccountWorker(void* Unused)
 {
     (void)Unused;
     for (;;) {
-        MdoAccountWork work; xcancel* cancel; uint16 status = 0, usage_status = 0;
-        xvalue *body=NULL,*data=NULL,*profile=NULL,*usage=NULL,*allowance=NULL,*catalog=NULL,*balance=NULL;
-        uint16 models_status=0,catalog_status=0;
-        uint16 balance_status=0;
+        MdoAccountWork work; xcancel* cancel; uint16 status = 0;
+        xvalue *body=NULL,*data=NULL;
         MdoAccountTokens tokens; bool ok = false;
         memset(&work, 0, sizeof(work)); memset(&tokens, 0, sizeof(tokens));
         xrtMutexLock(g_MdoAccount.Lock);
@@ -115,18 +261,15 @@ static int32 MdoAccountWorker(void* Unused)
                 MdoDeadlineExpired(g_MdoAccount.NextRefresh) && !g_MdoAccount.Authorization.State[0]) {
                 (void)MdoAccountQueueLocked(MDO_ACCOUNT_WORK_REFRESH); break;
             }
-            if(g_MdoAccount.Tokens.Access[0]&&!MdoDeadlineExpired(g_MdoAccount.Tokens.Expires)&&
-                MdoDeadlineExpired(g_MdoAccount.NextProfile)&&!g_MdoAccount.Authorization.State[0]){
-                (void)MdoAccountQueueLocked(MDO_ACCOUNT_WORK_PROFILE);break;}
             if (g_MdoAccount.Authorization.Expires && g_MdoAccount.Authorization.Expires <= MdoUtcUs()/1000000) {
                 MdoAccountClearAuthorizationLocked(); strcpy(g_MdoAccount.Message, "authorization_expired");
                 MdoAccountChangedLocked();
             }
+            MdoAccountDispatchReadsLocked();
             xrtCondWaitFor(g_MdoAccount.Changed, g_MdoAccount.Lock, MdoDurationMs(1000000));
         }
         if (g_MdoAccount.Stopping) { xrtMutexUnlock(g_MdoAccount.Lock); break; }
         work = g_MdoAccount.Work; xrtSecureZero(&g_MdoAccount.Work, sizeof(g_MdoAccount.Work));
-        if(work.Kind==MDO_ACCOUNT_WORK_PROFILE)g_MdoAccount.NextProfile=MdoDeadlineAfterUs(30000000);
         g_MdoAccount.Busy = true; g_MdoAccount.BusyKind = work.Kind;
         cancel = xrtCancelCreate(); g_MdoAccount.WorkCancel = cancel;
         MdoAccountChangedLocked(); xrtMutexUnlock(g_MdoAccount.Lock);
@@ -152,21 +295,6 @@ static int32 MdoAccountWorker(void* Unused)
             ok = MdoAccountClientTokens(data, &tokens) &&
                 (work.Kind != MDO_ACCOUNT_WORK_REFRESH || tokens.MemberId == work.Tokens.MemberId);
             MdoAccountSecretValueUnit(data); data = NULL;
-        } else if (cancel && work.Kind == MDO_ACCOUNT_WORK_PROFILE) {
-            data = MdoAccountClient(work.Origin, "/api/v1/profile", "GET", NULL, work.Tokens.Access, cancel, &status);
-            profile = MdoAccountProfile(data, work.Tokens.MemberId); xrtValueRelease(data); data = NULL;
-            data = MdoAccountClient(work.Origin, "/api/v1/search/usage", "GET", NULL, work.Tokens.Access, cancel, &usage_status);
-            usage = MdoAccountUsage(data); xrtValueRelease(data); data = NULL;
-            data=MdoAccountClient(work.Origin,"/api/v1/ai/allowance","GET",NULL,work.Tokens.Access,cancel,&models_status);
-            allowance=MdoAccountAllowance(data,work.Tokens.MemberId);xrtValueRelease(data);data=NULL;
-            if(!allowance&&models_status==200)models_status=502;
-            catalog=MdoAccountClient(work.Origin,"/api/v1/ai/catalog","GET",NULL,work.Tokens.Access,cancel,&catalog_status);
-            if(catalog_status!=200){xrtValueRelease(catalog);catalog=NULL;}
-            data = MdoAccountClient(work.Origin, "/api/v1/billing/account", "GET", NULL,
-                work.Tokens.Access, cancel, &balance_status);
-            if ( balance_status == 200u ) balance = MdoAccountBalance(data, work.Tokens.MemberId);
-            xrtValueRelease(data); data = NULL;
-            if ( !balance && balance_status == 200u ) balance_status = 502u;
         } else if (cancel && work.Kind == MDO_ACCOUNT_WORK_LOGOUT) {
             data = MdoAccountClient(work.Origin, "/api/v1/logout", "POST", NULL, work.Tokens.Access, cancel, &status);
             xrtValueRelease(data); data = NULL;
@@ -196,7 +324,9 @@ static int32 MdoAccountWorker(void* Unused)
                     ++g_MdoAccount.ModelCredentialRevision;
                     g_MdoAccount.NextRefresh = 0; g_MdoAccount.RefreshFailures = 0;
                     (void)MdoAccountCredentialSaveLocked(replaced);
-                    (void)MdoAccountQueueLocked(MDO_ACCOUNT_WORK_PROFILE);
+                    MdoAccountResetReadsLocked();
+                    if (work.Kind == MDO_ACCOUNT_WORK_EXCHANGE) MdoAccountClearAuthorizationLocked();
+                    MdoAccountDispatchReadsLocked();
                 } else {
                     if (work.Kind == MDO_ACCOUNT_WORK_REFRESH) {
                         /* Keep the account binding so a paused run can resume
@@ -220,33 +350,14 @@ static int32 MdoAccountWorker(void* Unused)
                         "account_renewal_pending" : "account_connection_failed");
                 }
                 ++g_MdoAccount.RefreshSerial;
-                if (work.Kind == MDO_ACCOUNT_WORK_EXCHANGE) MdoAccountClearAuthorizationLocked();
-            } else if (work.Kind == MDO_ACCOUNT_WORK_PROFILE) {
-                bool save_profile = profile && !g_MdoAccount.Profile;
-                if (profile) { xrtValueRelease(g_MdoAccount.Profile); g_MdoAccount.Profile = profile; profile = NULL; }
-                if (save_profile && g_MdoAccount.Remember) (void)MdoAccountCredentialSaveLocked(false);
-                if (usage) { xrtValueRelease(g_MdoAccount.Usage); g_MdoAccount.Usage = usage; usage = NULL; }
-                if (usage_status) g_MdoAccount.SearchStatus = usage_status;
-                if(allowance){xrtValueRelease(g_MdoAccount.Allowance);g_MdoAccount.Allowance=allowance;allowance=NULL;}
-                g_MdoAccount.ModelsStatus=models_status;
-                if ( balance ) { xrtValueRelease(g_MdoAccount.Balance); g_MdoAccount.Balance = balance; balance = NULL; }
-                g_MdoAccount.BalanceStatus = balance_status;
-                cstr version=MdoAccountText(catalog,"version",64);
-                bool catalog_ok=version&&strlen(version)==64;
-                if(catalog_ok&&strcmp(version,g_MdoAccount.OnlineVersion)){
-                    catalog_ok=MdoModelManagerSetOnlineCatalog(catalog);
-                    if(catalog_ok)strcpy(g_MdoAccount.OnlineVersion,version);
-                }
-                g_MdoAccount.CatalogStatus=catalog_ok?200u:(catalog_status&&catalog_status!=200u?catalog_status:502u);
-                /* Profile reads never invalidate a working token on transient
-                 * network failures. Search handles a real 401 with one refresh. */
+                if (!ok && work.Kind == MDO_ACCOUNT_WORK_EXCHANGE) MdoAccountClearAuthorizationLocked();
             } else if (work.Kind == MDO_ACCOUNT_WORK_LOGOUT && status != 200) {
                 strcpy(g_MdoAccount.Message, "local_logout_only");
             }
             MdoAccountChangedLocked();
         }
         xrtMutexUnlock(g_MdoAccount.Lock);
-        xrtCancelDestroy(cancel);xrtValueRelease(profile);xrtValueRelease(usage);xrtValueRelease(allowance);xrtValueRelease(catalog);xrtValueRelease(balance);
+        xrtCancelDestroy(cancel);
         xrtSecureZero(&work, sizeof(work)); xrtSecureZero(&tokens, sizeof(tokens));
     }
     return 0;
@@ -278,6 +389,9 @@ bool MdoAccountInit(void)
     xrtMutexUnlock(g_MdoAccount.Lock);
     MdoModelOnlineAuthority authority={MDO_ACCOUNT_SERVICE_ORIGIN,MdoAccountModelAccess,MdoAccountModelRelease,MdoAccountModelState,MdoAccountModelPin,MdoAccountModelRecoveryRevision};
     MdoModelManagerSetOnlineAuthority(&authority);
+    xtaskpoolconfig pool = {.Threads = MDO_ACCOUNT_READ_COUNT, .QueueLimit = MDO_ACCOUNT_READ_COUNT};
+    g_MdoAccount.ReadPool = xrtTaskPoolCreate(&pool);
+    if (!g_MdoAccount.ReadPool) goto failed;
     g_MdoAccount.Worker = xrtThreadCreate(MdoAccountWorker, NULL, 0);
     if (g_MdoAccount.Worker) return true;
 failed:
@@ -288,11 +402,17 @@ void MdoAccountUnit(void)
     if (g_MdoAccount.Lock) {
         xrtMutexLock(g_MdoAccount.Lock); g_MdoAccount.Stopping = true;
         xrtCancelRequest(g_MdoAccount.WorkCancel); xrtCancelRequest(g_MdoAccount.SessionCancel);
+        MdoAccountResetReadsLocked();
         if (g_MdoAccount.Changed) xrtCondBroadcast(g_MdoAccount.Changed);
         while (g_MdoAccount.Acquirers) xrtCondWaitFor(g_MdoAccount.Changed, g_MdoAccount.Lock, MdoDurationMs(100000));
         xrtMutexUnlock(g_MdoAccount.Lock);
     }
     if (g_MdoAccount.Worker) { xrtThreadWait(g_MdoAccount.Worker); xrtThreadDestroy(g_MdoAccount.Worker); }
+    if (g_MdoAccount.ReadPool) {
+        xrtTaskPoolCancel(g_MdoAccount.ReadPool);
+        xrtTaskPoolWait(g_MdoAccount.ReadPool);
+        xrtTaskPoolDestroy(g_MdoAccount.ReadPool);
+    }
     xrtValueRelease(g_MdoAccount.Allowance);MdoModelManagerSetOnlineAuthority(NULL);
     MdoAccountClearBalanceLocked();
     xrtValueRelease(g_MdoAccount.Profile); xrtValueRelease(g_MdoAccount.Usage);
@@ -327,7 +447,8 @@ xvalue* MdoAccountSnapshot(void)
         MdoAccountSetBool(out, "persistence_available", xsCredentialProtectionAvailable()) &&
         MdoAccountSetBool(out, "refresh_available", g_MdoAccount.Tokens.Refresh[0] != 0) &&
         MdoAccountSetBool(out, "remembered", g_MdoAccount.Saved) &&
-        MdoAccountSetBool(out, "busy", g_MdoAccount.Busy || g_MdoAccount.Work.Kind) &&
+        MdoAccountSetBool(out, "busy", g_MdoAccount.Busy || g_MdoAccount.Work.Kind ||
+            (live && g_MdoAccount.Reads[MDO_ACCOUNT_READ_PROFILE].Cancel)) &&
         MdoAccountSetUInt(out, "revision", g_MdoAccount.Revision) &&
         MdoAccountSetUInt(out, "search_status", g_MdoAccount.SearchStatus);
     if (ok && g_MdoAccount.Profile) ok = xrtValueObjectSetNew(out, xrtStrView("profile"), xrtValueClone(g_MdoAccount.Profile));
@@ -570,7 +691,7 @@ void MdoAccountSearchStatus(uint16 Status)
 {
     if (!g_MdoAccount.Initialized) return;
     xrtMutexLock(g_MdoAccount.Lock); g_MdoAccount.SearchStatus = Status;
-    if (Status == 200) (void)MdoAccountQueueLocked(MDO_ACCOUNT_WORK_PROFILE);
+    if (Status == 200) MdoAccountRequestReadLocked(MDO_ACCOUNT_READ_SEARCH);
     MdoAccountChangedLocked(); xrtMutexUnlock(g_MdoAccount.Lock);
 }
 bool MdoAccountOpenWebsite(cstr Path)

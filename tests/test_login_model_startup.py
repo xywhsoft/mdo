@@ -28,6 +28,10 @@ class Service(BaseHTTPRequestHandler):
     catalog = threading.Event()
     login_started = threading.Event()
     catalog_started = threading.Event()
+    search_started = threading.Event()
+    search_allowed = threading.Event()
+    search_allowed.set()
+    refresh_started = threading.Event()
     removed = False
     catalog_status = 200
     model_calls = 0
@@ -47,6 +51,8 @@ class Service(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
         if self.path in ("/api/v1/login", "/api/v1/token/refresh"):
             self.login_started.set()
+            if self.path == "/api/v1/token/refresh":
+                self.refresh_started.set()
             assert self.login.wait(15), "fixture login was not released"
             self.reply({"id": 1, "access_token": "startup-fixture-token", "refresh_token": "a" * 64,
                         "token_type": "Bearer", "expires_in": 900})
@@ -79,6 +85,8 @@ class Service(BaseHTTPRequestHandler):
         if self.path == "/api/v1/profile":
             self.reply({"id": 1, "username": "startup-fixture"})
         elif self.path == "/api/v1/search/usage":
+            self.search_started.set()
+            self.search_allowed.wait(10)
             self.reply(dict.fromkeys(("minute_used", "minute_limit", "daily_used", "daily_limit", "daily_reset_at"), 0))
         elif self.path == "/api/v1/ai/allowance":
             self.reply({"member_id": 1, "plan_id": "fixture", "group_id": "fixture", "is_vip": False,
@@ -109,6 +117,9 @@ def until(probe):
 
 def check(host: Path, base: Path, unconfigured=False):
     for event in (Service.login, Service.catalog, Service.login_started, Service.catalog_started): event.clear()
+    Service.search_started.clear()
+    Service.refresh_started.clear()
+    Service.search_allowed.clear()
     Service.removed=False; Service.catalog_status=200; Service.model_calls=0
     server = ThreadingHTTPServer(("127.0.0.1", 0), Service)
     server.daemon_threads = True
@@ -198,6 +209,11 @@ def check(host: Path, base: Path, unconfigured=False):
             assert call("GET","/sessions")["items"] == [] and Service.model_calls == 0
         Service.catalog.set()
         catalog = until(ready)
+        assert Service.search_started.wait(3), "search usage read was never attempted"
+        until(lambda: call("GET", "/account").get("model_allowance"))
+        call("POST", "/account/refresh", {})
+        assert Service.refresh_started.wait(3), "search usage blocked credential renewal"
+        Service.search_allowed.set()
         if unconfigured:
             assert catalog["default_model_id"] == ONLINE and len(catalog["models"]) == 2
             return {"empty_default_waits_for_catalog":"PASS","empty_default_model_calls":Service.model_calls}
@@ -256,7 +272,7 @@ def check(host: Path, base: Path, unconfigured=False):
         assert until(ready)["models"] == []
         return {"result": "PASS", "restarts": starts - 1, "model_calls": Service.model_calls}
     finally:
-        Service.login.set(); Service.catalog.set()
+        Service.login.set(); Service.catalog.set(); Service.search_allowed.set()
         stop(); server.shutdown(); server.server_close(); worker.join(timeout=3)
 
 
