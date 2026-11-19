@@ -24,6 +24,23 @@ test("all nine stores use directory metadata and the shared numbered pager",asyn
  }finally{store.destroy();}}}finally{restore();}
 });
 
+test("public catalog is visible while this kind's installed inventory is pending",async()=>{
+ const restore=environment();
+ const row={kind:"skills",name:"Public skill",xid:"work",version_id:"version",id:"skill:fixture"};
+ let resolveInventory,store;
+ const api={get:path=>{assert.equal(path,"/ecosystem?kind=skills");return new Promise(resolve=>{resolveInventory=resolve;});},
+   post:async()=>({data:{items:[row],total:1}})};
+ try{
+  store=(await loadStore(api)).createSingleResourceStore("skills",()=>{});
+  store.activate(true);await flush();
+  assert.equal(store.root.querySelector(".eb-name").textContent,row.name);
+  const install=()=>descendants(store.root).find(n=>n.tagName==="BUTTON"&&n.textContent==="安装");
+  assert(install()?.disabled);
+  resolveInventory({data:{}});await flush();
+  assert.equal(install()?.disabled,false);
+ }finally{store?.destroy();restore();}
+});
+
 test("publication packs the real directory and sends only task and review metadata",async()=>{
  const restore=environment(),calls=[];
  const api={post:async(path,body)=>{calls.push({path,body});if(path==="/extensions/skills/authored/pack")return{data:{id:"V--fixture-publication-task-00000"}};if(body.action==="profile")return{data:{works:0,work_limit:3,version_bytes:10485760}};if(body.action==="mine")return{data:{items:[]}};if(body.action==="submit")return{data:{state:"pending"}};throw Error(`Unexpected ${path}`);}};

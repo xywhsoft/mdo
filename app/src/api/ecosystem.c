@@ -16,7 +16,11 @@ static bool EcoHandleInput(MdoApiContext* C,xvalue* Input){
  else if(Action&&!strcmp(Action,"check_updates")){Ok=MdoExtensionUpdatesRequest();Out=Ok?MdoExtensionUpdatesSnapshot():NULL;Ok=Ok&&Out;}
  else if(Action&&!strcmp(Action,"installed")){
   const cstr Kinds[]={"agents","subagents","tools","mcp","skills","commands","external-tools","knowledge","plugins","local-models"};Out=xrtValueObject();Ok=Out!=NULL;
-  for(size_t I=0;Ok&&I<sizeof(Kinds)/sizeof(*Kinds);I++){xvalue* Rows=MdoExtensionsList(Kinds[I],Error);Ok=Rows!=NULL;for(size_t J=0;Ok&&J<xrtValueCount(Rows);J++){const xvalue* Row=xrtValueArrayGet(Rows,J);cstr Id=MdoExtensionText(Row,"directory_id",96);char* Key=Id?xrtFormat("%s:%s",Kinds[I],Id):NULL;Ok=Key&&xrtValueObjectSet(Out,xrtStrView(Key),Row);xrtFree(Key);}xrtValueRelease(Rows);}
+  cstr Kind=MdoExtensionText(Input,"kind",32);
+  for(size_t I=0;Ok&&I<sizeof(Kinds)/sizeof(*Kinds);I++){
+   if(Kind&&strcmp(Kind,Kinds[I]))continue;
+   xvalue* Rows=MdoExtensionsList(Kinds[I],Error);Ok=Rows!=NULL;for(size_t J=0;Ok&&J<xrtValueCount(Rows);J++){const xvalue* Row=xrtValueArrayGet(Rows,J);cstr Id=MdoExtensionText(Row,"directory_id",96);char* Key=Id?xrtFormat("%s:%s",Kinds[I],Id):NULL;Ok=Key&&xrtValueObjectSet(Out,xrtStrView(Key),Row);xrtFree(Key);}xrtValueRelease(Rows);
+  }
  }else if(Action&&!strcmp(Action,"migrate_builtins")){
   bool Trust=false;Ok=xrtValueGetBool(xrtValueObjectGet(Input,XRT_STR_LITERAL("trust_code")),&Trust)&&Trust&&MdoExtensionsMutationBegin();
   if(Ok){Ok=MdoExtensionsMigrateBuiltins(Error)&&MdoModuleManagerReload()&&MdoSkillManagerReload();MdoExtensionsMutationEnd();}
@@ -47,7 +51,9 @@ typedef struct EcoApiJob {
     EcoApiQueue* Queue;
     bool Sent;
 } EcoApiJob;
-static struct { xmutex* Lock;EcoApiQueue Operations,Catalog;bool Stopping; } EcoApi;
+static struct { xmutex* Lock;EcoApiQueue Operations,Catalog,Inventory;bool Stopping; } EcoApi;
+static bool EcoQueueOperation(MdoApiContext* Context,xvalue* Input,
+    bool (*Handler)(MdoApiContext*,xvalue*),EcoApiQueue* Queue,size_t Threads);
 bool MdoApiEcosystemInit(void)
 {if(EcoApi.Lock)return true;EcoApi.Lock=xrtMutexCreate();return EcoApi.Lock!=NULL;}
 static void EcoApiDrop(ptr value,ptr user)
@@ -64,14 +70,15 @@ static xtaskoutcome EcoApiRun(xcancel* cancel,ptr value,xtaskvalue* out)
     if(!MdoApiDownloadLive(&job->Context))return XTASK_CANCELLED;
     xvalue* input=job->Input;job->Input=NULL;
     job->Sent=job->Handler(&job->Context,input);
-    MdoApiLiveChanged(NULL);return job->Sent?XTASK_SUCCESS:XTASK_FAILED;
+    if(job->Head.MethodCode!=XHTTP_METHOD_GET)MdoApiLiveChanged(NULL);
+    return job->Sent?XTASK_SUCCESS:XTASK_FAILED;
 }
 void MdoApiEcosystemUnit(void)
 {
     if(!EcoApi.Lock)return;
     xrtMutexLock(EcoApi.Lock);
     EcoApi.Stopping=true;
-    xtaskpool* pools[]={EcoApi.Operations.Pool,EcoApi.Catalog.Pool};
+    xtaskpool* pools[]={EcoApi.Operations.Pool,EcoApi.Catalog.Pool,EcoApi.Inventory.Pool};
     xrtMutexUnlock(EcoApi.Lock);
     for(size_t i=0;i<sizeof(pools)/sizeof(*pools);++i)
         if(pools[i])xrtTaskPoolCancel(pools[i]);
@@ -84,7 +91,23 @@ void MdoApiEcosystemUnit(void)
 }
 bool MdoApiEcosystemRoute(MdoApiContext* c)
 {
-    if(c->Request->head->MethodCode==XHTTP_METHOD_GET){xvalue* input=xrtValueObject();bool Updates=c->Target.Query.Size==13&&!memcmp(c->Target.Query.Data,"scope=updates",13);MdoApiValueSetString(input,"action",Updates?"updates":"installed");return EcoHandleInput(c,input);}
+    if(c->Request->head->MethodCode==XHTTP_METHOD_GET){
+        xstrview query=c->Target.Query;
+        bool updates=xrtStrEqual(query,XRT_STR_LITERAL("scope=updates"));
+        char kind[33]={0};
+        if(query.Size>5&&!memcmp(query.Data,"kind=",5)){
+            if(query.Size-5>=sizeof(kind))return MdoApiReplyError(c,422,"ecosystem_kind_invalid","Invalid extension type",NULL);
+            memcpy(kind,query.Data+5,query.Size-5);
+            if(!MdoExtensionDirectoryKind(kind))return MdoApiReplyError(c,422,"ecosystem_kind_invalid","Invalid extension type",NULL);
+        }
+        xvalue* input=xrtValueObject();
+        if(!input||!MdoApiValueSetString(input,"action",updates?"updates":"installed")||
+            (kind[0]&&!MdoApiValueSetString(input,"kind",kind))){
+            xrtValueRelease(input);
+            return MdoApiReplyError(c,500,"ecosystem_inventory_unavailable","Could not read installed extensions",NULL);
+        }
+        return updates?EcoHandleInput(c,input):EcoQueueOperation(c,input,EcoHandleInput,&EcoApi.Inventory,2);
+    }
     char* raw=NULL;size_t length=0;MdoApiBodyStatus read=MdoApiBinaryBodyRead(c,65536,&raw,&length);
     if(read!=MDO_API_BODY_OK)return MdoApiReplyBodyError(c,read);
     xjsonreadconfig limits;xrtJsonReadConfigInit(&limits);limits.MaxInputBytes=65536;limits.MaxStringBytes=8192;limits.MaxDepth=8;limits.MaxValues=1024;
@@ -95,10 +118,15 @@ bool MdoApiEcosystemRoute(MdoApiContext* c)
 }
 
 bool MdoApiQueueOperation(MdoApiContext* c,xvalue* input,bool (*Handler)(MdoApiContext*,xvalue*),bool catalog){
+    /* Keep public catalog reads separate from local IO and deployments. */
+    return EcoQueueOperation(c,input,Handler,catalog?&EcoApi.Catalog:&EcoApi.Operations,catalog?2:1);
+}
+
+static bool EcoQueueOperation(MdoApiContext* c,xvalue* input,bool (*Handler)(MdoApiContext*,xvalue*),EcoApiQueue* queue,size_t threads){
     if(c->ApplicationResponse)return Handler(c,input);
     EcoApiJob* job=xrtCalloc(1,sizeof(*job));xfuture* future=NULL;
     if(!job||!EcoApi.Lock)goto failed;
-    job->Head.MethodCode=XHTTP_METHOD_POST;job->Request.head=&job->Head;
+    job->Head.MethodCode=c->Request->head->MethodCode;job->Request.head=&job->Head;
     if(c->Request->tls)job->Request.tls=xrtTlsStreamRef(c->Request->tls);else if(c->Request->tcp)job->Request.tcp=xrtNetStreamRef(c->Request->tcp);
     if(!job->Request.tls&&!job->Request.tcp)goto failed;
     job->Context.Request=&job->Request;job->Context.Target.Path=xrtStrView("/api/v1/ecosystem");job->Context.CloseResponse=true;
@@ -106,10 +134,7 @@ bool MdoApiQueueOperation(MdoApiContext* c,xvalue* input,bool (*Handler)(MdoApiC
     /* Transfer the admitted write count to the owned job. Home purge/import
      * stays fenced until network work and any resource publication finish. */
     job->Context.WriteShared=c->WriteShared;job->Context.WriteExclusive=c->WriteExclusive;
-    /* Public catalog reads stay responsive even when a deployment plan or
-     * another long extension operation is holding the operations worker. */
-    EcoApiQueue* queue=catalog?&EcoApi.Catalog:&EcoApi.Operations;
-    const size_t threads=catalog?2u:1u, waiting=2u;
+    const size_t waiting=2u;
     job->Queue=queue;
     xrtMutexLock(EcoApi.Lock);
     if(!EcoApi.Stopping&&queue->Count<threads+waiting){
@@ -131,6 +156,6 @@ bool MdoApiQueueOperation(MdoApiContext* c,xvalue* input,bool (*Handler)(MdoApiC
     if(future){c->WriteShared=c->WriteExclusive=false;c->Takeover=true;xrtFutureDestroy(future);return true;}
 failed:
     if(job){xrtTlsStreamDestroy(job->Request.tls);xrtNetStreamDestroy(job->Request.tcp);xrtFree(job);}xrtValueRelease(input);
-    if(catalog)return MdoApiReplyError(c,503,"ecosystem_catalog_busy","The store is handling other requests. Refresh in a moment.",NULL);
+    if(queue==&EcoApi.Catalog)return MdoApiReplyError(c,503,"ecosystem_catalog_busy","The store is handling other requests. Refresh in a moment.",NULL);
     return MdoApiReplyError(c,503,"ecosystem_busy","Extension operation unavailable; retry shortly",NULL);
 }

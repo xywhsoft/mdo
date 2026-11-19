@@ -28,7 +28,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
   if (!names[kind]) throw Error(uiErrorText("error.detail.unsupportedExtensionType", {}, "Unsupported extension type"));
   const root=text("div","","single-resource-store"),statusRoot=element("p",{className:"extension-help",attrs:{role:"status"}});
   const browser=createExtensionBrowser({kind,onClose:()=>{++detailEpoch;detailAbort?.abort();}});
-  let items=[],installed={},query="",applied="",state="new",total=0,epoch=0,detailEpoch=0,controller=null,detailAbort=null,dialog=null,busy=false,saving=false,dirty=false,visible=false,disposed=false,activeTarget=device();
+  let items=[],installed={},inventoryReady=false,query="",applied="",state="new",total=0,epoch=0,detailEpoch=0,controller=null,detailAbort=null,dialog=null,busy=false,saving=false,dirty=false,visible=false,disposed=false,activeTarget=device();
   const live=(n,target)=>!disposed&&n===epoch&&target===device();
   const call=async(body,signal=controller?.signal)=>(await api.post("/ecosystem",{kind,...body},{signal})).data;
   const owned=row=>Object.values(installed).find(local=>local.kind===kind&&local.directory_id===row.xid&&local.source==="store");
@@ -44,7 +44,7 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
     control.setAttribute("aria-label",label);control.setAttribute("aria-busy",String(state==="installing"));control.title=job?.error||label;
     control.replaceChildren(state==="installing"?element("span",{className:"extension-install-spinner",attrs:{"aria-hidden":"true"}}):document.createTextNode(label));
     const selected=targetState().selected;
-    control.disabled=busy||active||pending||Boolean(selected&&(!targetState().connected||targetState().runtimeChanged||selected.mode==="view"));
+    control.disabled=busy||!inventoryReady||active||pending||Boolean(selected&&(!targetState().connected||targetState().runtimeChanged||selected.mode==="view"));
   }}
   function installButton(row){const control=button("",()=>{
     const job=installation(row),same=sameVersion(row);
@@ -68,17 +68,26 @@ export function createSingleResourceStore(kind, onChange, onBrowse=()=>{}, onMan
   function close(force=false){if(!dialog)return true;if(!force&&(saving||dirty&&!confirm(uiMessage("ui.singleResourceStore.discardUnsubmittedInformation", {}, "放弃未提交的信息？"))))return false;dialog.dispose();dialog=null;dirty=saving=false;return true;}
   function modal(title){if(!close())return null;const view=openLayer({title,icon:kind==="skills"?"spark":"folder",width:"48rem",height:"80%",beforeClose:()=>!saving&&(!dirty||confirm(uiMessage("ui.singleResourceStore.discardUnsubmittedInformation", {}, "放弃未提交的信息？"))),onClosed(){if(dialog===view){dialog=null;dirty=saving=false;}}});dialog=view;return view;}
   async function load(append=false){
-    if(busy||disposed)return;const n=++epoch,target=device();controller?.abort();controller=new AbortController();busy=true;render();
-    try{const q=append?applied:query;const [data,local]=await Promise.all([call({action:"catalog",q,offset:append?items.length:0,limit:100}),api.get("/ecosystem",{signal:controller.signal})]);if(!live(n,target))return;
-      items=append?[...new Map([...items,...data.items].map(row=>[row.version_id,row])).values()]:data.items;total=data.total;installed=local.data;applied=q;writeUiText(statusRoot, "");
+    if(busy||disposed)return;
+    const n=++epoch,target=device();
+    controller?.abort();controller=new AbortController();
+    busy=true;inventoryReady=false;writeUiText(statusRoot,"");render();
+    const inventory=api.get(`/ecosystem?kind=${encodeURIComponent(kind)}`,{signal:controller.signal}).then(local=>{
+      if(!live(n,target))return;
+      installed=local.data;inventoryReady=true;
+      if(!busy)render();
+    }).catch(e=>{if(live(n,target)&&e.name!=="AbortError")report(e);});
+    try{const q=append?applied:query;const data=await call({action:"catalog",q,offset:append?items.length:0,limit:100});if(!live(n,target))return;
+      items=append?[...new Map([...items,...data.items].map(row=>[row.version_id,row])).values()]:data.items;total=data.total;applied=q;
     }catch(e){if(live(n,target)&&e.name!=="AbortError")report(e);}finally{if(live(n,target)){busy=false;render();}}
+    await inventory;
   }
   function render(){
     installControls.clear();
     browser.rememberFocus();const form=element("form",{className:"store-search eb-toolbar"}),input=element("input",{attrs:{type:"search",maxlength:"240",placeholder:uiMessage("ui.singleResourceStore.searchValue1AuthorsOrUses", { value1: names[kind] }, "搜索{value1}、作者或用途"),"aria-label":uiMessage("ui.singleResourceStore.searchValue1", { value1: names[kind] }, "搜索{value1}")}});input.value=query;input.addEventListener("input",()=>{query=input.value;});
     const select=element("select",{attrs:{"aria-label":uiMessage("task.meta.state", {}, "状态")}});for(const [value,label]of [["all",uiText("extensionBrowser.all", {}, "全部状态")],["installed",uiText("store.installed", {}, "已安装")],["updates",uiText("extensionBrowser.updates", {}, "可更新")],["new",uiText("extensionBrowser.notInstalled", {}, "未安装")]])select.append(element("option",{text:label,attrs:{value}}));select.value=state;select.addEventListener("change",()=>{state=select.value;render();});
     form.append(input,select,element("button",{text:uiMessage("store.searchButton", {}, "搜索"),className:"secondary-button",attrs:{type:"submit"}}),button(uiMessage("resource.refresh", {}, "刷新"),()=>load()));form.addEventListener("submit",e=>{e.preventDefault();query=input.value.trim();void load();});for(const b of form.querySelectorAll("button"))b.disabled=busy;
-    const rows=items.filter(row=>{const local=owned(row),same=sameVersion(row);return state==="all"||state==="installed"&&local||state==="updates"&&local&&!same||state==="new"&&!local;}).map(row=>{
+    const rows=items.filter(row=>{const local=owned(row),same=sameVersion(row);return !inventoryReady||state==="all"||state==="installed"&&local||state==="updates"&&local&&!same||state==="new"&&!local;}).map(row=>{
       const local=owned(row),same=sameVersion(row),credits=resourceCredits({...row,source:"store"}),primary=installButton(row);
       return {...extensionPresentation(row),key:row.version_id,kind,title:row.name,byline:credits.submitter,description:row.description,meta:credits.meta,badge:{text:same?uiText("store.installed", {}, "已安装"):local?uiText("extensionBrowser.updates", {}, "可更新"):""},primary,onSelect:()=>loadDetail(row)};
     });

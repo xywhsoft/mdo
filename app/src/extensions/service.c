@@ -70,7 +70,10 @@ static bool MdoExtServiceFetchAttempt(cstr Path,cstr Method,const void* Body,siz
  Request.IdleTimeout=Catalog?5000000:ArchiveRead?30000000:10000000;
  Request.MaxBodyBytes=Binary?1048576:8u*1024u*1024u;
  Request.Cancel=Lease&&Lease->Managed?Lease->Cancel:Cancel;Response->Size=sizeof(*Response);
- bool Read=Ok&&!strcmp(Method,"GET");if(Ok){xrtClearError();Ok=MdoDownloadFetch(&Request,Response);}
+ /* Upload chunks are idempotent at the same upload ID, offset and bytes. */
+ bool Read=Ok&&(!strcmp(Method,"GET")||
+  (Binary&&!strcmp(Method,"PUT")&&!strncmp(Path,MDO_EXT_SERVICE "/uploads?",sizeof(MDO_EXT_SERVICE "/uploads?")-1)));
+ if(Ok){xrtClearError();Ok=MdoDownloadFetch(&Request,Response);}
  bool Cancelled=Request.Cancel&&xrtCancelRequested(Request.Cancel);
  if(Retryable&&Read&&!Cancelled&&!Response->Redirects)*Retryable=!Ok?MdoExtServiceTransientTransport(xrtGetError()):Response->Status==408||Response->Status==425||Response->Status==500||Response->Status==502||Response->Status==503||Response->Status==504;
  xrtSecureZero(Authorization,sizeof(Authorization));xrtFree(Url);
