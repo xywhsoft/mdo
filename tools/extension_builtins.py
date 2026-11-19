@@ -39,7 +39,7 @@ def generate(root):
     rows = []
     for kind in KINDS:
         parent = root / 'app/default-home' / kind
-        for directory in sorted(parent.iterdir()) if parent.exists() else ():
+        for directory in sorted(parent.iterdir(), key=lambda path: path.name) if parent.exists() else ():
             if not directory.is_dir() or not (directory / 'extension.json').is_file():
                 continue
             meta = json.loads((directory / 'extension.json').read_text(encoding='utf-8'))
@@ -47,7 +47,7 @@ def generate(root):
                 raise ValueError('Invalid builtin extension: ' + str(directory))
             data = io.BytesIO()
             with zipfile.ZipFile(data, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
-                for path in sorted(directory.rglob('*')):
+                for path in sorted(directory.rglob('*'), key=lambda path: path.as_posix()):
                     if path.is_symlink():
                         raise ValueError('Builtin extension links are forbidden: ' + str(path))
                     name = path.relative_to(directory).as_posix() + ('/' if path.is_dir() else '')

@@ -18,7 +18,7 @@ from test_optional_tools_runtime import run as optional_tool_probe
 
 
 class ReleaseGateTests(unittest.TestCase):
-    def test_builtin_zip_modes_use_git_index_instead_of_mount_permissions(self):
+    def test_builtin_zip_uses_canonical_order_and_git_modes(self):
         with tempfile.TemporaryDirectory(prefix="builtin-zip-modes-") as raw:
             root = Path(raw)
             extension = root / "app/default-home/commands/mode-test"
@@ -28,6 +28,7 @@ class ReleaseGateTests(unittest.TestCase):
             helper = extension / "run helper"
             entry.write_text("/* normal source */\n")
             helper.write_text("#!/bin/sh\n")
+            (extension / "README.md").write_text("Example\n")
             subprocess.run(["git", "init", "-q"], cwd=root, check=True)
             subprocess.run(["git", "add", "--chmod=-x", "app"], cwd=root, check=True)
             subprocess.run(["git", "add", "--chmod=+x", helper.relative_to(root).as_posix()], cwd=root, check=True)
@@ -37,6 +38,7 @@ class ReleaseGateTests(unittest.TestCase):
             extension_builtins.generate(root)
             archive_path = root / "app/generated/builtin-extensions/commands-mode-test.zip"
             with zipfile.ZipFile(archive_path) as archive:
+                self.assertEqual(archive.namelist(), ["README.md", "command.c", "extension.json", "run helper"])
                 self.assertEqual(archive.getinfo("command.c").external_attr >> 16, 0o100644)
                 self.assertEqual(archive.getinfo("run helper").external_attr >> 16, 0o100755)
 
